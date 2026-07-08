@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { playBeep } from '../utils/sound'
 
 export default function StretchTimer({ stretch, onClose }) {
   const totalSides = stretch.perSide ? 2 : 1
@@ -7,6 +8,10 @@ export default function StretchTimer({ stretch, onClose }) {
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState(false)
   const intervalRef = useRef(null)
+
+  useEffect(() => {
+    if (done) playBeep()
+  }, [done])
 
   useEffect(() => {
     if (running && timeLeft > 0) {
@@ -36,14 +41,14 @@ export default function StretchTimer({ stretch, onClose }) {
   const circumference = 2 * Math.PI * 52
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-      <div className="bg-zinc-900 rounded-3xl p-8 w-full max-w-sm">
-        <h3 className="text-white font-bold text-xl text-center mb-1">{stretch.name}</h3>
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+      <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-xl">
+        <h3 className="text-stone-900 font-bold text-xl text-center mb-1">{stretch.name}</h3>
         {stretch.alt && (
-          <p className="text-zinc-500 text-sm text-center mb-1">Alt: {stretch.alt}</p>
+          <p className="text-stone-400 text-sm text-center mb-1">Alt: {stretch.alt}</p>
         )}
         {stretch.perSide && (
-          <p className="text-orange-400 text-sm text-center mb-6">
+          <p className="text-orange-500 text-sm text-center mb-6 font-medium">
             {done ? 'Complete!' : `Side ${side} of 2`}
           </p>
         )}
@@ -52,7 +57,7 @@ export default function StretchTimer({ stretch, onClose }) {
         <div className="flex items-center justify-center mb-8">
           <div className="relative w-36 h-36">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="52" fill="none" stroke="#27272a" strokeWidth="8" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e7e5e4" strokeWidth="8" />
               <circle
                 cx="60" cy="60" r="52" fill="none"
                 stroke={done ? '#22c55e' : '#f97316'}
@@ -65,9 +70,9 @@ export default function StretchTimer({ stretch, onClose }) {
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               {done ? (
-                <span className="text-4xl">✓</span>
+                <span className="text-4xl text-emerald-500">✓</span>
               ) : (
-                <span className="text-4xl font-bold text-white">{timeLeft}</span>
+                <span className="text-4xl font-bold text-stone-900">{timeLeft}</span>
               )}
             </div>
           </div>
@@ -86,8 +91,8 @@ export default function StretchTimer({ stretch, onClose }) {
             onClick={onClose}
             className={`py-4 rounded-2xl font-semibold transition-colors ${
               done
-                ? 'flex-1 bg-emerald-600 text-white active:bg-emerald-700'
-                : 'px-5 bg-zinc-800 text-zinc-300 active:bg-zinc-700'
+                ? 'flex-1 bg-emerald-500 text-white active:bg-emerald-600'
+                : 'px-5 bg-stone-100 text-stone-700 active:bg-stone-200'
             }`}
           >
             {done ? 'Done' : 'Close'}

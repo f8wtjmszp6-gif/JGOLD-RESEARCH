@@ -16,14 +16,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-svh max-w-md mx-auto bg-black">
+    <div className="flex flex-col h-svh bg-stone-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="flex-1 overflow-hidden">
         {screen === 'home' && (
-          <WeeklySchedule
-            onSelectDay={openDay}
-            currentWeek={store.currentWeek}
-            store={store}
-          />
+          <WeeklySchedule onSelectDay={openDay} store={store} />
         )}
         {screen === 'day' && selectedDay && (
           <DayDetail
@@ -34,14 +30,11 @@ export default function App() {
           />
         )}
         {screen === 'program' && (
-          <ProgramView
-            currentWeek={store.currentWeek}
-            onSetWeek={store.setWeek}
-          />
+          <ProgramView store={store} />
         )}
       </div>
 
-      <nav className="shrink-0 bg-zinc-950 border-t border-zinc-800 flex" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="shrink-0 bg-white border-t border-stone-100 flex" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <NavBtn
           label="Schedule"
           active={screen === 'home' || screen === 'day'}
@@ -75,7 +68,7 @@ function NavBtn({ label, active, onClick, icon }) {
     <button
       onClick={onClick}
       className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
-        active ? 'text-orange-500' : 'text-zinc-500'
+        active ? 'text-orange-500' : 'text-stone-400'
       }`}
     >
       {icon}

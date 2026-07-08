@@ -1,4 +1,10 @@
 export const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+export const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+export const LIFT_DAYS = ['monday', 'tuesday', 'thursday', 'friday']
+
+// Barbell exercises use { barbell: { plateWeight, plateDisplay, defaultBar } }
+// instead of a weight string. Total = plateWeight + selected bar weight.
+// Non-barbell exercises use { weight: '...' }.
 
 export const schedule = {
   monday: {
@@ -11,21 +17,22 @@ export const schedule = {
         name: 'Bench Press',
         sets: 3,
         reps: '6–8',
-        weight: '2 × 40 lb plates | 25 lb bar | 105 lbs total',
+        barbell: { plateWeight: 80, plateDisplay: '2 × 40 lb', defaultBar: 25 },
       },
       {
         id: 'overhead-press',
         name: 'Overhead Press',
         sets: 3,
         reps: '8–10',
-        weight: '2 × 15 lb plates | 25 lb bar | 55 lbs total',
+        barbell: { plateWeight: 30, plateDisplay: '2 × 15 lb', defaultBar: 25 },
       },
       {
         id: 'dips',
         name: 'Dips',
         sets: 3,
         reps: '8–10',
-        weight: '35 lbs added',
+        weight: '35 lbs assist',
+        bodyweight: true,
       },
       {
         id: 'lateral-raises',
@@ -68,14 +75,14 @@ export const schedule = {
         name: 'Hip Thrust',
         sets: 3,
         reps: '6–8',
-        weight: '2 × 60 lb plates | 25 lb bar | 145 lbs total',
+        barbell: { plateWeight: 120, plateDisplay: '2 × 60 lb', defaultBar: 25 },
       },
       {
         id: 'hip-abduction',
         name: 'Hip Abduction Machine',
         sets: 3,
         reps: '12–14',
-        weight: 'TBD',
+        weight: '130 lbs',
       },
       {
         id: 'hip-adduction',
@@ -90,7 +97,9 @@ export const schedule = {
         sets: 3,
         reps: '45s',
         weight: 'Bodyweight',
+        bodyweight: true,
         isTime: true,
+        durationSeconds: 45,
       },
       {
         id: 'dead-bugs',
@@ -98,6 +107,7 @@ export const schedule = {
         sets: 3,
         reps: '12–14',
         weight: 'Bodyweight',
+        bodyweight: true,
         perSide: true,
       },
     ],
@@ -127,21 +137,22 @@ export const schedule = {
         name: 'Barbell Rows',
         sets: 3,
         reps: '8–10',
-        weight: '2 × 25 lb plates | 45 lb bar | 95 lbs total',
+        barbell: { plateWeight: 50, plateDisplay: '2 × 25 lb', defaultBar: 45 },
       },
       {
         id: 'pull-ups',
         name: 'Pull-Ups',
         sets: 3,
         reps: '8–10',
-        weight: '35 lbs added',
+        weight: '35 lbs assist',
+        bodyweight: true,
       },
       {
         id: 'barbell-shrugs',
         name: 'Barbell Shrugs',
         sets: 3,
         reps: '12–14',
-        weight: '2 × 35 lb plates | 45 lb bar | 115 lbs total',
+        barbell: { plateWeight: 70, plateDisplay: '2 × 35 lb', defaultBar: 45 },
       },
       {
         id: 'face-pulls',
@@ -155,14 +166,14 @@ export const schedule = {
         name: 'Barbell Curl',
         sets: 3,
         reps: '8–10',
-        weight: '2 × 15 lb plates | 15 lb bar | 45 lbs total',
+        barbell: { plateWeight: 30, plateDisplay: '2 × 15 lb', defaultBar: 15 },
       },
       {
         id: 'hammer-curls',
         name: 'Hammer Curls',
         sets: 3,
         reps: '10–12',
-        weight: '25 lb dumbbells',
+        weight: '20 lb dumbbells',
       },
       {
         id: 'hanging-leg-raises',
@@ -170,6 +181,7 @@ export const schedule = {
         sets: 3,
         reps: '12–14',
         weight: 'Bodyweight',
+        bodyweight: true,
       },
     ],
     stretches: [
@@ -190,7 +202,7 @@ export const schedule = {
         name: 'Romanian Deadlift',
         sets: 3,
         reps: '6–8',
-        weight: '2 × 40 lb plates | 45 lb bar | 125 lbs total',
+        barbell: { plateWeight: 80, plateDisplay: '2 × 40 lb', defaultBar: 45 },
       },
       {
         id: 'back-extensions',
