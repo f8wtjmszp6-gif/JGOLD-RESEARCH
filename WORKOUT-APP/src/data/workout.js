@@ -1,10 +1,19 @@
 export const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-export const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+export const ALL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 export const LIFT_DAYS = ['monday', 'tuesday', 'thursday', 'friday']
 
-// Barbell exercises use { barbell: { plateWeight, plateDisplay, defaultBar } }
-// instead of a weight string. Total = plateWeight + selected bar weight.
-// Non-barbell exercises use { weight: '...' }.
+// Bar weight range for the per-exercise settings menu (0 = no bar / machine).
+export const BAR_MIN = 0
+export const BAR_MAX = 100
+export const BAR_STEP = 5
+
+// Every exercise carries a uniform weight config:
+//   weight: { bar, value, assist? }
+//     bar    – weight of the bar (0 for machines / dumbbells / bodyweight).
+//     value  – total weight lifted. When bar > 0 the app derives the plates
+//              per side as (value − bar) / 2.
+//     assist – default state of the "Assist" checkbox (you aren't lifting the
+//              full load, e.g. assisted pull-ups or pure bodyweight moves).
 
 export const schedule = {
   monday: {
@@ -17,36 +26,35 @@ export const schedule = {
         name: 'Bench Press',
         sets: 3,
         reps: '6–8',
-        barbell: { plateWeight: 80, plateDisplay: '2 × 40 lb', defaultBar: 25 },
+        weight: { bar: 25, value: 105 },
       },
       {
         id: 'overhead-press',
         name: 'Overhead Press',
         sets: 3,
         reps: '8–10',
-        barbell: { plateWeight: 30, plateDisplay: '2 × 15 lb', defaultBar: 25 },
+        weight: { bar: 25, value: 55 },
       },
       {
         id: 'dips',
         name: 'Dips',
         sets: 3,
         reps: '8–10',
-        weight: '35 lbs assist',
-        bodyweight: true,
+        weight: { bar: 0, value: 35, assist: true },
       },
       {
         id: 'lateral-raises',
         name: 'Lateral Raises',
         sets: 3,
         reps: '12–14',
-        weight: '12 lb dumbbells',
+        weight: { bar: 0, value: 12 },
       },
       {
         id: 'overhead-tricep-extension',
         name: 'Overhead Tricep Extension',
         sets: 3,
         reps: '10–12',
-        weight: '40 lbs',
+        weight: { bar: 0, value: 40 },
       },
     ],
     stretches: [
@@ -68,47 +76,45 @@ export const schedule = {
         name: 'Cable-Assisted Squat',
         sets: 3,
         reps: '6–8',
-        weight: '170 lbs',
+        weight: { bar: 0, value: 170 },
       },
       {
         id: 'hip-thrust',
         name: 'Hip Thrust',
         sets: 3,
         reps: '6–8',
-        barbell: { plateWeight: 120, plateDisplay: '2 × 60 lb', defaultBar: 25 },
+        weight: { bar: 25, value: 145 },
       },
       {
         id: 'hip-abduction',
         name: 'Hip Abduction Machine',
         sets: 3,
         reps: '12–14',
-        weight: '130 lbs',
+        weight: { bar: 0, value: 130 },
       },
       {
         id: 'hip-adduction',
         name: 'Hip Adduction',
         sets: 3,
         reps: '12–14',
-        weight: '185 lbs',
+        weight: { bar: 0, value: 185 },
       },
       {
         id: 'plank',
         name: 'Plank',
         sets: 3,
         reps: '45s',
-        weight: 'Bodyweight',
-        bodyweight: true,
         isTime: true,
         durationSeconds: 45,
+        weight: { bar: 0, value: 0, assist: true },
       },
       {
         id: 'dead-bugs',
         name: 'Dead Bugs',
         sets: 3,
         reps: '12–14',
-        weight: 'Bodyweight',
-        bodyweight: true,
         perSide: true,
+        weight: { bar: 0, value: 0, assist: true },
       },
     ],
     stretches: [
@@ -137,51 +143,49 @@ export const schedule = {
         name: 'Barbell Rows',
         sets: 3,
         reps: '8–10',
-        barbell: { plateWeight: 50, plateDisplay: '2 × 25 lb', defaultBar: 45 },
+        weight: { bar: 45, value: 95 },
       },
       {
         id: 'pull-ups',
         name: 'Pull-Ups',
         sets: 3,
         reps: '8–10',
-        weight: '35 lbs assist',
-        bodyweight: true,
+        weight: { bar: 0, value: 35, assist: true },
       },
       {
         id: 'barbell-shrugs',
         name: 'Barbell Shrugs',
         sets: 3,
         reps: '12–14',
-        barbell: { plateWeight: 70, plateDisplay: '2 × 35 lb', defaultBar: 45 },
+        weight: { bar: 45, value: 115 },
       },
       {
         id: 'face-pulls',
         name: 'Face Pulls',
         sets: 3,
         reps: '12–14',
-        weight: '42.5 lbs',
+        weight: { bar: 0, value: 43 },
       },
       {
         id: 'barbell-curl',
         name: 'Barbell Curl',
         sets: 3,
         reps: '8–10',
-        barbell: { plateWeight: 30, plateDisplay: '2 × 15 lb', defaultBar: 15 },
+        weight: { bar: 15, value: 45 },
       },
       {
         id: 'hammer-curls',
         name: 'Hammer Curls',
         sets: 3,
         reps: '10–12',
-        weight: '20 lb dumbbells',
+        weight: { bar: 0, value: 20 },
       },
       {
         id: 'hanging-leg-raises',
         name: 'Hanging Leg Raises',
         sets: 3,
         reps: '12–14',
-        weight: 'Bodyweight',
-        bodyweight: true,
+        weight: { bar: 0, value: 0, assist: true },
       },
     ],
     stretches: [
@@ -202,36 +206,36 @@ export const schedule = {
         name: 'Romanian Deadlift',
         sets: 3,
         reps: '6–8',
-        barbell: { plateWeight: 80, plateDisplay: '2 × 40 lb', defaultBar: 45 },
+        weight: { bar: 45, value: 125 },
       },
       {
         id: 'back-extensions',
         name: 'Weighted Back Extensions',
         sets: 3,
         reps: '10–12',
-        weight: '35 lbs',
+        weight: { bar: 0, value: 35 },
       },
       {
         id: 'standing-calf-raise',
         name: 'Standing Calf Raise',
         sets: 3,
         reps: '12–14',
-        weight: '180 lbs',
+        weight: { bar: 0, value: 180 },
       },
       {
         id: 'seated-calf-raise',
         name: 'Seated Calf Raise',
         sets: 3,
         reps: '12–14',
-        weight: '55 lbs',
+        weight: { bar: 0, value: 55 },
       },
       {
         id: 'woodchoppers',
         name: 'Woodchoppers',
         sets: 2,
         reps: '12–14',
-        weight: '20 lbs',
         perSide: true,
+        weight: { bar: 0, value: 20 },
       },
     ],
     stretches: [
@@ -247,6 +251,14 @@ export const schedule = {
     label: 'Saturday',
     name: '30-Min Walk',
     type: 'walk',
+    exercises: [],
+    stretches: [],
+  },
+
+  sunday: {
+    label: 'Sunday',
+    name: 'Rest & Recovery',
+    type: 'rest',
     exercises: [],
     stretches: [],
   },

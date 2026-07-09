@@ -16,7 +16,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-svh bg-stone-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="flex flex-col bg-stone-50" style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="flex-1 overflow-hidden">
         {screen === 'home' && (
           <WeeklySchedule onSelectDay={openDay} store={store} />

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import StretchTimer from './StretchTimer'
 import { getTargetReps } from '../utils/progression'
+import { BAR_MIN, BAR_MAX, BAR_STEP } from '../data/workout'
+
+const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
 
 export default function DayDetail({ day, dayData, store, onBack }) {
   const [activeStretch, setActiveStretch] = useState(null)
@@ -42,14 +45,13 @@ export default function DayDetail({ day, dayData, store, onBack }) {
           <ExerciseCard
             key={exercise.id}
             exercise={exercise}
+            store={store}
             checked={store.getChecked(day, 'exercises', exercise.id)}
             onToggle={() => store.toggleChecked(day, 'exercises', exercise.id)}
-            onTimer={exercise.isTime ? () => setActiveTimed(exercise) : null}
-            currentWeek={store.currentWeek}
-            barWeight={exercise.barbell ? store.getBarWeight(exercise.id, exercise.barbell.defaultBar) : null}
-            onBarWeightChange={exercise.barbell ? (w) => store.setBarWeight(exercise.id, w) : null}
-            customWeight={store.getCustomWeight(exercise.id)}
-            onWeightChange={(val) => store.setCustomWeight(exercise.id, val)}
+            onTimer={exercise.isTime ? () => setActiveTimed({
+              ...exercise,
+              durationSeconds: store.getCustomDuration(exercise.id, exercise.durationSeconds),
+            }) : null}
           />
         ))}
 
@@ -59,7 +61,12 @@ export default function DayDetail({ day, dayData, store, onBack }) {
             stretch={stretch}
             checked={store.getChecked(day, 'stretches', stretch.id)}
             onToggle={() => store.toggleChecked(day, 'stretches', stretch.id)}
-            onTimer={() => setActiveStretch(stretch)}
+            customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
+            onDurationChange={(s) => store.setCustomDuration(stretch.id, s)}
+            onTimer={() => setActiveStretch({
+              ...stretch,
+              duration: store.getCustomDuration(stretch.id, stretch.duration),
+            })}
           />
         ))}
       </div>
@@ -116,42 +123,106 @@ function PencilIcon() {
   )
 }
 
-function ExerciseCard({ exercise, checked, onToggle, onTimer, currentWeek, barWeight, onBarWeightChange, customWeight, onWeightChange }) {
-  const [editingWeight, setEditingWeight] = useState(false)
+function GearIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  )
+}
+
+// ── A −/+ row used inside the settings menu ──────────────────────────────────
+function StepperRow({ label, value, step, min = 0, max = Infinity, editable, suffix = '', onChange }) {
+  const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
-  const target = getTargetReps(exercise.reps, currentWeek)
+  const clamp = v => Math.min(max, Math.max(min, Math.round(v * 100) / 100))
+  const dec = () => onChange(clamp(value - step))
+  const inc = () => onChange(clamp(value + step))
 
-  // Barbell: effective plate weight (custom overrides data default)
-  const effectivePlateWeight = exercise.barbell
-    ? (typeof customWeight === 'number' ? customWeight - barWeight : exercise.barbell.plateWeight)
-    : null
-  const total = effectivePlateWeight != null && barWeight != null ? barWeight + effectivePlateWeight : null
-  const perSide = effectivePlateWeight != null ? effectivePlateWeight / 2 : null
-  const plateDisplay = perSide != null
-    ? `2 × ${Number.isInteger(perSide) ? perSide : perSide.toFixed(1)} lb`
-    : exercise.barbell?.plateDisplay
-
-  // Non-barbell: custom string or default
-  const displayWeight = !exercise.barbell
-    ? (typeof customWeight === 'string' ? customWeight : exercise.weight)
-    : null
-
-  function startEdit() {
-    setDraft(exercise.barbell ? String(total) : displayWeight)
-    setEditingWeight(true)
+  function save() {
+    setEditing(false)
+    const n = parseFloat(draft)
+    if (!isNaN(n)) onChange(clamp(n))
   }
 
-  function saveEdit() {
-    setEditingWeight(false)
-    if (exercise.barbell) {
-      const newTotal = parseFloat(draft)
-      if (!isNaN(newTotal) && newTotal > barWeight) {
-        onWeightChange(newTotal)
-      }
-    } else {
-      if (draft.trim()) onWeightChange(draft.trim())
-    }
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-stone-500">{label}</span>
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={dec}
+          className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-stone-600 text-lg font-medium active:bg-stone-100 transition-colors"
+        >
+          −
+        </button>
+        {editing ? (
+          <input
+            type="number"
+            inputMode="numeric"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            autoFocus
+            className="w-14 text-center text-base font-bold bg-white rounded-lg px-1 py-1 text-stone-900 outline-none shadow-sm"
+          />
+        ) : (
+          <button
+            onClick={() => { if (editable) { setDraft(String(value)); setEditing(true) } }}
+            className={`w-14 text-center text-base font-bold text-stone-900 ${editable ? 'active:opacity-60' : ''}`}
+          >
+            {fmt(value)}{suffix && <span className="text-xs font-medium text-stone-400">{suffix}</span>}
+          </button>
+        )}
+        <button
+          onClick={inc}
+          className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-stone-600 text-lg font-medium active:bg-stone-100 transition-colors"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Exercise card ────────────────────────────────────────────────────────────
+function ExerciseCard({ exercise, store, checked, onToggle, onTimer }) {
+  const [showSettings, setShowSettings] = useState(false)
+  const [editingDuration, setEditingDuration] = useState(false)
+  const [durationDraft, setDurationDraft] = useState('')
+
+  const target = getTargetReps(exercise.reps, store.currentWeek)
+
+  const w = exercise.weight ?? { bar: 0, value: 0 }
+  const bar = store.getBar(exercise.id, w.bar)
+  const value = store.getValue(exercise.id, w.value)
+  const assist = store.getAssist(exercise.id, w.assist ?? false)
+  const perSide = bar > 0 ? (value - bar) / 2 : null
+
+  // Collapsed summary of the weight setup
+  let summary
+  if (value === 0 && bar === 0) {
+    summary = assist ? 'Assisted' : 'Bodyweight'
+  } else {
+    const wp = `${fmt(value)} lbs${bar > 0 ? ` · ${fmt(perSide)} lb/side` : ''}`
+    summary = assist ? `Assisted · ${wp}` : wp
+  }
+
+  const customDuration = exercise.isTime
+    ? store.getCustomDuration(exercise.id, exercise.durationSeconds)
+    : null
+
+  function startEditDuration() {
+    setDurationDraft(String(customDuration))
+    setEditingDuration(true)
+  }
+
+  function saveDuration() {
+    setEditingDuration(false)
+    const s = parseInt(durationDraft)
+    if (!isNaN(s) && s > 0) store.setCustomDuration(exercise.id, s)
   }
 
   return (
@@ -159,6 +230,7 @@ function ExerciseCard({ exercise, checked, onToggle, onTimer, currentWeek, barWe
       checked ? 'bg-orange-50 border border-orange-200' : 'bg-white shadow-sm'
     }`}>
       <div className="flex items-start gap-3">
+        {/* Checkbox */}
         <button onClick={onToggle} className="shrink-0 mt-0.5 active:scale-95 transition-transform">
           <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             checked ? 'border-orange-500 bg-orange-500' : 'border-stone-200'
@@ -172,91 +244,123 @@ function ExerciseCard({ exercise, checked, onToggle, onTimer, currentWeek, barWe
         </button>
 
         <div className="flex-1 min-w-0">
+          {/* Name + actions */}
           <div className="flex items-start justify-between gap-2">
             <p className={`font-semibold leading-tight ${checked ? 'text-orange-500 line-through' : 'text-stone-900'}`}>
               {exercise.name}
               {exercise.perSide && <span className="text-stone-400 font-normal text-sm ml-1">(per side)</span>}
             </p>
-            {onTimer && (
-              <button
-                onClick={onTimer}
-                className="shrink-0 w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center active:bg-orange-200 transition-colors"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-stone-400 text-sm">{exercise.sets} sets × {exercise.reps}</p>
-            {target != null && (
-              <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md font-medium">
-                → {target} this week
-              </span>
-            )}
-          </div>
-
-          {/* Weight row */}
-          {exercise.barbell ? (
-            <div className="mt-2">
-              <div className="flex gap-1">
-                {[15, 25, 45].map(w => (
-                  <button
-                    key={w}
-                    onClick={() => onBarWeightChange(w)}
-                    className={`px-2 py-0.5 rounded-md text-xs font-semibold transition-colors ${
-                      barWeight === w
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-stone-100 text-stone-500 active:bg-stone-200'
-                    }`}
-                  >
-                    {w} lb bar
-                  </button>
-                ))}
-              </div>
-              {editingWeight ? (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <input
-                    type="number"
-                    value={draft}
-                    onChange={e => setDraft(e.target.value)}
-                    onBlur={saveEdit}
-                    onKeyDown={e => e.key === 'Enter' && saveEdit()}
-                    autoFocus
-                    className="w-16 text-xs bg-stone-100 rounded-lg px-2.5 py-1 text-stone-900 outline-none"
-                  />
-                  <span className="text-stone-400 text-xs">lbs · {plateDisplay} per side</span>
-                </div>
-              ) : (
-                <button onClick={startEdit} className="flex items-center gap-1.5 mt-1 group">
-                  <span className="text-stone-400 text-xs">
-                    {plateDisplay} plates · <span className="text-stone-600 font-medium">{total} lbs total</span>
-                  </span>
-                  <span className="text-stone-300 group-active:text-stone-500"><PencilIcon /></span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {onTimer && (
+                <button
+                  onClick={onTimer}
+                  className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center active:bg-orange-200 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
                 </button>
               )}
-            </div>
-          ) : (
-            editingWeight ? (
-              <input
-                type="text"
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                onBlur={saveEdit}
-                onKeyDown={e => e.key === 'Enter' && saveEdit()}
-                autoFocus
-                placeholder="e.g. 25 lbs assist"
-                className="mt-1.5 w-full text-xs bg-stone-100 rounded-lg px-2.5 py-1.5 text-stone-900 outline-none"
-              />
-            ) : (
-              <button onClick={startEdit} className="flex items-center gap-1.5 mt-1 group">
-                <span className="text-stone-400 text-xs">{displayWeight}</span>
-                <span className="text-stone-300 group-active:text-stone-500"><PencilIcon /></span>
+              <button
+                onClick={() => setShowSettings(v => !v)}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  showSettings ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-400 active:bg-stone-200'
+                }`}
+              >
+                <GearIcon />
               </button>
-            )
+            </div>
+          </div>
+
+          {/* Sets × reps / duration */}
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {exercise.isTime ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-stone-400 text-sm">{exercise.sets} sets ×</span>
+                {editingDuration ? (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={durationDraft}
+                    onChange={e => setDurationDraft(e.target.value)}
+                    onBlur={saveDuration}
+                    onKeyDown={e => e.key === 'Enter' && saveDuration()}
+                    autoFocus
+                    className="w-14 text-sm bg-stone-100 rounded-lg px-2 py-0.5 text-stone-900 outline-none text-center"
+                  />
+                ) : (
+                  <button onClick={startEditDuration} className="flex items-center gap-1 group">
+                    <span className="text-stone-600 text-sm font-medium">{customDuration}s</span>
+                    <span className="text-stone-300 group-active:text-stone-500"><PencilIcon /></span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="text-stone-400 text-sm">{exercise.sets} sets × {exercise.reps}</p>
+                {target != null && (
+                  <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md font-medium">
+                    → {target} this week
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Weight summary (tap to open settings) */}
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className="mt-1.5 text-left active:opacity-60"
+          >
+            <span className={`text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
+              {summary}
+            </span>
+          </button>
+
+          {/* Settings menu */}
+          {showSettings && (
+            <div className="mt-2.5 rounded-xl bg-stone-50 p-3.5 space-y-3">
+              <StepperRow
+                label="Bar"
+                value={bar}
+                step={BAR_STEP}
+                min={BAR_MIN}
+                max={BAR_MAX}
+                onChange={(v) => store.setBar(exercise.id, v)}
+              />
+              <StepperRow
+                label="Weight"
+                value={value}
+                step={1}
+                min={0}
+                editable
+                onChange={(v) => store.setValue(exercise.id, v)}
+              />
+              {bar > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-400">Plates per side</span>
+                  <span className="text-stone-600 font-semibold">
+                    {perSide > 0 ? `${fmt(perSide)} lb each side` : 'Empty bar'}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => store.setAssist(exercise.id, !assist)}
+                className="flex items-center gap-2.5 w-full pt-0.5 active:opacity-70"
+              >
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                  assist ? 'border-orange-500 bg-orange-500' : 'border-stone-300'
+                }`}>
+                  {assist && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-sm text-stone-600">Assist — not lifting the full load</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -264,7 +368,10 @@ function ExerciseCard({ exercise, checked, onToggle, onTimer, currentWeek, barWe
   )
 }
 
-function StretchCard({ stretch, checked, onToggle, onTimer }) {
+// ── Stretch card ─────────────────────────────────────────────────────────────
+function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange }) {
+  const [showSettings, setShowSettings] = useState(false)
+
   return (
     <div className={`rounded-2xl p-4 transition-all ${
       checked ? 'bg-orange-50 border border-orange-200' : 'bg-white shadow-sm'
@@ -281,23 +388,47 @@ function StretchCard({ stretch, checked, onToggle, onTimer }) {
             )}
           </div>
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className={`font-semibold ${checked ? 'text-orange-500' : 'text-stone-900'}`}>{stretch.name}</p>
-          <p className="text-stone-400 text-sm mt-0.5">
-            {stretch.duration}s{stretch.perSide ? ' per side' : ''}
-            {stretch.alt && <span className="text-stone-300"> · Alt: {stretch.alt}</span>}
-          </p>
+          <button onClick={() => setShowSettings(v => !v)} className="flex items-center mt-0.5 text-left active:opacity-60">
+            <span className="text-stone-400 text-sm">{customDuration}s{stretch.perSide ? ' per side' : ''}</span>
+            {stretch.alt && <span className="text-stone-300 text-sm ml-1">· Alt: {stretch.alt}</span>}
+          </button>
         </div>
-        <button
-          onClick={onTimer}
-          className="shrink-0 w-11 h-11 rounded-xl bg-orange-100 flex items-center justify-center active:bg-orange-200 transition-colors"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+              showSettings ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-400 active:bg-stone-200'
+            }`}
+          >
+            <GearIcon />
+          </button>
+          <button
+            onClick={onTimer}
+            className="w-11 h-11 rounded-xl bg-orange-100 flex items-center justify-center active:bg-orange-200 transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {showSettings && (
+        <div className="mt-2.5 rounded-xl bg-stone-50 p-3.5">
+          <StepperRow
+            label="Duration"
+            value={customDuration}
+            step={5}
+            min={5}
+            editable
+            suffix="s"
+            onChange={onDurationChange}
+          />
+        </div>
+      )}
     </div>
   )
 }

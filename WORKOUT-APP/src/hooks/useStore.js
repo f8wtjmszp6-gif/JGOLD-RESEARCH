@@ -107,24 +107,32 @@ export function useStore() {
     update(s => ({ ...s, currentWeek: week, pendingMissedDays: null }))
   }
 
-  // ── Bar weights ───────────────────────────────────────────────────────────
-  function getBarWeight(exerciseId, defaultBar) {
-    return state.barWeights?.[exerciseId] ?? defaultBar
+  // ── Per-exercise weight settings ──────────────────────────────────────────
+  // bar   – bar weight (0 = machine / no bar)
+  // value – total weight lifted; plates per side = (value − bar) / 2
+  // assist – "not lifting the full load" flag
+  function getBar(exerciseId, defaultBar) {
+    return state.bars?.[exerciseId] ?? defaultBar
   }
 
-  function setBarWeight(exerciseId, weight) {
-    update(s => ({ ...s, barWeights: { ...s.barWeights, [exerciseId]: weight } }))
+  function setBar(exerciseId, weight) {
+    update(s => ({ ...s, bars: { ...s.bars, [exerciseId]: weight } }))
   }
 
-  // ── Custom exercise weights ───────────────────────────────────────────────
-  // For barbell: stored value is total weight (number). Plate weight = total - bar.
-  // For non-barbell: stored value is the display string (e.g. "25 lbs assist").
-  function getCustomWeight(exerciseId) {
-    return state.customWeights?.[exerciseId] ?? null
+  function getValue(exerciseId, defaultValue) {
+    return state.values?.[exerciseId] ?? defaultValue
   }
 
-  function setCustomWeight(exerciseId, value) {
-    update(s => ({ ...s, customWeights: { ...s.customWeights, [exerciseId]: value } }))
+  function setValue(exerciseId, value) {
+    update(s => ({ ...s, values: { ...s.values, [exerciseId]: value } }))
+  }
+
+  function getAssist(exerciseId, defaultAssist) {
+    return state.assist?.[exerciseId] ?? defaultAssist
+  }
+
+  function setAssist(exerciseId, isAssist) {
+    update(s => ({ ...s, assist: { ...s.assist, [exerciseId]: isAssist } }))
   }
 
   // ── Restart ───────────────────────────────────────────────────────────────
@@ -193,15 +201,14 @@ export function useStore() {
   }
 
 
-  // ── Bodyweight mode per exercise ─────────────────────────────────────────
-  // true = bodyweight, false = add-weight mode
-  function getBodyweightMode(exerciseId, defaultIsBW) {
-    const stored = state.bodyweightModes?.[exerciseId]
-    return stored === undefined ? defaultIsBW : stored
+  // ── Weekend day mode ('walk' | 'rest') ────────────────────────────────────
+  // Persistent setting (does not reset weekly). Each weekend day is independent.
+  function getWeekendMode(day) {
+    return state.weekendModes?.[day] ?? (day === 'saturday' ? 'walk' : 'rest')
   }
 
-  function setBodyweightMode(exerciseId, isBW) {
-    update(s => ({ ...s, bodyweightModes: { ...s.bodyweightModes, [exerciseId]: isBW } }))
+  function setWeekendMode(day, mode) {
+    update(s => ({ ...s, weekendModes: { ...s.weekendModes, [day]: mode } }))
   }
 
   // ── Custom durations (seconds) for timed exercises and stretches ──────────
@@ -220,13 +227,15 @@ export function useStore() {
     redoWeek,
     advanceWeek,
     setWeek,
-    getBarWeight,
-    setBarWeight,
-    getCustomWeight,
-    setCustomWeight,
+    getBar,
+    setBar,
+    getValue,
+    setValue,
+    getAssist,
+    setAssist,
+    getWeekendMode,
+    setWeekendMode,
     restartProgram,
-    getBodyweightMode,
-    setBodyweightMode,
     getCustomDuration,
     setCustomDuration,
     getChecked,

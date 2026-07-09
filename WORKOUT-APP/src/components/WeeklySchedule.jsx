@@ -7,12 +7,14 @@ const dayColors = {
   lift: 'bg-orange-100 text-orange-600',
   otf: 'bg-red-100 text-red-600',
   walk: 'bg-emerald-100 text-emerald-600',
+  rest: 'bg-stone-100 text-stone-400',
 }
 
 const dayIcons = {
   lift: '🏋️',
   otf: '🔥',
   walk: '🚶',
+  rest: '😴',
 }
 
 export default function WeeklySchedule({ onSelectDay, store }) {
@@ -21,7 +23,7 @@ export default function WeeklySchedule({ onSelectDay, store }) {
   }
 
   const today = store.getTodayKey()
-  const allDays = [...DAYS, 'saturday']
+  const allDays = [...DAYS, 'saturday', 'sunday']
 
   return (
     <div className="flex flex-col h-full">
@@ -60,49 +62,140 @@ export default function WeeklySchedule({ onSelectDay, store }) {
           const d = schedule[day]
           if (!d) return null
           const isToday = today === day
-          const exerciseCount = d.exercises.length
-          const completed = d.exercises.filter(e => store.getChecked(day, 'exercises', e.id)).length
 
-          return (
-            <button
-              key={day}
-              onClick={() => d.type !== 'walk' && onSelectDay(day)}
-              className={`w-full text-left rounded-2xl px-4 py-3.5 bg-white transition-all active:scale-[0.98] ${
-                isToday ? 'ring-2 ring-orange-400 shadow-sm' : 'shadow-sm'
-              } ${d.type === 'walk' ? 'cursor-default' : ''}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3.5">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${dayColors[d.type]}`}>
-                    {dayIcons[d.type]}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-stone-900">{d.label}</span>
-                      {isToday && (
-                        <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">Today</span>
-                      )}
-                    </div>
-                    <span className="text-sm text-stone-400">{d.name}</span>
-                  </div>
-                </div>
-                {exerciseCount > 0 && (
-                  <div className="text-right">
-                    <span className="text-sm font-medium text-stone-500">{completed}/{exerciseCount}</span>
-                    <div className="w-16 h-1 bg-stone-100 rounded-full mt-1.5">
-                      <div
-                        className="h-full bg-orange-400 rounded-full transition-all"
-                        style={{ width: `${exerciseCount ? (completed / exerciseCount) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </button>
-          )
+          if (day === 'saturday' || day === 'sunday') {
+            return <WeekendCard key={day} day={day} label={d.label} isToday={isToday} store={store} />
+          }
+          if (d.type === 'otf') {
+            return <OtfCard key={day} d={d} isToday={isToday} store={store} />
+          }
+          return <LiftCard key={day} day={day} d={d} isToday={isToday} store={store} onSelect={() => onSelectDay(day)} />
         })}
       </div>
     </div>
+  )
+}
+
+// Shared card row: colored icon tile + label/name on the left, `right` slot on the right.
+function CardRow({ icon, iconColor, label, name, isToday, right }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3.5">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${iconColor}`}>{icon}</div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-stone-900">{label}</span>
+            {isToday && (
+              <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">Today</span>
+            )}
+          </div>
+          <span className="text-sm text-stone-400">{name}</span>
+        </div>
+      </div>
+      {right}
+    </div>
+  )
+}
+
+function LiftCard({ day, d, isToday, store, onSelect }) {
+  const exerciseCount = d.exercises.length
+  const completed = d.exercises.filter(e => store.getChecked(day, 'exercises', e.id)).length
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left rounded-2xl px-4 py-3.5 bg-white transition-all active:scale-[0.98] ${
+        isToday ? 'ring-2 ring-orange-400 shadow-sm' : 'shadow-sm'
+      }`}
+    >
+      <CardRow
+        icon={dayIcons[d.type]}
+        iconColor={dayColors[d.type]}
+        label={d.label}
+        name={d.name}
+        isToday={isToday}
+        right={exerciseCount > 0 && (
+          <div className="text-right">
+            <span className="text-sm font-medium text-stone-500">{completed}/{exerciseCount}</span>
+            <div className="w-16 h-1 bg-stone-100 rounded-full mt-1.5">
+              <div
+                className="h-full bg-orange-400 rounded-full transition-all"
+                style={{ width: `${exerciseCount ? (completed / exerciseCount) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+      />
+    </button>
+  )
+}
+
+function WeekendCard({ day, label, isToday, store }) {
+  const isWalk = store.getWeekendMode(day) === 'walk'
+  return (
+    <div className={`w-full rounded-2xl px-4 py-3.5 bg-white ${isToday ? 'ring-2 ring-orange-400 shadow-sm' : 'shadow-sm'}`}>
+      <CardRow
+        icon={isWalk ? '🚶' : '😴'}
+        iconColor={isWalk ? dayColors.walk : dayColors.rest}
+        label={label}
+        name={isWalk ? '30-Min Walk' : 'Rest & Recovery'}
+        isToday={isToday}
+        right={
+          <Toggle
+            on={isWalk}
+            onLabel="Walk"
+            offLabel="Rest"
+            onToggle={() => store.setWeekendMode(day, isWalk ? 'rest' : 'walk')}
+          />
+        }
+      />
+    </div>
+  )
+}
+
+function OtfCard({ d, isToday, store }) {
+  const done = store.getChecked('wednesday', 'otf', 'done')
+  return (
+    <div className={`w-full rounded-2xl px-4 py-3.5 bg-white ${isToday ? 'ring-2 ring-orange-400 shadow-sm' : 'shadow-sm'}`}>
+      <CardRow
+        icon={dayIcons.otf}
+        iconColor={dayColors.otf}
+        label={d.label}
+        name={d.name}
+        isToday={isToday}
+        right={
+          <button
+            onClick={() => store.toggleChecked('wednesday', 'otf', 'done')}
+            className="flex items-center gap-2 active:scale-95 transition-transform"
+          >
+            <span className={`text-xs font-medium ${done ? 'text-orange-500' : 'text-stone-400'}`}>
+              {done ? 'Done' : 'Mark done'}
+            </span>
+            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+              done ? 'border-orange-500 bg-orange-500' : 'border-stone-200'
+            }`}>
+              {done && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </div>
+          </button>
+        }
+      />
+    </div>
+  )
+}
+
+function Toggle({ on, onToggle, onLabel, offLabel }) {
+  return (
+    <button onClick={onToggle} className="flex items-center gap-2.5 active:opacity-70">
+      <span className={`text-xs font-medium ${on ? 'text-orange-500' : 'text-stone-400'}`}>
+        {on ? onLabel : offLabel}
+      </span>
+      <div className={`w-11 h-6 rounded-full p-0.5 transition-colors ${on ? 'bg-orange-500' : 'bg-stone-300'}`}>
+        <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${on ? 'translate-x-5' : ''}`} />
+      </div>
+    </button>
   )
 }
 
