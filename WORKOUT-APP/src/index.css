@@ -21,7 +21,7 @@ button {
 }
 
 #root {
-  height: 100svh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
