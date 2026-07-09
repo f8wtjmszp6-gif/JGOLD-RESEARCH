@@ -27,24 +27,6 @@ export default function WeeklySchedule({ onSelectDay, store }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Hero */}
-      <div className="relative h-48 shrink-0 overflow-hidden">
-        <img
-          src={HERO}
-          className="w-full h-full object-cover"
-          alt=""
-          draggable={false}
-        />
-        <div
-          className="absolute inset-0"
-          style={{ background: 'linear-gradient(to bottom, transparent 20%, #fafaf9 100%)' }}
-        />
-        <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
-          <h1 className="text-3xl font-bold text-stone-900 tracking-tight">My Workouts</h1>
-          <p className="text-stone-500 text-sm mt-0.5">Week {store.currentWeek} of 12</p>
-        </div>
-      </div>
-
       {store.pendingMissedDays && (
         <MissedDaysBanner
           week={store.pendingMissedDays}

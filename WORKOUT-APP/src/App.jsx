@@ -5,6 +5,8 @@ import ProgramView from './components/ProgramView'
 import { useStore } from './hooks/useStore'
 import { schedule } from './data/workout'
 
+const HERO = `${import.meta.env.BASE_URL}workout-hero-image.jpg`
+
 export default function App() {
   const [screen, setScreen] = useState('home')
   const [selectedDay, setSelectedDay] = useState(null)
@@ -15,9 +17,39 @@ export default function App() {
     setScreen('day')
   }
 
+  // Setup and the day drill-in each own the full viewport and bring their own header.
+  const showChrome = store.startDate && screen !== 'day'
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-stone-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-      <div className="flex-1 overflow-hidden">
+    <div
+      className="flex flex-col flex-1 min-h-0 bg-stone-50"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {showChrome && (
+        <>
+          <Hero
+            title={screen === 'program' ? '12-Week Program' : 'My Workouts'}
+            subtitle={
+              screen === 'program'
+                ? 'Tap a week to set it as current'
+                : `Week ${store.currentWeek} of 12`
+            }
+          />
+
+          <div className="shrink-0 px-5 pb-3">
+            <div className="bg-stone-100 rounded-xl p-1 flex">
+              <TabBtn active={screen === 'home'} onClick={() => setScreen('home')}>
+                Schedule
+              </TabBtn>
+              <TabBtn active={screen === 'program'} onClick={() => setScreen('program')}>
+                Program
+              </TabBtn>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-hidden">
         {screen === 'home' && (
           <WeeklySchedule onSelectDay={openDay} store={store} />
         )}
@@ -33,46 +65,35 @@ export default function App() {
           <ProgramView store={store} />
         )}
       </div>
-
-      <nav className="shrink-0 bg-white border-t border-stone-100 flex" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <NavBtn
-          label="Schedule"
-          active={screen === 'home' || screen === 'day'}
-          onClick={() => setScreen('home')}
-          icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-          }
-        />
-        <NavBtn
-          label="Program"
-          active={screen === 'program'}
-          onClick={() => setScreen('program')}
-          icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-          }
-        />
-      </nav>
     </div>
   )
 }
 
-function NavBtn({ label, active, onClick, icon }) {
+function Hero({ title, subtitle }) {
+  return (
+    <div className="relative h-48 shrink-0 overflow-hidden">
+      <img src={HERO} className="w-full h-full object-cover" alt="" draggable={false} />
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to bottom, transparent 20%, #fafaf9 100%)' }}
+      />
+      <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
+        <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{title}</h1>
+        <p className="text-stone-500 text-sm mt-0.5">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
+
+function TabBtn({ active, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
-        active ? 'text-orange-500' : 'text-stone-400'
+      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+        active ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'
       }`}
     >
-      {icon}
-      <span className="text-xs font-medium">{label}</span>
+      {children}
     </button>
   )
 }

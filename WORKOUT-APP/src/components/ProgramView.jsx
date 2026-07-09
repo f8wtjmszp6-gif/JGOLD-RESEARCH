@@ -29,11 +29,6 @@ export default function ProgramView({ store }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-5 pt-8 pb-4">
-        <h1 className="text-3xl font-bold text-stone-900 tracking-tight">12-Week Program</h1>
-        <p className="text-stone-400 text-sm mt-1">Tap a week to set it as current</p>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-6">
 
         {/* Start date card */}
