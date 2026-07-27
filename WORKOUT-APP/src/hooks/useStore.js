@@ -28,20 +28,28 @@ function processOnLoad(s) {
   if (!s.startDate) return s
 
   const calWeek = getCalendarWeek(s.startDate)
+  // ackCalWeek = the calendar week we've already reconciled. This is tracked
+  // separately from currentWeek so that choosing "Redo" (which keeps you on an
+  // earlier week than the calendar) doesn't re-trigger the missed-days prompt on
+  // every reload. For pre-existing saves without the field, treat the current
+  // calendar week as already acknowledged so we never wipe their data on upgrade.
+  const ack = s.ackCalWeek ?? calWeek
+
+  // No new calendar week to reconcile — just make sure the baseline is persisted.
+  if (calWeek <= ack || s.pendingMissedDays) {
+    return s.ackCalWeek === undefined ? { ...s, ackCalWeek: calWeek } : s
+  }
+
+  // Calendar has moved into a new week — check if the current week was completed
   const curWeek = s.currentWeek ?? 1
-
-  // Already handled or same week
-  if (calWeek <= curWeek || s.pendingMissedDays) return s
-
-  // Calendar has moved ahead — check if last week was completed
   const completedDays = s.weeklyLog?.[curWeek]?.completedDays ?? []
   const allDone = LIFT_DAYS.every(d => completedDays.includes(d))
   const cleared = clearDayCheckboxes(s)
 
   if (allDone) {
-    return { ...cleared, currentWeek: Math.min(12, curWeek + 1) }
+    return { ...cleared, currentWeek: Math.min(12, curWeek + 1), ackCalWeek: calWeek }
   } else {
-    return { ...cleared, pendingMissedDays: curWeek }
+    return { ...cleared, pendingMissedDays: curWeek, ackCalWeek: calWeek }
   }
 }
 
@@ -49,7 +57,11 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     const s = raw ? JSON.parse(raw) : {}
-    return processOnLoad(s)
+    const processed = processOnLoad(s)
+    // Persist load-time reconciliation so the acknowledged calendar week is
+    // durable even before the user interacts.
+    if (processed !== s) saveState(processed)
+    return processed
   } catch {
     return {}
   }
@@ -58,7 +70,9 @@ function loadState() {
 function saveState(s) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
-  } catch {}
+  } catch {
+    // Storage may be unavailable (private mode / quota) — nothing to do.
+  }
 }
 
 export function useStore() {
@@ -83,14 +97,17 @@ export function useStore() {
       ...s,
       startDate: date,
       currentWeek: week,
+      ackCalWeek: week,
       weeklyLog: {},
       pendingMissedDays: null,
     }))
   }
 
-  // User chose to redo the missed week — stay on same week, dismiss banner
+  // User chose to redo the missed week — stay on same week, dismiss banner.
+  // Acknowledge the current calendar week so the prompt doesn't fire again until
+  // a further week passes.
   function redoWeek() {
-    update(s => ({ ...s, pendingMissedDays: null }))
+    update(s => ({ ...s, pendingMissedDays: null, ackCalWeek: getCalendarWeek(s.startDate) }))
   }
 
   // User chose to continue despite missing days — advance one week
@@ -98,6 +115,7 @@ export function useStore() {
     update(s => ({
       ...s,
       pendingMissedDays: null,
+      ackCalWeek: getCalendarWeek(s.startDate),
       currentWeek: Math.min(12, (s.currentWeek ?? 1) + 1),
     }))
   }
@@ -146,6 +164,7 @@ export function useStore() {
       ...s,
       startDate: fmt(monday),
       currentWeek: 1,
+      ackCalWeek: 1,
       weeklyLog: {},
       pendingMissedDays: null,
     }))
