@@ -5,6 +5,15 @@ import { BAR_MIN, BAR_MAX, BAR_STEP } from '../data/workout'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
 
+// Seconds → "6m 30s" / "6m" / "45s"
+function fmtDuration(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m === 0) return `${s}s`
+  if (s === 0) return `${m}m`
+  return `${m}m ${s}s`
+}
+
 export default function DayDetail({ day, dayData, store, onBack }) {
   const [activeStretch, setActiveStretch] = useState(null)
   const [activeTimed, setActiveTimed] = useState(null)
@@ -12,6 +21,13 @@ export default function DayDetail({ day, dayData, store, onBack }) {
 
   const exerciseDone = dayData.exercises.filter(e => store.getChecked(day, 'exercises', e.id)).length
   const stretchDone = dayData.stretches.filter(s => store.getChecked(day, 'stretches', s.id)).length
+
+  // Total stretching time for the day: each stretch's configured duration,
+  // counting per-side stretches twice (you hold each side).
+  const totalStretchSeconds = dayData.stretches.reduce(
+    (sum, s) => sum + store.getCustomDuration(s.id, s.duration) * (store.getPerSide(s.id, s.perSide) ? 2 : 1),
+    0,
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -55,6 +71,19 @@ export default function DayDetail({ day, dayData, store, onBack }) {
           />
         ))}
 
+        {tab === 'stretches' && (
+          <div className="rounded-2xl bg-orange-50 border border-orange-100 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span className="text-sm font-medium text-stone-600">Total stretching time</span>
+            </div>
+            <span className="text-orange-600 font-bold">{fmtDuration(totalStretchSeconds)}</span>
+          </div>
+        )}
+
         {tab === 'stretches' && dayData.stretches.map(stretch => (
           <StretchCard
             key={stretch.id}
@@ -63,9 +92,12 @@ export default function DayDetail({ day, dayData, store, onBack }) {
             onToggle={() => store.toggleChecked(day, 'stretches', stretch.id)}
             customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
             onDurationChange={(s) => store.setCustomDuration(stretch.id, s)}
+            perSide={store.getPerSide(stretch.id, stretch.perSide)}
+            onPerSideChange={(v) => store.setPerSide(stretch.id, v)}
             onTimer={() => setActiveStretch({
               ...stretch,
               duration: store.getCustomDuration(stretch.id, stretch.duration),
+              perSide: store.getPerSide(stretch.id, stretch.perSide),
             })}
           />
         ))}
@@ -369,7 +401,7 @@ function ExerciseCard({ exercise, store, checked, onToggle, onTimer }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
-function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange }) {
+function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange }) {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
@@ -391,7 +423,7 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
         <div className="flex-1 min-w-0">
           <p className={`font-semibold ${checked ? 'text-orange-500' : 'text-stone-900'}`}>{stretch.name}</p>
           <button onClick={() => setShowSettings(v => !v)} className="flex items-center mt-0.5 text-left active:opacity-60">
-            <span className="text-stone-400 text-sm">{customDuration}s{stretch.perSide ? ' per side' : ''}</span>
+            <span className="text-stone-400 text-sm">{customDuration}s{perSide ? ' per side' : ''}</span>
             {stretch.alt && <span className="text-stone-300 text-sm ml-1">· Alt: {stretch.alt}</span>}
           </button>
         </div>
@@ -417,7 +449,7 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
       </div>
 
       {showSettings && (
-        <div className="mt-2.5 rounded-xl bg-stone-50 p-3.5">
+        <div className="mt-2.5 rounded-xl bg-stone-50 p-3.5 space-y-3">
           <StepperRow
             label="Duration"
             value={customDuration}
@@ -427,6 +459,21 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
             suffix="s"
             onChange={onDurationChange}
           />
+          <button
+            onClick={() => onPerSideChange(!perSide)}
+            className="flex items-center gap-2.5 w-full active:opacity-70"
+          >
+            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+              perSide ? 'border-orange-500 bg-orange-500' : 'border-stone-300'
+            }`}>
+              {perSide && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </div>
+            <span className="text-sm text-stone-600">Per side — hold each side (counts 2×)</span>
+          </button>
         </div>
       )}
     </div>

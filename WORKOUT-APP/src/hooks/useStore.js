@@ -238,6 +238,15 @@ export function useStore() {
   function setCustomDuration(itemId, seconds) {
     update(s => ({ ...s, customDurations: { ...s.customDurations, [itemId]: seconds } }))
   }
+
+  // ── Per-side override for stretches (true = hold each side, counts 2×) ───────
+  function getPerSide(itemId, defaultPerSide) {
+    return state.perSide?.[itemId] ?? defaultPerSide
+  }
+
+  function setPerSide(itemId, value) {
+    update(s => ({ ...s, perSide: { ...s.perSide, [itemId]: value } }))
+  }
   return {
     currentWeek,
     startDate,
@@ -257,6 +266,8 @@ export function useStore() {
     restartProgram,
     getCustomDuration,
     setCustomDuration,
+    getPerSide,
+    setPerSide,
     getChecked,
     toggleChecked,
     clearDay,
