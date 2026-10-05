@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'WORKOUT-APP/**'
+      - 'WORKOUT-APP-V2/**'
       - '.github/workflows/deploy.yml'
 
 permissions:
@@ -31,15 +32,33 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: WORKOUT-APP/package-lock.json
+          cache-dependency-path: |
+            WORKOUT-APP/package-lock.json
+            WORKOUT-APP-V2/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies (v1)
         run: npm ci
         working-directory: WORKOUT-APP
 
-      - name: Build
+      - name: Build v1
         run: npm run build
         working-directory: WORKOUT-APP
+
+      - name: Install dependencies (v2)
+        run: npm ci
+        working-directory: WORKOUT-APP-V2
+
+      - name: Build v2
+        run: npm run build
+        working-directory: WORKOUT-APP-V2
+
+      # v1 is served at the site root, v2 from the /v2/ subdirectory.
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp -r WORKOUT-APP/dist/. site/
+          mkdir -p site/v2
+          cp -r WORKOUT-APP-V2/dist/. site/v2/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -47,7 +66,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: WORKOUT-APP/dist
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
