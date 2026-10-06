@@ -1,7 +1,7 @@
 // Bar weight range for the per-exercise settings menu (0 = no bar / machine).
 export const BAR_MIN = 0
 export const BAR_MAX = 100
-export const BAR_STEP = 5
+export const BAR_STEP = 1
 
 // Every exercise carries a uniform weight config:
 //   weight: { bar, value, assist? }
@@ -94,18 +94,60 @@ export const workouts = {
   },
 }
 
+// Default rest between sets when an exercise's timer is set to Rest: longer
+// for the heavy compound lifts, shorter for accessory work.
+export const COMPOUND_LIFTS = new Set([
+  'bench-press', 'overhead-press', 'dips', 'cable-squat', 'hip-thrust',
+  'barbell-rows', 'pull-ups', 'romanian-deadlift',
+])
+export const REST_COMPOUND = 150
+export const REST_ACCESSORY = 90
+
+// A standalone full-body routine for days without a gym workout, built from
+// the gym days' own stretches so durations and per-side settings carry over.
+const ROUTINE_STRETCHES = [
+  'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'cross-body-shoulder',
+  'spinal-twist', 'figure-4', 'wall-calf-stretch', 'childs-pose',
+]
+export const STRETCH_ROUTINE = {
+  id: 'routine',
+  name: 'Full-Body Stretch',
+  short: 'Full-Body Stretch',
+  exercises: [],
+}
+
+// Weekly goal for both home cards — workouts and stretching: 3 a week
+// meets it, 4 is the stretch target.
+export const WEEKLY_GOAL = { min: 3, max: 4 }
+
+// Which body regions each workout trains, per view, for the home screen's
+// Muscles this week figure. Pushing works the front of the upper body and
+// the triceps; pulling the back and biceps; the two leg days split front
+// (quads) and back (hamstrings, calves), with glutes and core shared.
+export const MUSCLE_MAP = {
+  push: { front: ['shoulders', 'chest'], back: ['arms'] },
+  legsQuad: { front: ['thighs', 'hips', 'core'], back: ['hips'] },
+  pull: { front: ['arms', 'core'], back: ['back', 'shoulders'] },
+  legsPost: { front: ['core'], back: ['thighs', 'calves', 'hips', 'back'] },
+}
+
 // Display order of the gym workouts on the home screen.
+{
+  const all = Object.values(workouts).flatMap(x => x.stretches)
+  STRETCH_ROUTINE.stretches = ROUTINE_STRETCHES.map(id => all.find(x => x.id === id))
+}
+
 export const GYM_ORDER = ['push', 'legsQuad', 'pull', 'legsPost']
 
 // Days you didn't make it to the gym — counted, so three walks read as 3.
 //   one / many  – how the count reads ("1 walk", "3 rest days").
 //   short       – legend label on the week bar.
-//   tile / mark – the activity's color: a light tile behind its icon, and the
+//   tile / mark – the activity's color: a light gradient tile behind its figure, and the
 //                 solid fill for its days on the week bar.
 export const activities = [
-  { id: 'class', name: 'Workout Class', short: 'Class', note: 'OrangeTheory or any class', icon: '🔥', one: 'class', many: 'classes', tile: 'bg-violet-100', mark: 'bg-violet-600' },
-  { id: 'walk', name: 'Walking', short: 'Walk', note: 'Got a walk in instead', icon: '🚶', one: 'walk', many: 'walks', tile: 'bg-emerald-100', mark: 'bg-emerald-600' },
-  { id: 'rest', name: 'Rest', short: 'Rest', note: 'Recovery day', icon: '😴', one: 'rest day', many: 'rest days', tile: 'bg-indigo-100', mark: 'bg-indigo-400' },
+  { id: 'class', name: 'Workout Class', short: 'Class', note: 'OrangeTheory or any class', icon: '🔥', one: 'class', many: 'classes', tile: 'from-violet-50 to-violet-100', mark: 'bg-violet-600' },
+  { id: 'walk', name: 'Walking', short: 'Walk', note: 'Got a walk in instead', icon: '🚶', one: 'walk', many: 'walks', tile: 'from-emerald-50 to-emerald-100', mark: 'bg-emerald-600' },
+  { id: 'rest', name: 'Rest', short: 'Rest', note: 'Recovery day', icon: '😴', one: 'rest day', many: 'rest days', tile: 'from-indigo-50 to-indigo-100', mark: 'bg-indigo-400' },
 ]
 
 // Gym days on the week bar. The four marks, in bar order gym → class → walk →
@@ -114,24 +156,3 @@ export const activities = [
 // clears 3:1 on white. Gray fails as a category color and orange beside red
 // fails outright, so re-run the validator before changing any of them.
 export const GYM_MARK = 'bg-orange-600'
-
-// ── Reference (the ⓘ sheet) ────────────────────────────────────────────────
-// Guidance for when and how much to bump — the app never changes your
-// numbers on its own.
-
-export const progressionRules = [
-  { category: 'Barbell — Upper Body', exercises: 'Bench Press, OHP, Barbell Rows, Shrugs, Barbell Curl', rule: '+5 lbs total (+2.5 lbs per side — requires fractional plates)' },
-  { category: 'Barbell — Lower Body', exercises: 'Romanian Deadlift, Hip Thrust', rule: '+10 lbs total (+5 lbs per side)' },
-  { category: 'Weighted Bodyweight', exercises: 'Dips, Pull-Ups', rule: '+5 lbs added weight' },
-  { category: 'Dumbbell', exercises: 'Lateral Raises, Hammer Curls, Overhead Tricep Extension', rule: 'Increase to next available dumbbell increment' },
-  { category: 'Cable', exercises: 'Face Pulls, Woodchoppers', rule: '+2.5–5 lbs' },
-  { category: 'Machine — Lower Body', exercises: 'Cable-Assisted Squat, Hip Adduction, Hip Abduction, Standing Calf Raise', rule: '+10 lbs' },
-  { category: 'Machine — Other', exercises: 'Seated Calf Raise', rule: '+5 lbs' },
-]
-
-export const coreProgression = [
-  { exercise: 'Plank', rule: 'Add 5s per week. Extend range by 15s when you plateau. Add a weight plate when consistently hitting 90s.' },
-  { exercise: 'Dead Bugs', rule: 'Follow rep progression (12–14). Hold a 2–5 lb dumbbell once 14 reps is easy.' },
-  { exercise: 'Hanging Leg Raises', rule: 'Follow rep progression (12–14). Switch to straight legs, then ankle weights or toes-to-bar.' },
-  { exercise: 'Woodchoppers', rule: 'Follow cable rule: +2.5–5 lbs when you top the range.' },
-]

@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import Home from './components/Home'
+import MuscleMap from './components/MuscleMap'
 import WorkoutDetail from './components/WorkoutDetail'
-import InfoSheet from './components/InfoSheet'
 import { useStore } from './hooks/useStore'
-import { GYM_MARK, activities } from './data/workout'
+import { GYM_MARK, activities, WEEKLY_GOAL } from './data/workout'
+import { GoalRow } from './components/Goal'
+import { goalTint, goalFill } from './utils/goal'
+import walkImg from './assets/workouts/walk.svg'
+import restImg from './assets/workouts/rest.svg'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
-  const [sheet, setSheet] = useState(null) // 'info' | 'reset' | null
+  const [sheet, setSheet] = useState(null) // 'reset' | null
   const store = useStore()
 
   return (
@@ -23,10 +27,11 @@ export default function App() {
       ) : (
         <>
           <Header
-            onInfo={() => setSheet('info')}
             onReset={() => setSheet('reset')}
             canReset={store.hasChecks}
             week={store.week}
+            stretch={store.stretchWeek}
+            store={store}
           />
           <div className="flex-1 min-h-0 overflow-hidden">
             <Home store={store} onOpenWorkout={setWorkoutId} />
@@ -34,7 +39,6 @@ export default function App() {
         </>
       )}
 
-      {sheet === 'info' && <InfoSheet onClose={() => setSheet(null)} />}
       {sheet === 'reset' && (
         <ResetConfirm
           onCancel={() => setSheet(null)}
@@ -45,19 +49,21 @@ export default function App() {
   )
 }
 
-function Header({ onInfo, onReset, canReset, week }) {
+function Header({ onReset, canReset, week, stretch, store }) {
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold text-stone-900 tracking-tight">My Workouts</h1>
+        <div>
+          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight">Today</h1>
+          <p className="text-sm text-stone-500 mt-0.5">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
         <div className="flex items-center gap-2 shrink-0">
-          <HeaderBtn onClick={onInfo} label="Progression rules">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="11" x2="12" y2="17" />
-              <circle cx="12" cy="7.5" r="0.6" fill="currentColor" />
-            </svg>
-          </HeaderBtn>
+          {/* This week's body map, as a small widget beside reset. */}
+          <div className="bg-white shadow-sm rounded-xl px-2 py-1">
+            <MuscleMap store={store} />
+          </div>
           <HeaderBtn onClick={onReset} label="Clear all checkmarks" disabled={!canReset}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 1 0 3-6.7" />
@@ -66,47 +72,61 @@ function Header({ onInfo, onReset, canReset, week }) {
           </HeaderBtn>
         </div>
       </div>
-      <WeekCard week={week} />
+      <ThisWeekCard week={week} stretch={stretch} />
     </div>
   )
 }
 
-// Bar and legend order match the list below: gym, then each activity.
-const WEEK_KINDS = [
+// Workouts toward the weekly goal: gym (orange) and class (violet) only.
+// The two colors are a validated pair; they stay put while the goal changes.
+const CLASS = activities.find(a => a.id === 'class')
+const WORKOUT_KINDS = [
   { id: 'gym', label: 'Gym', mark: GYM_MARK },
-  ...activities.map(a => ({ id: a.id, label: a.short, mark: a.mark })),
+  { id: 'class', label: 'Class', mark: CLASS.mark },
 ]
 
-// The week as a stacked bar: one segment per day, colored by what you did.
-// Anything past 7 (you forgot to reset) just reads as a full week.
-function WeekCard({ week }) {
-  const segments = WEEK_KINDS.flatMap(k => Array(week[k.id]).fill(k.mark)).slice(0, 7)
-  const filled = segments.length
-  const summary = WEEK_KINDS.map(k => `${week[k.id]} ${k.label.toLowerCase()}`).join(', ')
+// Walks and rest days show on the card but don't count toward the goal.
+const SHOWN_KINDS = [
+  { id: 'walk', label: 'walks', img: walkImg, tile: activities.find(a => a.id === 'walk').tile },
+  { id: 'rest', label: 'rest days', img: restImg, tile: activities.find(a => a.id === 'rest').tile },
+]
+
+// Both weekly goals in one card. It greens as the two average toward the goal.
+function ThisWeekCard({ week, stretch }) {
+  const workouts = week.gym + week.class
+  const level = Math.floor((Math.min(workouts, WEEKLY_GOAL.max) + Math.min(stretch.total, WEEKLY_GOAL.max)) / 2)
 
   return (
-    <div className="mt-4 bg-white shadow-sm rounded-2xl px-4 py-3.5">
-      <div className="flex items-baseline justify-between mb-2.5">
+    <div className={`mt-4 shadow-sm rounded-2xl px-4 py-3.5 border transition-colors duration-500 ${goalTint(level)}`}>
+      <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-medium text-stone-500">This week</p>
-        <p className="text-stone-900">
-          {filled === 7 && <span className="text-stone-500 mr-1">✓</span>}
-          <span className="text-lg font-semibold">{filled}</span>
-          <span className="text-sm text-stone-400"> / 7</span>
-        </p>
+        <p className="text-xs text-stone-400">Goal {WEEKLY_GOAL.min}–{WEEKLY_GOAL.max}</p>
       </div>
-      <div className="flex gap-0.5" role="img" aria-label={`${filled} of 7 days: ${summary}`}>
-        {Array.from({ length: 7 }, (_, i) => (
-          <div key={i} className={`flex-1 h-2.5 rounded transition-colors ${segments[i] ?? 'bg-stone-200'}`} />
-        ))}
+      <div className="space-y-2.5">
+        <GoalRow label="Workouts" count={workouts} fills={WORKOUT_KINDS.flatMap(k => Array(week[k.id]).fill(k.mark))} />
+        <GoalRow label="Stretching" count={stretch.total} fills={Array(stretch.total).fill(goalFill(stretch.total))} />
       </div>
-      <div className="flex items-center justify-between mt-3">
-        {WEEK_KINDS.map(k => (
-          <div key={k.id} className={`flex items-center gap-1.5 text-xs ${week[k.id] ? '' : 'opacity-40'}`}>
+      <div className="flex items-center gap-4 mt-3 text-xs">
+        {WORKOUT_KINDS.map(k => (
+          <div key={k.id} className={`flex items-center gap-1.5 ${week[k.id] ? '' : 'opacity-40'}`}>
             <span className={`w-2 h-2 rounded-full ${k.mark}`} />
             <span className="text-stone-500">{k.label}</span>
             <span className="font-semibold text-stone-900">{week[k.id]}</span>
           </div>
         ))}
+        {/* Shown, not counted: walks and rest days, as their figures. */}
+        <div className="ml-auto flex items-center gap-1.5">
+          {SHOWN_KINDS.map(k => (
+            <span
+              key={k.id}
+              aria-label={`${week[k.id]} ${k.label} (not counted)`}
+              className={`flex items-center gap-1 rounded-lg pl-0.5 pr-2 py-0.5 bg-gradient-to-br ${k.tile} ${week[k.id] ? '' : 'opacity-40'}`}
+            >
+              <img src={k.img} alt="" className="w-5 h-6" draggable={false} />
+              <span className="font-semibold text-stone-700">{week[k.id]}</span>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
