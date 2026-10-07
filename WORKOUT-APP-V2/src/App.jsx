@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Home from './components/Home'
 import MuscleMap from './components/MuscleMap'
+import WeekCard from './components/WeekCard'
+import History from './components/History'
+import TrendsScreen from './components/Trends'
 import WorkoutDetail from './components/WorkoutDetail'
 import { useStore } from './hooks/useStore'
-import { GYM_MARK, activities, WEEKLY_GOAL } from './data/workout'
-import { GoalRow } from './components/Goal'
-import { goalTint, goalFill } from './utils/goal'
-import walkImg from './assets/workouts/walk.svg'
-import restImg from './assets/workouts/rest.svg'
+import { shareBackup, readBackup, backupAge, usesShareSheet } from './utils/backup'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
+  const [view, setView] = useState(null) // 'history' | 'trends' | null
   const [sheet, setSheet] = useState(null) // 'reset' | null
   const store = useStore()
 
@@ -19,7 +19,15 @@ export default function App() {
       className="flex flex-col flex-1 min-h-0 bg-stone-50"
       style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      {workoutId ? (
+      {view === 'history' ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <History store={store} onBack={() => setView(null)} />
+        </div>
+      ) : view === 'trends' ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <TrendsScreen store={store} onBack={() => setView(null)} />
+        </div>
+      ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
           <WorkoutDetail workoutId={workoutId} store={store} onBack={() => setWorkoutId(null)} />
@@ -28,7 +36,8 @@ export default function App() {
         <>
           <Header
             onReset={() => setSheet('reset')}
-            canReset={store.hasChecks}
+            onHistory={() => setView('history')}
+            onTrends={() => setView('trends')}
             week={store.week}
             stretch={store.stretchWeek}
             store={store}
@@ -39,24 +48,20 @@ export default function App() {
         </>
       )}
 
-      {sheet === 'reset' && (
-        <ResetConfirm
-          onCancel={() => setSheet(null)}
-          onConfirm={() => { store.resetChecks(); setSheet(null) }}
-        />
-      )}
+      {sheet === 'reset' && <WeekSheet store={store} onClose={() => setSheet(null)} />}
+      {store.canUndoReset && <UndoBar store={store} />}
     </div>
   )
 }
 
-function Header({ onReset, canReset, week, stretch, store }) {
+function Header({ onReset, onHistory, onTrends, week, stretch, store }) {
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight">Today</h1>
-          <p className="text-sm text-stone-500 mt-0.5">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          <p className="text-sm text-stone-500 mt-0.5 whitespace-nowrap">
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -64,7 +69,20 @@ function Header({ onReset, canReset, week, stretch, store }) {
           <div className="bg-white shadow-sm rounded-xl px-2 py-1">
             <MuscleMap store={store} />
           </div>
-          <HeaderBtn onClick={onReset} label="Clear all checkmarks" disabled={!canReset}>
+          <HeaderBtn onClick={onTrends} label="Trends">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19h16" />
+              <polyline points="5 15 10 10 13 13 19 7" />
+              <polyline points="15 7 19 7 19 11" />
+            </svg>
+          </HeaderBtn>
+          <HeaderBtn onClick={onHistory} label="Past weeks">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="16" rx="2.5" />
+              <path d="M3 10h18M8 3v4M16 3v4" />
+            </svg>
+          </HeaderBtn>
+          <HeaderBtn onClick={onReset} label="New week and backups">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 1 0 3-6.7" />
               <polyline points="3 3 3 9 9 9" />
@@ -72,61 +90,26 @@ function Header({ onReset, canReset, week, stretch, store }) {
           </HeaderBtn>
         </div>
       </div>
-      <ThisWeekCard week={week} stretch={stretch} />
+      <div className="mt-4">
+        <WeekCard week={week} stretch={stretch} />
+      </div>
     </div>
   )
 }
 
-// Workouts toward the weekly goal: gym (orange) and class (violet) only.
-// The two colors are a validated pair; they stay put while the goal changes.
-const CLASS = activities.find(a => a.id === 'class')
-const WORKOUT_KINDS = [
-  { id: 'gym', label: 'Gym', mark: GYM_MARK },
-  { id: 'class', label: 'Class', mark: CLASS.mark },
-]
-
-// Walks and rest days show on the card but don't count toward the goal.
-const SHOWN_KINDS = [
-  { id: 'walk', label: 'walks', img: walkImg, tile: activities.find(a => a.id === 'walk').tile },
-  { id: 'rest', label: 'rest days', img: restImg, tile: activities.find(a => a.id === 'rest').tile },
-]
-
-// Both weekly goals in one card. It greens as the two average toward the goal.
-function ThisWeekCard({ week, stretch }) {
-  const workouts = week.gym + week.class
-  const level = Math.floor((Math.min(workouts, WEEKLY_GOAL.max) + Math.min(stretch.total, WEEKLY_GOAL.max)) / 2)
-
+// After clearing the week: a few seconds to take it back.
+function UndoBar({ store }) {
+  useEffect(() => {
+    const t = setTimeout(store.dismissUndo, 8000)
+    return () => clearTimeout(t)
+  }, [store.dismissUndo])
   return (
-    <div className={`mt-4 shadow-sm rounded-2xl px-4 py-3.5 border transition-colors duration-500 ${goalTint(level)}`}>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-stone-500">This week</p>
-        <p className="text-xs text-stone-400">Goal {WEEKLY_GOAL.min}–{WEEKLY_GOAL.max}</p>
-      </div>
-      <div className="space-y-2.5">
-        <GoalRow label="Workouts" count={workouts} fills={WORKOUT_KINDS.flatMap(k => Array(week[k.id]).fill(k.mark))} />
-        <GoalRow label="Stretching" count={stretch.total} fills={Array(stretch.total).fill(goalFill(stretch.total))} />
-      </div>
-      <div className="flex items-center gap-4 mt-3 text-xs">
-        {WORKOUT_KINDS.map(k => (
-          <div key={k.id} className={`flex items-center gap-1.5 ${week[k.id] ? '' : 'opacity-40'}`}>
-            <span className={`w-2 h-2 rounded-full ${k.mark}`} />
-            <span className="text-stone-500">{k.label}</span>
-            <span className="font-semibold text-stone-900">{week[k.id]}</span>
-          </div>
-        ))}
-        {/* Shown, not counted: walks and rest days, as their figures. */}
-        <div className="ml-auto flex items-center gap-1.5">
-          {SHOWN_KINDS.map(k => (
-            <span
-              key={k.id}
-              aria-label={`${week[k.id]} ${k.label} (not counted)`}
-              className={`flex items-center gap-1 rounded-lg pl-0.5 pr-2 py-0.5 bg-gradient-to-br ${k.tile} ${week[k.id] ? '' : 'opacity-40'}`}
-            >
-              <img src={k.img} alt="" className="w-5 h-6" draggable={false} />
-              <span className="font-semibold text-stone-700">{week[k.id]}</span>
-            </span>
-          ))}
-        </div>
+    <div className="fixed left-0 right-0 bottom-0 z-40 px-4" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      <div className="max-w-md mx-auto rounded-2xl bg-stone-900 shadow-lg pl-4 pr-2 py-2 flex items-center gap-3">
+        <p className="flex-1 text-sm text-white">Week cleared and saved to Past weeks</p>
+        <button onClick={store.undoReset} className="px-3.5 h-9 rounded-xl bg-white text-stone-900 text-sm font-semibold active:bg-stone-200">
+          Undo
+        </button>
       </div>
     </div>
   )
@@ -145,28 +128,101 @@ function HeaderBtn({ onClick, label, disabled, children }) {
   )
 }
 
-function ResetConfirm({ onCancel, onConfirm }) {
+// The weekly check-in: back up, then start a fresh week. Restore lives here
+// too, so it's always reachable from the header.
+function WeekSheet({ store, onClose }) {
+  const [status, setStatus] = useState(null) // { kind: 'ok' | 'error', text }
+  const [pending, setPending] = useState(null) // a backup waiting for confirm
+  const fileInput = useRef(null)
+  const age = backupAge(store.lastBackupAt)
+
+  async function backUp() {
+    const saved = await shareBackup(store.exportData())
+    if (saved) {
+      store.markBackedUp()
+      setStatus({ kind: 'ok', text: 'Backup saved.' })
+    }
+  }
+
+  async function pickFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      setPending(await readBackup(file))
+      setStatus(null)
+    } catch (err) {
+      setStatus({ kind: 'error', text: err.message })
+    }
+  }
+
+  function restore() {
+    store.restoreData(pending.data, pending.exportedAt)
+    setPending(null)
+    setStatus({ kind: 'ok', text: 'Restored.' })
+  }
+
+  const btn = 'w-full py-3 rounded-xl text-sm font-semibold transition-colors'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-6" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-6" onClick={onClose}>
       <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-        <h3 className="text-stone-900 font-bold text-lg mb-1">Clear all checkmarks?</h3>
-        <p className="text-stone-500 text-sm mb-5 leading-relaxed">
-          Unticks every set and stretch, and sets your class, walk and rest counts back to zero. Your weights, reps and settings stay as they are.
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 rounded-xl bg-stone-900 text-white text-sm font-semibold active:bg-stone-700 transition-colors"
-          >
-            Clear
-          </button>
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 text-sm font-semibold active:bg-stone-200 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
+        {pending ? (
+          <>
+            <h3 className="text-stone-900 font-bold text-lg mb-1">Restore this backup?</h3>
+            <p className="text-stone-500 text-sm mb-5 leading-relaxed">
+              From {new Date(pending.exportedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+              It replaces everything in the app now — weights, reps, settings and this week&rsquo;s progress.
+            </p>
+            <div className="space-y-2">
+              <button onClick={restore} className={`${btn} bg-stone-900 text-white active:bg-stone-700`}>Restore</button>
+              <button onClick={() => setPending(null)} className={`${btn} bg-stone-100 text-stone-600 active:bg-stone-200`}>Cancel</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="text-stone-900 font-bold text-lg mb-1">Start a new week?</h3>
+            <p className="text-stone-500 text-sm mb-4 leading-relaxed">
+              Unticks every set and stretch, and sets your class, walk and rest counts back to zero. Your weights, reps and settings stay as they are.
+            </p>
+
+            <div className="rounded-2xl bg-accent-50 px-3.5 py-3 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-stone-900">Back up first</p>
+                  <p className="text-xs text-stone-500">{age ? `Last backed up ${age}` : 'Not backed up yet'} · {usesShareSheet ? 'save to Files › iCloud Drive' : 'downloads to this computer'}</p>
+                </div>
+                <button onClick={backUp} className="px-3.5 h-9 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 shrink-0">
+                  Back up
+                </button>
+              </div>
+            </div>
+
+            {status && (
+              <p className={`text-sm mb-3 ${status.kind === 'ok' ? 'text-emerald-700' : 'text-red-600'}`}>{status.text}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { store.resetChecks(); onClose() }}
+                disabled={!store.hasChecks}
+                className="flex-1 py-3 rounded-xl bg-stone-900 text-white text-sm font-semibold active:bg-stone-700 transition-colors disabled:opacity-40"
+              >
+                Clear this week
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl bg-stone-100 text-stone-600 text-sm font-semibold active:bg-stone-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <button onClick={() => fileInput.current?.click()} className="w-full mt-4 text-xs font-medium text-accent-500 active:opacity-60">
+              Restore from a backup…
+            </button>
+            <input ref={fileInput} type="file" accept="application/json,.json" className="hidden" onChange={pickFile} />
+          </>
+        )}
       </div>
     </div>
   )

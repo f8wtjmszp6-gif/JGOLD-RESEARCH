@@ -29,14 +29,29 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
   //   side / sides – per-side holds and stretches run twice
   //   phase – 'running' | 'switch' (between sides) | 'over'
   const [active, setActive] = useState(null)
-  const clock = useCountdown(() => {
+  const clock = useCountdown(({ start }) => {
     playBeep()
     const a = active
     if (!a) return
 
+    // A rest between stretch sets ends by waiting for Start, like a side switch.
+    if (a.phase === 'rest') {
+      setActive({ ...a, phase: 'switch' })
+      return
+    }
     // Between sides it waits for you to reposition and tap Start.
     if (a.side < a.sides) {
       setActive({ ...a, phase: 'switch' })
+      return
+    }
+    // Between sets: rest first (if set), then wait for Start.
+    if (a.set < a.sets) {
+      if (a.rest > 0) {
+        setActive({ ...a, phase: 'rest', restTotal: a.rest * 1000 })
+        start(a.rest * 1000)
+      } else {
+        setActive({ ...a, phase: 'switch' })
+      }
       return
     }
 
@@ -69,7 +84,7 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
 
   function run(timer) {
     unlockAudio()
-    setActive({ id: ++timerSeq, side: 1, sides: 1, phase: 'running', ...timer })
+    setActive({ id: ++timerSeq, side: 1, sides: 1, set: 1, sets: 1, phase: 'running', ...timer })
     clock.start(timer.total)
   }
 
@@ -111,6 +126,8 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
       title: stretch.name,
       total: stretch.duration * 1000,
       sides: stretch.perSide ? 2 : 1,
+      sets: stretch.sets,
+      rest: stretch.rest,
       stretchId: stretch.id,
     })
   }
@@ -120,10 +137,12 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
     setActive(null)
   }
 
-  // "Start" after switching sides: times the next side.
+  // "Start" between rounds: the next side, or side 1 of the next set.
   function startNextSide() {
     unlockAudio()
-    setActive(a => ({ ...a, side: a.side + 1, phase: 'running' }))
+    setActive(a => (a.side < a.sides
+      ? { ...a, side: a.side + 1, phase: 'running' }
+      : { ...a, set: a.set + 1, side: 1, phase: 'running' }))
     clock.start(active.total)
   }
 
@@ -244,7 +263,11 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
           running={clock.running}
           onPause={clock.pause}
           onResume={() => { unlockAudio(); clock.resume() }}
-          onAdd={() => { clock.add(30000); setActive(a => ({ ...a, total: a.total + 30000 })) }}
+          onAdd={() => {
+            clock.add(30000)
+            setActive(a => (a.phase === 'rest' ? { ...a, restTotal: a.restTotal + 30000 } : { ...a, total: a.total + 30000 }))
+          }}
+          onSkipRest={() => { clock.stop(); setActive(a => ({ ...a, phase: 'switch' })) }}
           onClose={stopTimer}
           onStart={active.phase === 'switch' ? startNextSide : startNextSet}
         />
@@ -257,16 +280,51 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
 // so the list stays in view while it runs.
 const TIMER_LABELS = { rest: 'Rest', hold: 'Hold', stretch: 'Stretch', warmup: 'Warm-up' }
 
-function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, onClose, onStart }) {
+// The bar's color says what's happening: blue while you work, amber while
+// you rest, white when it's waiting for your tap, green when you're done.
+const BAR_THEMES = {
+  work: {
+    bar: 'bg-blue-50 border-blue-200', label: 'text-blue-900/70', big: 'text-blue-900',
+    track: 'bg-blue-100', fill: 'bg-blue-600',
+    primary: 'bg-blue-600 text-white active:bg-blue-700', secondary: 'bg-blue-100 text-blue-900 active:bg-blue-200',
+  },
+  rest: {
+    bar: 'bg-amber-50 border-amber-300', label: 'text-amber-900/70', big: 'text-amber-900',
+    track: 'bg-amber-100', fill: 'bg-amber-600',
+    primary: 'bg-amber-600 text-white active:bg-amber-700', secondary: 'bg-amber-100 text-amber-900 active:bg-amber-200',
+  },
+  waiting: {
+    bar: 'bg-white border-stone-200', label: 'text-stone-500', big: 'text-stone-900',
+    track: 'bg-stone-100', fill: 'bg-stone-900',
+    primary: 'bg-stone-900 text-white active:bg-stone-700', secondary: 'bg-stone-100 text-stone-700 active:bg-stone-200',
+  },
+  done: {
+    bar: 'bg-emerald-50 border-emerald-200', label: 'text-emerald-900/70', big: 'text-emerald-900',
+    track: 'bg-emerald-100', fill: 'bg-emerald-600',
+    primary: 'bg-emerald-600 text-white active:bg-emerald-700', secondary: 'bg-emerald-100 text-emerald-900 active:bg-emerald-200',
+  },
+}
+
+function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, onClose, onStart, onSkipRest }) {
   const over = timer.phase === 'over'
   const switching = timer.phase === 'switch'
-  const progress = over ? 1 : switching ? 1 : 1 - remaining / timer.total
-  const sides = timer.sides > 1 ? ` · Side ${timer.side} of ${timer.sides}` : ''
+  const setRest = timer.phase === 'rest' // resting between stretch sets
+  const resting = timer.kind === 'rest' || setRest
+  const progress = over || switching ? 1 : 1 - remaining / (setRest ? timer.restTotal : timer.total)
+  const sides = (timer.sets > 1 ? ` · Set ${timer.set} of ${timer.sets}` : '') +
+    (timer.sides > 1 ? ` · Side ${timer.side} of ${timer.sides}` : '')
 
   let big = fmtClock(remaining)
   let label = `${TIMER_LABELS[timer.kind]} · ${timer.title}${sides}`
   if (next && !next.complete) label += ` · Next: set ${next.set} of ${next.of}`
-  if (switching) { big = 'Switch sides'; label = `${timer.title} · Side ${timer.side + 1} next` }
+  if (setRest) label = `Rest · ${timer.title} · Set ${timer.set + 1} of ${timer.sets} next`
+  if (switching && timer.side < timer.sides) {
+    big = 'Switch sides'
+    label = `${timer.title} · Side ${timer.side + 1} next${timer.sets > 1 ? ` · set ${timer.set} of ${timer.sets}` : ''}`
+  } else if (switching) {
+    big = 'Next set'
+    label = `${timer.title} · Set ${timer.set + 1} of ${timer.sets} next`
+  }
   if (over) {
     if (timer.kind !== 'rest') {
       big = 'Done ✓'
@@ -280,49 +338,47 @@ function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, o
     }
   }
 
+  const waiting = switching || (over && timer.kind === 'rest' && next && !next.complete)
+  const theme = BAR_THEMES[waiting ? 'waiting' : over ? 'done' : resting ? 'rest' : 'work']
+
   return (
     <div
       className="fixed left-0 right-0 bottom-0 z-40 px-4"
       style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
     >
-      <div className={`max-w-md mx-auto rounded-2xl shadow-lg px-4 py-3 transition-colors ${over ? 'bg-emerald-600' : 'bg-stone-900'}`}>
+      <div className={`max-w-md mx-auto rounded-2xl border shadow-lg px-4 py-3 transition-colors duration-300 ${theme.bar}`}>
         <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-white/60 truncate">{label}</p>
-            <p className="text-2xl font-bold text-white">{big}</p>
+            <p className={`text-xs truncate ${theme.label}`}>{label}</p>
+            <p className={`text-2xl font-bold ${theme.big}`}>{big}</p>
           </div>
-          {!over && !switching && (timer.kind === 'rest' ? (
-            <BarBtn onClick={onAdd}>+30s</BarBtn>
+          {!over && !switching && (resting ? (
+            <BarBtn className={theme.secondary} onClick={onAdd}>+30s</BarBtn>
           ) : (
-            <BarBtn onClick={running ? onPause : onResume}>{running ? 'Pause' : 'Resume'}</BarBtn>
+            <BarBtn className={theme.secondary} onClick={running ? onPause : onResume}>{running ? 'Pause' : 'Resume'}</BarBtn>
           ))}
-          {switching || (over && timer.kind === 'rest' && next && !next.complete) ? (
+          {waiting ? (
             <>
-              {switching && <BarBtn onClick={onClose}>Stop</BarBtn>}
-              <BarBtn primary onClick={onStart}>Start</BarBtn>
+              {switching && <BarBtn className={theme.secondary} onClick={onClose}>Stop</BarBtn>}
+              <BarBtn className={theme.primary} onClick={onStart}>Start</BarBtn>
             </>
           ) : (
-            <BarBtn primary onClick={onClose}>
-              {over ? 'Done' : timer.kind === 'rest' ? 'Skip' : 'Stop'}
+            <BarBtn className={theme.primary} onClick={setRest ? onSkipRest : onClose}>
+              {over ? 'Done' : resting ? 'Skip' : 'Stop'}
             </BarBtn>
           )}
         </div>
-        <div className="h-1 rounded-full bg-white/15 mt-2.5 overflow-hidden">
-          <div className="h-full bg-white rounded-full" style={{ width: `${progress * 100}%` }} />
+        <div className={`h-1 rounded-full mt-2.5 overflow-hidden ${theme.track}`}>
+          <div className={`h-full rounded-full ${theme.fill}`} style={{ width: `${progress * 100}%` }} />
         </div>
       </div>
     </div>
   )
 }
 
-function BarBtn({ primary, onClick, children }) {
+function BarBtn({ className, onClick, children }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 h-10 rounded-xl text-sm font-semibold ${
-        primary ? 'bg-white text-stone-900 active:bg-stone-200' : 'bg-white/15 text-white active:bg-white/25'
-      }`}
-    >
+    <button onClick={onClick} className={`px-3 h-10 rounded-xl text-sm font-semibold transition-colors ${className}`}>
       {children}
     </button>
   )
@@ -330,7 +386,11 @@ function BarBtn({ primary, onClick, children }) {
 
 function StretchesTab({ workout, store, onTimer }) {
   const totalStretchSeconds = workout.stretches.reduce(
-    (sum, s) => sum + store.getCustomDuration(s.id, s.duration) * (store.getPerSide(s.id, s.perSide) ? 2 : 1),
+    (sum, s) => {
+      const sets = store.getStretchSets(s.id)
+      const hold = store.getCustomDuration(s.id, s.duration) * (store.getPerSide(s.id, s.perSide) ? 2 : 1)
+      return sum + hold * sets + store.getStretchRest(s.id) * (sets - 1)
+    },
     0,
   )
 
@@ -354,10 +414,16 @@ function StretchesTab({ workout, store, onTimer }) {
           onDurationChange={s => store.setCustomDuration(stretch.id, s)}
           perSide={store.getPerSide(stretch.id, stretch.perSide)}
           onPerSideChange={v => store.setPerSide(stretch.id, v)}
+          sets={store.getStretchSets(stretch.id)}
+          onSetsChange={n => store.setStretchSets(stretch.id, n)}
+          rest={store.getStretchRest(stretch.id)}
+          onRestChange={n => store.setStretchRest(stretch.id, n)}
           onTimer={() => onTimer({
             ...stretch,
             duration: store.getCustomDuration(stretch.id, stretch.duration),
             perSide: store.getPerSide(stretch.id, stretch.perSide),
+            sets: store.getStretchSets(stretch.id),
+            rest: store.getStretchRest(stretch.id),
           })}
         />
       ))}
@@ -924,7 +990,7 @@ function ToggleRow({ label, detail, on, onChange }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
-function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange }) {
+function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
@@ -946,7 +1012,7 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
         <div className="flex-1 min-w-0">
           <p className={`font-semibold ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}</p>
           <button onClick={() => setShowSettings(true)} className="flex items-center gap-1 mt-0.5 text-left active:opacity-60 min-w-0 max-w-full overflow-hidden">
-            <span className="text-stone-400 text-sm whitespace-nowrap shrink-0">{customDuration}s{perSide ? ' per side' : ''}</span>
+            <span className="text-stone-400 text-sm whitespace-nowrap shrink-0">{customDuration}s{perSide ? ' per side' : ''}{sets > 1 ? ` × ${sets}` : ''}</span>
             {stretch.alt && <span className="text-stone-300 text-sm ml-1 truncate">· Alt: {stretch.alt}</span>}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
           </button>
@@ -979,6 +1045,24 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
             suffix="s"
             onChange={onDurationChange}
           />
+          <StepperRow
+            label="Sets"
+            value={sets}
+            step={1}
+            min={1}
+            max={4}
+            onChange={onSetsChange}
+          />
+          {sets > 1 && (
+            <StepperRow
+              label="Rest between sets"
+              value={rest}
+              step={5}
+              min={5}
+              format={s => fmtClock(s * 1000)}
+              onChange={onRestChange}
+            />
+          )}
           <ToggleRow
             label="Per side"
             detail="Hold each side — the timer runs twice"

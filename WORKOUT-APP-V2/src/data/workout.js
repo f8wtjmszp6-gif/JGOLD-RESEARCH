@@ -131,6 +131,17 @@ export const MUSCLE_MAP = {
   legsPost: { front: ['core'], back: ['thighs', 'calves', 'hips', 'back'] },
 }
 
+// Trends groups exercises by the muscles they mainly work — not by which
+// workout they're in — so, say, the plank sits under Core.
+export const MUSCLE_GROUPS = [
+  { id: 'chest', label: 'Chest', exercises: ['bench-press', 'dips'] },
+  { id: 'back', label: 'Back', exercises: ['barbell-rows', 'pull-ups', 'barbell-shrugs', 'back-extensions'] },
+  { id: 'shoulders', label: 'Shoulders', exercises: ['overhead-press', 'lateral-raises', 'face-pulls'] },
+  { id: 'arms', label: 'Arms', exercises: ['overhead-tricep-extension', 'barbell-curl', 'hammer-curls'] },
+  { id: 'legs', label: 'Legs', exercises: ['cable-squat', 'hip-thrust', 'hip-abduction', 'hip-adduction', 'romanian-deadlift', 'standing-calf-raise', 'seated-calf-raise'] },
+  { id: 'core', label: 'Core', exercises: ['plank', 'dead-bugs', 'hanging-leg-raises', 'woodchoppers'] },
+]
+
 // Display order of the gym workouts on the home screen.
 {
   const all = Object.values(workouts).flatMap(x => x.stretches)

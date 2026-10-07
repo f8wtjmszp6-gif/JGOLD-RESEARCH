@@ -100,7 +100,11 @@ function RoutineCard({ store, onOpen }) {
   const done = list.filter(x => store.getStretchDone(STRETCH_ROUTINE.id, x.id)).length
   const complete = done === list.length
   const seconds = list.reduce(
-    (sum, x) => sum + store.getCustomDuration(x.id, x.duration) * (store.getPerSide(x.id, x.perSide) ? 2 : 1),
+    (sum, x) => {
+      const sets = store.getStretchSets(x.id)
+      const hold = store.getCustomDuration(x.id, x.duration) * (store.getPerSide(x.id, x.perSide) ? 2 : 1)
+      return sum + hold * sets + store.getStretchRest(x.id) * (sets - 1)
+    },
     0,
   )
   return (

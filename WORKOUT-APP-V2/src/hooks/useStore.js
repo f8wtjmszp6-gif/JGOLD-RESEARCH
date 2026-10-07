@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { workouts, activities, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY } from '../data/workout'
+import { useCallback, useState } from 'react'
+import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY } from '../data/workout'
 
 const STORAGE_KEY = 'workout-tracker-v2'
 
@@ -13,6 +13,11 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     assist            { [exerciseId]: bool }
 //     customDurations   { [stretchId]: seconds }
 //     perSide           { [stretchId]: bool }
+//     stretchSets       { [stretchId]: count }  (rounds of a stretch, default 1)
+//     stretchRest       { [stretchId]: seconds } (rest between those rounds, default 20)
+//     lastBackupAt      ISO time of the last backup file you saved
+//     history           [weekSummary, …] newest first — saved by each reset, never cleared
+//     lastResetAt       ISO time of the last reset (the start of the current week)
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool } }
@@ -109,6 +114,102 @@ function orderIds(s, workoutId) {
   return [...saved, ...ids.filter(id => !saved.includes(id))]
 }
 
+// What a week is made of: finished gym workouts, plus each class, walk and
+// rest logged.
+function weekOf(s) {
+  return {
+    gym: GYM_ORDER.filter(id => workoutComplete(s, id)).length,
+    ...Object.fromEntries(activities.map(a => [a.id, countOf(s, a.id)])),
+  }
+}
+
+// Stretch days: each gym workout whose stretches are all ticked, the
+// full-body routine once it's all ticked, and stretches done on your own.
+function stretchWeekOf(s) {
+  const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
+  const st = {
+    gym: GYM_ORDER.filter(id => all(id, workouts[id].stretches)).length,
+    routine: all(STRETCH_ROUTINE.id, STRETCH_ROUTINE.stretches) ? 1 : 0,
+    extra: Number(s.stretchExtra) || 0,
+  }
+  return { ...st, total: st.gym + st.routine + st.extra }
+}
+
+// A week as saved in history: the same numbers as the live cards, plus how
+// far each plan got, pounds lifted (reps × weight on ticked rep sets), and
+// what you ticked on each exercise — the raw material for Trends.
+function summarize(s, endedAt) {
+  let lifted = 0
+  const lifts = {}
+  const plans = GYM_ORDER.map(id => {
+    let done = 0
+    let total = 0
+    for (const ex of workouts[id].exercises) {
+      const { reps, weight } = settingsOf(s, ex)
+      const ticks = ticksOf(s, id, ex)
+      total += ticks.length
+      done += ticks.filter(Boolean).length
+      // Every exercise you ticked a set of: its mode, weight, the reps (or hold
+      // seconds) of the ticked sets, and whether it was assisted — what the
+      // Trends charts draw from.
+      if (ticks.some(Boolean)) {
+        const mode = setupOf(s, ex).mode
+        const sets = reps.filter((_, i) => ticks[i])
+        if (mode === 'reps') lifted += sets.reduce((n, r) => n + r * weight, 0)
+        lifts[ex.id] = { mode, weight, sets, assist: s.assist?.[ex.id] ?? !!ex.weight.assist }
+      }
+    }
+    return { id, done, total }
+  })
+  const entry = {
+    start: s.lastResetAt ?? null,
+    end: endedAt,
+    week: weekOf(s),
+    stretch: stretchWeekOf(s),
+    plans,
+    lifted: Math.round(lifted),
+    lifts,
+  }
+  return { ...entry, weekStart: calendarWeekOf(entry) }
+}
+
+// ── Calendar weeks for history ─────────────────────────────────────────────
+// Past weeks are filed by calendar week (Monday–Sunday, as "YYYY-MM-DD" of
+// the Monday). A saved period belongs to the week its middle falls in, so a
+// reset on Sunday night or Monday morning both file the week just finished;
+// with no earlier reset, the day before the reset stands in for the middle.
+function mondayOf(date) {
+  const d = new Date(date)
+  d.setHours(12, 0, 0, 0)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function calendarWeekOf(entry) {
+  if (entry.weekStart) return entry.weekStart
+  const end = new Date(entry.end).getTime()
+  const anchor = entry.start ? (new Date(entry.start).getTime() + end) / 2 : end - 86400000
+  return mondayOf(anchor)
+}
+
+// Two saved periods in the same calendar week become one entry.
+function mergeWeeks(a, b) {
+  const sum = (x, y) => Object.fromEntries(Object.keys({ ...x, ...y }).map(k => [k, (x[k] ?? 0) + (y[k] ?? 0)]))
+  return {
+    weekStart: a.weekStart,
+    start: a.start ?? b.start,
+    end: b.end,
+    week: sum(a.week, b.week),
+    stretch: sum(a.stretch, b.stretch),
+    plans: b.plans.map(p => {
+      const q = a.plans.find(x => x.id === p.id)
+      return { ...p, done: Math.min(p.total, p.done + (q?.done ?? 0)) }
+    }),
+    lifted: a.lifted + b.lifted,
+    lifts: { ...a.lifts, ...b.lifts },
+  }
+}
+
 // ── Persistence ────────────────────────────────────────────────────────────
 
 // Earlier builds stored the plank's seconds under `reps`; they're holds now.
@@ -145,6 +246,8 @@ function saveState(s) {
 
 export function useStore() {
   const [state, setState] = useState(loadState)
+  // Everything as it was just before the last reset, for Undo. Not saved.
+  const [undoSnapshot, setUndoSnapshot] = useState(null)
 
   function update(fn) {
     setState(s => {
@@ -308,25 +411,13 @@ export function useStore() {
       Object.values(c.stretches ?? {}).some(Boolean) ||
       !!c.warmup)
 
-  // What this week is made of: each gym workout you've finished counts as a
-  // day, plus every class, walk and rest you've logged.
-  const week = {
-    gym: Object.keys(workouts).filter(id => workoutComplete(state, id)).length,
-    ...Object.fromEntries(activities.map(a => [a.id, countOf(state, a.id)])),
-  }
+  // This week, computed the same way it's saved to history on reset.
+  const week = weekOf(state)
   // Only gym workouts and classes count toward the weekly goal; walks show
   // as a bonus and rest days just show.
   const workoutsLogged = week.gym + week.class
 
-  // Stretching this week: each gym workout whose stretches are all ticked,
-  // the full-body routine once it's all ticked, and stretches done on your own.
-  const allStretched = (id, list) => list.length > 0 && list.every(x => state.checks?.[id]?.stretches?.[x.id])
-  const stretchWeek = {
-    gym: Object.values(workouts).filter(w => allStretched(w.id, w.stretches)).length,
-    routine: allStretched(STRETCH_ROUTINE.id, STRETCH_ROUTINE.stretches) ? 1 : 0,
-    extra: Number(state.stretchExtra) || 0,
-  }
-  stretchWeek.total = stretchWeek.gym + stretchWeek.routine + stretchWeek.extra
+  const stretchWeek = stretchWeekOf(state)
 
   function addStretchExtra(delta) {
     update(s => ({ ...s, stretchExtra: Math.max(0, (Number(s.stretchExtra) || 0) + delta) }))
@@ -334,8 +425,54 @@ export function useStore() {
 
   // Unticks every set and stretch and zeroes the activity counts. Your
   // numbers and settings are left alone.
+  // Saves the finished week to history first, so past weeks stay viewable. A
+  // second reset in the same calendar week adds to that week's entry.
   function resetChecks() {
-    update(s => ({ ...s, checks: {}, activities: {}, stretchExtra: 0 }))
+    setUndoSnapshot(state)
+    update(s => {
+      const now = new Date().toISOString()
+      const entry = summarize(s, now)
+      const [latest, ...older] = s.history ?? []
+      const history = latest && calendarWeekOf(latest) === entry.weekStart
+        ? [mergeWeeks({ ...latest, weekStart: entry.weekStart }, entry), ...older]
+        : [entry, ...(s.history ?? [])]
+      return {
+        ...s,
+        history,
+        lastResetAt: now,
+        checks: {},
+        activities: {},
+        stretchExtra: 0,
+      }
+    })
+  }
+
+  // Puts everything back as it was before the last reset.
+  function undoReset() {
+    if (!undoSnapshot) return
+    const snapshot = undoSnapshot
+    update(() => snapshot)
+    setUndoSnapshot(null)
+  }
+
+  // Stable, so the Undo bar's timeout isn't restarted on every render.
+  const dismissUndo = useCallback(() => setUndoSnapshot(null), [])
+
+  // ── Backup / restore ─────────────────────────────────────────────────────
+  // Everything the app stores, as one object for a backup file.
+  function exportData() {
+    return state
+  }
+
+  function markBackedUp() {
+    update(s => ({ ...s, lastBackupAt: new Date().toISOString() }))
+  }
+
+  // Replaces everything with a backup's data (run through the same migration
+  // as a normal load, so older backups still work). The backup itself counts
+  // as your latest backup.
+  function restoreData(data, exportedAt) {
+    update(() => migrate({ ...data, lastBackupAt: exportedAt ?? data.lastBackupAt }))
   }
 
   // ── Exercise setup (remembered) ──────────────────────────────────────────
@@ -375,6 +512,22 @@ export function useStore() {
     update(s => ({ ...s, perSide: { ...s.perSide, [itemId]: value } }))
   }
 
+  function getStretchSets(stretchId) {
+    return state.stretchSets?.[stretchId] ?? 1
+  }
+
+  function setStretchSets(stretchId, count) {
+    update(s => ({ ...s, stretchSets: { ...s.stretchSets, [stretchId]: count } }))
+  }
+
+  function getStretchRest(stretchId) {
+    return state.stretchRest?.[stretchId] ?? 20
+  }
+
+  function setStretchRest(stretchId, seconds) {
+    update(s => ({ ...s, stretchRest: { ...s.stretchRest, [stretchId]: seconds } }))
+  }
+
   return {
     getLog,
     setSetReps,
@@ -400,6 +553,14 @@ export function useStore() {
     addActivity,
     removeActivity,
     hasChecks,
+    lastBackupAt: state.lastBackupAt ?? null,
+    history: state.history ?? [],
+    canUndoReset: undoSnapshot !== null,
+    undoReset,
+    dismissUndo,
+    exportData,
+    markBackedUp,
+    restoreData,
     week,
     workoutsLogged,
     stretchWeek,
@@ -413,5 +574,9 @@ export function useStore() {
     setCustomDuration,
     getPerSide,
     setPerSide,
+    getStretchSets,
+    setStretchSets,
+    getStretchRest,
+    setStretchRest,
   }
 }
