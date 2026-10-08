@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { playBeep, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
 import { workouts, STRETCH_ROUTINE, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
-import { EXERCISE_BANK, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, ratingLabel } from '../data/exercises'
+import { EXERCISE_BANK, EXERCISE_BY_ID, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, ratingLabel, coverage, coversOf, gapsAfter } from '../data/exercises'
 import { HowToToggle, HowToBody } from './HowTo'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchFits, stretchRating } from '../data/stretches'
 
@@ -547,10 +547,44 @@ function StretchPicker({ listId, store, swap, onPick, onClose }) {
 // The same for exercises, by the muscle group Trends files them under.
 // Only exercises that fit: for the main list, what the plan is for; for the
 // Core section, core exercises.
+// Exercises that cover an area the list is missing are marked "Fills" and
+// listed first. A swap that would leave an area uncovered asks first.
 function ExercisePicker({ workoutId, store, swap, section, onPick, onClose }) {
   const core = section === 'core'
+  const area = core ? 'core' : workoutId
+  const sections = store.getExerciseSections(workoutId)
+  const list = core ? sections.core : sections.main
+  const base = swap ? list.filter(x => x.id !== swap.id) : list
+  const missing = coverage(base, area).filter(a => !a.covered)
+  const fills = x => missing.filter(a => coversOf(x).includes(a.id)).map(a => a.label)
+  const names = missing.map(a => a.label).join(' and ')
+  const lost = swap ? gapsAfter(list, base, area) : []
+  const [confirm, setConfirm] = useState(null) // id waiting on "swap anyway"
+
+  function pick(id) {
+    if (swap && gapsAfter(list, [...base, EXERCISE_BY_ID[id]], area).length) setConfirm(id)
+    else onPick(id)
+  }
+
+  if (confirm) {
+    const left = gapsAfter(list, [...base, EXERCISE_BY_ID[confirm]], area).join(' and ')
+    return (
+      <ConfirmSheet
+        title={`Leave ${left} uncovered?`}
+        body={`${EXERCISE_BY_ID[confirm].name} doesn't work ${left}, so this workout won't either.`}
+        confirmLabel="Swap anyway"
+        onConfirm={() => onPick(confirm)}
+        onClose={() => setConfirm(null)}
+      />
+    )
+  }
+
   return (
     <BankPicker
+      fills={fills}
+      banner={lost.length
+        ? `Swapping out ${swap.name} leaves ${lost.join(' and ')} uncovered. Exercises marked Fills keep it covered.`
+        : missing.length ? `Not covered yet: ${names}. Exercises marked Fills cover it.` : null}
       title={swap ? `Swap ${swap.name}` : core ? 'Add a core exercise' : 'Add an exercise'}
       noun="exercises"
       kind="exercise"
@@ -561,9 +595,43 @@ function ExercisePicker({ workoutId, store, swap, section, onPick, onClose }) {
       rateFor={core ? 'core' : workouts[workoutId]?.short}
       exclude={store.getExercises(workoutId).map(x => x.id)}
       first={swap ? [swap.group] : core ? [] : SUGGESTED_GROUPS[workoutId] ?? []}
-      onPick={onPick}
+      onPick={pick}
       onClose={onClose}
     />
+  )
+}
+
+// A yes/no question in a sheet: Cancel, or do it anyway.
+function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) {
+  return (
+    <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
+      <p className="text-sm text-stone-600 leading-relaxed">{body}</p>
+      <button
+        onClick={onConfirm}
+        className="w-full py-3 rounded-2xl bg-orange-50 text-orange-700 text-sm font-semibold active:bg-orange-100 transition-colors"
+      >
+        {confirmLabel}
+      </button>
+    </SettingsSheet>
+  )
+}
+
+// Which of a list's areas are covered: "Chest ✓ · Side delts — missing".
+function CoverageRow({ list, area }) {
+  const areas = coverage(list, area)
+  if (!areas.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-stone-500 font-medium">Covers:</span>
+      {areas.map(a => (
+        <span
+          key={a.id}
+          className={`px-2 py-0.5 rounded-md font-semibold ${a.covered ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}
+        >
+          {a.label} {a.covered ? '✓' : '— missing'}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -587,7 +655,7 @@ function RatingMeter({ rating, label }) {
 // what's already in the list.
 // With `rate`, each row shows how well it targets what it's for (rated for
 // `rateFor`), best first within each section.
-function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, first, rate, rateFor, onPick, onClose }) {
+function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, first, rate, rateFor, fills, banner, onPick, onClose }) {
   const [query, setQuery] = useState('')
   const [info, setInfo] = useState(null) // the item whose how-to is open
   const skip = new Set(exclude)
@@ -599,9 +667,11 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, fir
       sec,
       items: bank
         .filter(x => sectionOf(x) === sec.id && !skip.has(x.id) && (!q || x.name.toLowerCase().includes(q)))
-        .sort((a, b) => (rate ? rate(b) - rate(a) : 0)),
+        .sort((a, b) => (fills ? fills(b).length - fills(a).length : 0) || (rate ? rate(b) - rate(a) : 0)),
     }))
     .filter(g => g.items.length)
+    // Groups with an exercise that fills a gap come first.
+    .sort((a, b) => (fills ? Number(fills(b.items[0]).length > 0) - Number(fills(a.items[0]).length > 0) : 0))
 
   return (
     <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
@@ -621,6 +691,7 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, fir
           ))}
         </div>
       )}
+      {banner && <p className="rounded-xl bg-orange-50 text-orange-700 text-sm px-3.5 py-2.5 leading-relaxed">{banner}</p>}
       {groups.length === 0 && <p className="text-sm text-stone-400">No {noun} match “{query}”.</p>}
       {groups.map(({ sec, items }) => (
         <div key={sec.id}>
@@ -632,7 +703,12 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, fir
               <div key={x.id}>
                 <div className="flex items-center">
                   <button onClick={() => onPick(x.id)} className="flex-1 min-w-0 flex items-center justify-between gap-2 pl-3.5 pr-1 py-2.5 text-left text-sm text-stone-800 active:bg-stone-100">
-                    <span className="min-w-0">{x.name}</span>
+                    <span className="min-w-0">
+                      {x.name}
+                      {fills?.(x).length > 0 && (
+                        <span className="block text-xs font-semibold text-emerald-700 mt-0.5">Fills: {fills(x).join(', ')}</span>
+                      )}
+                    </span>
                     {rate && <RatingMeter rating={rate(x)} label />}
                   </button>
                   <button
@@ -670,6 +746,15 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, fir
 function ExerciseOrder({ workoutId, store }) {
   const { main, core, coreOn } = store.getExerciseSections(workoutId)
   const [adding, setAdding] = useState(null) // 'main' | 'core'
+  const [removing, setRemoving] = useState(null) // { ex, gaps } waiting on "remove anyway"
+
+  // Removing the only exercise for an area asks first.
+  function remove(ex) {
+    const list = isCore(ex) ? core : main
+    const gaps = gapsAfter(list, list.filter(x => x.id !== ex.id), isCore(ex) ? 'core' : workoutId)
+    if (gaps.length) setRemoving({ ex, gaps })
+    else store.removeExercise(workoutId, ex.id)
+  }
   const icon = (d, disabled, onClick, label) => (
     <button
       onClick={onClick}
@@ -691,7 +776,7 @@ function ExerciseOrder({ workoutId, store }) {
           <RatingMeter rating={ratingFor(ex, ratedFor)} />
           {icon('M18 15l-6-6-6 6', i === 0, () => store.moveExercise(workoutId, ex.id, -1), `Move ${ex.name} up`)}
           {icon('M6 9l6 6 6-6', i === list.length - 1, () => store.moveExercise(workoutId, ex.id, 1), `Move ${ex.name} down`)}
-          {icon('M6 6l12 12M18 6L6 18', minOne && list.length <= 1, () => store.removeExercise(workoutId, ex.id), `Remove ${ex.name}`)}
+          {icon('M6 6l12 12M18 6L6 18', minOne && list.length <= 1, () => remove(ex), `Remove ${ex.name}`)}
         </div>
       ))}
     </div>
@@ -706,12 +791,14 @@ function ExerciseOrder({ workoutId, store }) {
   )
   return (
     <>
+      <CoverageRow list={main} area={workoutId} />
       {rows(main, true, workoutId)}
       {addBtn('+ Add exercise', 'main')}
       {/* The Core section's own list, while Core is on (switch at the top). */}
       {coreOn && (
         <div className="pt-4 border-t border-stone-100 space-y-3">
           <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Core</p>
+          <CoverageRow list={core} area="core" />
           {core.length > 0 ? rows(core, false, 'core') : <p className="text-sm text-stone-400">No core exercises yet.</p>}
           {addBtn('+ Add core exercise', 'core')}
         </div>
@@ -720,6 +807,15 @@ function ExerciseOrder({ workoutId, store }) {
         <button onClick={() => store.resetOrder(workoutId)} className="text-xs font-medium text-accent-500 active:opacity-60">
           Reset to default exercises
         </button>
+      )}
+      {removing && (
+        <ConfirmSheet
+          title={`Leave ${removing.gaps.join(' and ')} uncovered?`}
+          body={`${removing.ex.name} is the only exercise here for ${removing.gaps.join(' and ')}.`}
+          confirmLabel="Remove anyway"
+          onConfirm={() => { store.removeExercise(workoutId, removing.ex.id); setRemoving(null) }}
+          onClose={() => setRemoving(null)}
+        />
       )}
       {adding && (
         <ExercisePicker

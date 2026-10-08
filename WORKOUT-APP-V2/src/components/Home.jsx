@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../data/workout'
+import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
 import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
+import { weekDays, sameDay, dayLabel, inDayOrder } from '../utils/days'
 import pushImg from '../assets/workouts/push.svg'
 import legsQuadImg from '../assets/workouts/legsQuad.svg'
 import pullImg from '../assets/workouts/pull.svg'
@@ -30,8 +31,11 @@ const activityImages = {
 }
 
 export default function Home({ store, onOpenWorkout }) {
-  // Which sheet is open: logging a class, adding a walk, or adding other cardio.
+  // The open sheet: { type: 'class' | 'walk' | 'other' | 'stretch', edit? },
+  // where `edit` is { index, entry } when changing something already logged.
   const [sheet, setSheet] = useState(null)
+  const open = (type, edit) => setSheet({ type, edit })
+  const close = () => setSheet(null)
   const byId = id => activities.find(a => a.id === id)
   const activityCard = a => (
     <ActivityCard
@@ -62,7 +66,7 @@ export default function Home({ store, onOpenWorkout }) {
       </Section>
 
       <Section title="Gym class">
-        <ClassCard store={store} activity={byId('class')} onAdd={() => setSheet('class')} />
+        <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={edit => open('class', edit)} />
       </Section>
 
       <Section title="Cardio and rest">
@@ -72,12 +76,12 @@ export default function Home({ store, onOpenWorkout }) {
           image={activityImages.walk}
           count={walks.length}
           detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
-          onAdd={() => setSheet('walk')}
+          onAdd={() => open('walk')}
           onRemove={() => store.removeActivity('walk')}
         >
           {walks.length > 0 && (
             <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {walks.map((x, i) => <CardioLine key={i} session={x} showWorkout={false} />)}
+              {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => open('walk', e)} />)}
             </div>
           )}
         </ActivityCard>
@@ -86,12 +90,12 @@ export default function Home({ store, onOpenWorkout }) {
           image={runImg}
           count={other.length}
           detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${otherMinutes} min` : undefined}
-          onAdd={() => setSheet('other')}
+          onAdd={() => open('other')}
           onRemove={store.removeOtherCardio}
         >
           {other.length > 0 && (
             <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {other.map((x, i) => <CardioLine key={i} session={x} />)}
+              {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('other', e)} />)}
             </div>
           )}
         </ActivityCard>
@@ -105,21 +109,21 @@ export default function Home({ store, onOpenWorkout }) {
           image={stretchImg}
           count={store.ownStretches.length}
           detail={store.ownStretches.length ? ownDetail(store.ownStretches) : undefined}
-          onAdd={() => setSheet('stretch')}
+          onAdd={() => open('stretch')}
           onRemove={store.removeOwnStretch}
         >
           {store.ownStretches.length > 0 && (
             <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {store.ownStretches.map((x, i) => <StretchLine key={i} session={x} />)}
+              {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => open('stretch', e)} />)}
             </div>
           )}
         </ActivityCard>
       </Section>
 
-      {sheet === 'other' && <AddCardioSheet store={store} onClose={() => setSheet(null)} />}
-      {sheet === 'stretch' && <AddStretchSheet store={store} onClose={() => setSheet(null)} />}
-      {sheet === 'class' && <LogClassSheet store={store} onClose={() => setSheet(null)} />}
-      {sheet === 'walk' && <AddCardioSheet kind="walk" store={store} onClose={() => setSheet(null)} />}
+      {sheet?.type === 'other' && <AddCardioSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
     </div>
   )
 }
@@ -147,7 +151,7 @@ function EffortNote() {
 
 // ── Workout classes ──────────────────────────────────────────────────────────
 // + opens Log a class; the card lists each class this week with its answers.
-function ClassCard({ store, activity, onAdd }) {
+function ClassCard({ store, activity, onAdd, onEdit }) {
   const classes = store.classes
   const n = classes.length
   return (
@@ -161,7 +165,7 @@ function ClassCard({ store, activity, onAdd }) {
     >
       {n > 0 && (
         <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-          {classes.map((c, i) => <ClassLine key={i} entry={c} />)}
+          {inDayOrder(classes).map(e => <ClassLine key={e.index} entry={e.entry} onEdit={() => onEdit(e)} />)}
         </div>
       )}
     </ActivityCard>
@@ -177,40 +181,51 @@ function areasLabel(areas) {
 
 const TAG = 'text-xs font-semibold px-2 py-0.5 rounded-md'
 
+// A logged item's row: tap it to edit it or change its day.
+function LineButton({ label, onEdit, children }) {
+  return (
+    <button onClick={onEdit} aria-label={`Edit ${label}`} className="w-full flex items-center gap-1.5 text-sm text-left rounded-lg -mx-1 px-1 py-0.5 active:bg-stone-100">
+      <span className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">{children}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+    </button>
+  )
+}
+
 // One class: its day, then a tag for each thing it was.
-function ClassLine({ entry }) {
-  const day = entry.at ? new Date(entry.at).toLocaleDateString('en-US', { weekday: 'short' }) : 'Earlier'
+function ClassLine({ entry, onEdit }) {
+  const day = dayLabel(entry.at)
   const strength = entry.strength && entry.areas.length > 0
   return (
-    <div className="flex items-center gap-1.5 flex-wrap text-sm">
+    <LineButton label={`${day} class`} onEdit={onEdit}>
       <span className="w-12 font-semibold text-stone-600">{day}</span>
       {entry.cardio && <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{entry.minutes} min {entry.hard ? 'hard' : 'easy'}</span>}
       {strength && <span className={`${TAG} bg-orange-50 text-orange-700`}>{areasLabel(entry.areas)}</span>}
       {entry.stretch && <span className={`${TAG} bg-teal-50 text-teal-700`}>Stretch{entry.stretchMinutes ? ` ${entry.stretchMinutes} min` : ''}</span>}
       {!classIsWorkout(entry) && <span className="text-xs text-stone-400">Not a workout</span>}
-    </div>
+    </LineButton>
   )
 }
 
 // One other-cardio session: its day, length and effort, and whether it was
 // long enough to count as a workout.
 // `showWorkout` is off for walks, which never count as workouts.
-function CardioLine({ session, showWorkout = true }) {
-  const day = session.at ? new Date(session.at).toLocaleDateString('en-US', { weekday: 'short' }) : 'Earlier'
+function CardioLine({ session, showWorkout = true, onEdit }) {
+  const day = dayLabel(session.at)
   return (
-    <div className="flex items-center gap-1.5 flex-wrap text-sm">
+    <LineButton label={`${day} ${session.kind === 'walk' ? 'walk' : 'cardio'}`} onEdit={onEdit}>
       <span className="w-12 font-semibold text-stone-600">{day}</span>
       <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{session.minutes} min {session.hard ? 'hard' : 'easy'}</span>
       {showWorkout && cardioIsWorkout(session) && <span className={`${TAG} bg-cyan-50 text-cyan-700`}>Workout</span>}
-    </div>
+    </LineButton>
   )
 }
 
 // What you did in a class: cardio (how long, how hard), strength (which
 // areas) and stretching. Everything starts off; cardio remembers your last
 // length and effort.
-function LogClassSheet({ store, onClose }) {
-  const [c, setC] = useState(store.getNewClass)
+// With `edit`, it opens filled in with that class to change or delete.
+function LogClassSheet({ store, edit, onClose }) {
+  const [c, setC] = useState(() => (edit ? { ...CLASS_DEFAULT, ...edit.entry } : { ...store.getNewClass(), at: new Date().toISOString() }))
   const set = patch => setC(cur => ({ ...cur, ...patch }))
   const all = CLASS_AREAS.map(a => a.id)
   const full = all.every(id => c.areas.includes(id))
@@ -227,7 +242,9 @@ function LogClassSheet({ store, onClose }) {
 
   // Strength with no areas picked would light nothing up, so it doesn't count.
   function log() {
-    store.logClass({ ...c, strength: c.strength && c.areas.length > 0, areas: c.strength ? c.areas : [] })
+    const answers = { ...c, strength: c.strength && c.areas.length > 0, areas: c.strength ? c.areas : [] }
+    if (edit) store.editClass(edit.index, answers)
+    else store.logClass(answers)
     onClose()
   }
 
@@ -237,7 +254,7 @@ function LogClassSheet({ store, onClose }) {
   }`
 
   return (
-    <SettingsSheet title="Log a class" closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={edit ? 'Edit class' : 'Log a class'} closeLabel="Cancel" onClose={onClose}>
       <div className="space-y-4">
         <ToggleRow label="Cardio" on={c.cardio} onChange={v => set({ cardio: v })} />
         {c.cardio && (
@@ -282,13 +299,15 @@ function LogClassSheet({ store, onClose }) {
           <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
         ))}
       </div>
+      <DayPicker at={c.at} onChange={at => set({ at })} />
       <button
         onClick={log}
         disabled={nothing}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
       >
-        {nothing ? 'Turn on what you did' : `Log class${counts && ` · ${counts}`}`}
+        {nothing ? 'Turn on what you did' : `${edit ? 'Save' : 'Log class'}${counts && ` · ${counts}`}`}
       </button>
+      {edit && <DeleteButton what="class" onDelete={() => { store.deleteClass(edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }
@@ -296,26 +315,28 @@ function LogClassSheet({ store, onClose }) {
 // Logs a walk (kind "walk") or other cardio. Starts from the last one you
 // added. Only other cardio can count as a workout, so only it shows how close
 // it is.
-function AddCardioSheet({ kind = 'other', store, onClose }) {
+function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   const isWalk = kind === 'walk'
-  const last = store.getCardioSetting(kind)
-  const [minutes, setMinutes] = useState(last.minutes)
-  const [hard, setHard] = useState(last.hard)
+  const start = edit?.entry ?? store.getCardioSetting(kind)
+  const [minutes, setMinutes] = useState(start.minutes)
+  const [hard, setHard] = useState(start.hard)
+  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
 
   const workout = !isWalk && cardioIsWorkout({ minutes, hard })
   const need = CARDIO_WORKOUT_MINUTES[hard ? 'hard' : 'easy'] - minutes
 
   function add() {
-    if (isWalk) store.addWalk(minutes, hard)
+    if (edit) store.editCardio(kind, edit.index, { minutes, hard, at })
+    else if (isWalk) store.addWalk(minutes, hard, at)
     else {
-      store.addOtherCardio(minutes, hard)
+      store.addOtherCardio(minutes, hard, at)
       store.setCardioSetting('other', { minutes, hard })
     }
     onClose()
   }
 
   return (
-    <SettingsSheet title={isWalk ? 'Add a walk' : 'Add cardio'} closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={edit ? (isWalk ? 'Edit walk' : 'Edit cardio') : isWalk ? 'Add a walk' : 'Add cardio'} closeLabel="Cancel" onClose={onClose}>
       <StepperRow label="Length" value={minutes} step={5} min={5} max={240} editable suffix=" min" onChange={setMinutes} />
       <Segmented label="Effort" value={hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => setHard(v === 'hard')} />
       {/* 30 min hard or 45 easy makes it a workout, not just cardio minutes. */}
@@ -328,13 +349,62 @@ function AddCardioSheet({ kind = 'other', store, onClose }) {
         </p>
       )}
       <EffortNote />
+      <DayPicker at={at} onChange={setAt} />
       <button
         onClick={add}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
       >
-        Add {minutes} min · {workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}
+        {edit ? 'Save' : 'Add'} {minutes} min · {workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}
       </button>
+      {edit && <DeleteButton what={isWalk ? 'walk' : 'session'} onDelete={() => { store.deleteCardio(kind, edit.index); onClose() }} />}
     </SettingsSheet>
+  )
+}
+
+// Which day of this week something happened: Mon–Sun, days still to come
+// greyed out. Today keeps the time you logged it.
+function DayPicker({ at, onChange }) {
+  const now = new Date()
+  const picked = at ? new Date(at) : null
+  return (
+    <div className="space-y-2">
+      <span className="text-base text-stone-600">Day</span>
+      <div className="grid grid-cols-7 gap-1">
+        {weekDays(now).map(d => {
+          const today = sameDay(d, now)
+          const future = !today && d > now
+          const on = picked && sameDay(d, picked)
+          return (
+            <button
+              key={d.getDate()}
+              disabled={future}
+              onClick={() => onChange(today ? now.toISOString() : d.toISOString())}
+              aria-pressed={!!on}
+              aria-label={d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              className={`rounded-xl py-1.5 text-center transition-colors disabled:opacity-30 ${
+                on ? 'bg-accent-500 text-white' : 'bg-stone-100 text-stone-600 active:bg-stone-200'
+              }`}
+            >
+              <span className="block text-[11px] font-medium">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+              <span className="block text-sm font-semibold">{d.getDate()}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Deleting asks once more, in place.
+function DeleteButton({ what, onDelete }) {
+  const [sure, setSure] = useState(false)
+  return (
+    <button
+      onClick={() => (sure ? onDelete() : setSure(true))}
+      className="w-full py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold active:bg-red-100 transition-colors"
+    >
+      {sure ? `Tap again to delete this ${what}` : `Delete ${what}`}
+    </button>
   )
 }
 
@@ -364,23 +434,24 @@ function ownDetail(list) {
 }
 
 // One session on your own: its day, length, and whether it was a workout.
-function StretchLine({ session }) {
-  const day = session.at ? new Date(session.at).toLocaleDateString('en-US', { weekday: 'short' }) : 'Earlier'
+function StretchLine({ session, onEdit }) {
+  const day = dayLabel(session.at)
   return (
-    <div className="flex items-center gap-1.5 flex-wrap text-sm">
+    <LineButton label={`${day} stretch session`} onEdit={onEdit}>
       <span className="w-12 font-semibold text-stone-600">{day}</span>
       {session.minutes !== null && <span className={`${TAG} bg-teal-50 text-teal-700`}>{session.minutes} min</span>}
       {session.minutes >= STRETCH_WORKOUT_MINUTES && <span className={`${TAG} bg-pink-50 text-pink-700`}>Workout</span>}
-    </div>
+    </LineButton>
   )
 }
 
 // Logs a stretch session on your own; 30+ minutes also counts as a workout.
-function AddStretchSheet({ store, onClose }) {
-  const [minutes, setMinutes] = useState(store.lastOwnStretch)
+function AddStretchSheet({ store, edit, onClose }) {
+  const [minutes, setMinutes] = useState(edit?.entry.minutes ?? store.lastOwnStretch)
+  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
   const need = STRETCH_WORKOUT_MINUTES - minutes
   return (
-    <SettingsSheet title="Add stretching" closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={edit ? 'Edit stretching' : 'Add stretching'} closeLabel="Cancel" onClose={onClose}>
       <StepperRow label="Length" value={minutes} step={5} min={5} max={240} editable suffix=" min" onChange={setMinutes} />
       {need > 0 ? (
         <p className="text-sm text-stone-500">
@@ -390,12 +461,18 @@ function AddStretchSheet({ store, onClose }) {
       ) : (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
       )}
+      <DayPicker at={at} onChange={setAt} />
       <button
-        onClick={() => { store.addOwnStretch(minutes); onClose() }}
+        onClick={() => {
+          if (edit) store.editOwnStretch(edit.index, { minutes, at })
+          else store.addOwnStretch(minutes, at)
+          onClose()
+        }}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
       >
-        Add {minutes} min · {need > 0 ? 'stretch day' : 'counts as a workout'}
+        {edit ? 'Save' : 'Add'} {minutes} min · {need > 0 ? 'stretch day' : 'counts as a workout'}
       </button>
+      {edit && <DeleteButton what="session" onDelete={() => { store.deleteOwnStretch(edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }
@@ -461,9 +538,9 @@ function WorkoutCard({ workout, progress, onOpen }) {
           <p className="text-sm text-stone-400 truncate">{workout.name}</p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <span className="text-sm font-medium text-stone-500">{done}/{total}</span>
-          <div className="w-16 h-1 bg-stone-100 rounded-full mt-1.5">
+        {/* Progress only: a bar that fills as you tick sets, no number. */}
+        <div className="shrink-0">
+          <div className="w-16 h-1 bg-stone-100 rounded-full">
             <div
               className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-orange-400'}`}
               style={{ width: `${total ? (done / total) * 100 : 0}%` }}

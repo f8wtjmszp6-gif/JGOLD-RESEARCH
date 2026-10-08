@@ -236,6 +236,14 @@ export function isCore(exercise) {
   return exercise.group === 'core'
 }
 
+// Each plan's starting Core section — abs and obliques both covered.
+export const DEFAULT_CORE = {
+  push: [],
+  legsQuad: ['plank', 'dead-bugs', 'side-plank'],
+  pull: ['hanging-leg-raises', 'pallof-press'],
+  legsPost: ['woodchoppers', 'ab-wheel'],
+}
+
 // Which plans start with their Core section on: the ones that had core work.
 export const CORE_ON_BY_DEFAULT = { push: false, legsQuad: true, pull: true, legsPost: true }
 
@@ -284,4 +292,84 @@ export const SUGGESTED_GROUPS = {
   legsQuad: ['legs', 'core'],
   pull: ['back', 'arms', 'core'],
   legsPost: ['legs', 'back', 'core'],
+}
+
+// ── Coverage ───────────────────────────────────────────────────────────────
+// The areas each plan (and the Core section) is meant to work. A plan covers
+// an area when one of its exercises has that area as a main target.
+export const PLAN_AREAS = {
+  push: [['chest', 'Chest'], ['front-delts', 'Front delts'], ['side-delts', 'Side delts'], ['triceps', 'Triceps']],
+  legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs']],
+  pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps']],
+  legsPost: [['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['lower-back', 'Lower back'], ['calves', 'Calves']],
+  core: [['abs', 'Abs'], ['obliques', 'Obliques']],
+}
+
+// Each exercise's main targets only — a bench press is chest work, not your
+// triceps work. Anything not listed targets a single area by its group.
+const T = (areas, ...ids) => Object.fromEntries(ids.map(id => [id, areas]))
+const COVERS = {
+  ...T(['chest'], 'bench-press', 'incline-db-press', 'db-bench-press', 'incline-bench-press', 'push-ups', 'cable-fly', 'pec-deck',
+    'chest-press-machine', 'decline-bench-press', 'decline-db-press', 'db-fly', 'incline-db-fly', 'low-to-high-cable-fly',
+    'smith-bench-press', 'smith-incline-press', 'incline-chest-press-machine', 'incline-push-ups', 'db-pullover', 'svend-press'),
+  ...T(['chest', 'triceps'], 'dips', 'weighted-dips'),
+  ...T(['chest', 'front-delts'], 'landmine-press'),
+  ...T(['triceps', 'chest'], 'close-grip-bench'),
+  ...T(['front-delts'], 'overhead-press', 'db-shoulder-press', 'front-raises', 'machine-shoulder-press', 'seated-db-press', 'push-press',
+    'landmine-shoulder-press', 'cable-front-raise', 'pike-push-ups'),
+  ...T(['front-delts', 'side-delts'], 'arnold-press'),
+  ...T(['side-delts'], 'lateral-raises', 'cable-lateral-raise', 'lu-raises'),
+  ...T(['side-delts', 'traps'], 'upright-row'),
+  ...T(['rear-delts'], 'face-pulls', 'rear-delt-fly', 'reverse-pec-deck', 'cable-rear-delt-fly', 'external-rotation'),
+  ...T(['rear-delts', 'traps'], 'y-raises'),
+  ...T(['triceps'], 'overhead-tricep-extension', 'tricep-pushdown', 'skull-crushers', 'tricep-kickbacks', 'rope-pushdown',
+    'overhead-cable-extension', 'single-arm-pushdown', 'dip-machine', 'bench-dips', 'db-skull-crushers', 'jm-press'),
+  ...T(['lats'], 'barbell-rows', 'pull-ups', 'lat-pulldown', 'seated-cable-row', 'one-arm-db-row', 'chest-supported-row', 't-bar-row',
+    'straight-arm-pulldown', 'pendlay-row', 'inverted-row', 'machine-row', 'close-grip-pulldown', 'single-arm-pulldown',
+    'meadows-row', 'seal-row', 'assisted-pull-up-machine'),
+  ...T(['lats', 'biceps'], 'chin-ups'),
+  ...T(['traps'], 'barbell-shrugs', 'db-shrugs'),
+  ...T(['hamstrings', 'glutes', 'lower-back', 'traps'], 'deadlift'),
+  ...T(['traps', 'lower-back', 'glutes'], 'rack-pull'),
+  ...T(['biceps'], 'barbell-curl', 'hammer-curls', 'db-curl', 'incline-db-curl', 'preacher-curl', 'cable-curl', 'ez-bar-curl',
+    'spider-curl', 'concentration-curl', 'reverse-curl', 'cable-hammer-curl', 'bayesian-curl', 'machine-curl'),
+  ...T([], 'wrist-curl', 'reverse-wrist-curl', 'tibialis-raise'),
+  ...T(['quads'], 'cable-squat', 'goblet-squat', 'leg-press', 'leg-extension', 'front-squat', 'hack-squat', 'smith-squat',
+    'pendulum-squat', 'belt-squat', 'single-leg-press', 'sissy-squat', 'wall-sit', 'box-jumps'),
+  ...T(['quads', 'glutes'], 'back-squat', 'box-squat', 'bulgarian-split-squat', 'walking-lunges', 'reverse-lunge', 'step-ups'),
+  ...T(['inner-thighs', 'quads'], 'lateral-lunge'),
+  ...T(['quads', 'glutes', 'hamstrings'], 'trap-bar-deadlift'),
+  ...T(['glutes', 'inner-thighs', 'hamstrings'], 'sumo-deadlift'),
+  ...T(['glutes'], 'hip-thrust', 'glute-bridge', 'hip-thrust-machine', 'single-leg-hip-thrust', 'frog-pumps', 'cable-kickback'),
+  ...T(['outer-thighs'], 'hip-abduction'),
+  ...T(['inner-thighs'], 'hip-adduction'),
+  ...T(['hamstrings', 'glutes'], 'romanian-deadlift', 'single-leg-rdl', 'db-rdl', 'cable-pull-through', 'kettlebell-swing'),
+  ...T(['hamstrings'], 'lying-leg-curl', 'seated-leg-curl', 'standing-leg-curl', 'nordic-curl', 'glute-ham-raise'),
+  ...T(['hamstrings', 'lower-back'], 'good-mornings'),
+  ...T(['lower-back'], 'back-extensions', 'superman'),
+  ...T(['lower-back', 'glutes'], 'reverse-hyper'),
+  ...T(['calves'], 'standing-calf-raise', 'seated-calf-raise', 'donkey-calf-raise', 'leg-press-calf-raise', 'single-leg-calf-raise'),
+  ...T(['abs'], 'plank', 'dead-bugs', 'hanging-leg-raises', 'cable-crunch', 'ab-wheel', 'hollow-hold', 'mountain-climbers', 'v-ups',
+    'crunches', 'decline-sit-ups', 'reverse-crunch', 'captains-chair', 'toes-to-bar', 'dragon-flag', 'bird-dog',
+    'ab-crunch-machine', 'plank-shoulder-taps', 'farmers-carry'),
+  ...T(['obliques'], 'woodchoppers', 'side-plank', 'russian-twists', 'pallof-press', 'suitcase-carry', 'landmine-rotation', 'copenhagen-plank'),
+  ...T(['abs', 'obliques'], 'bicycle-crunch'),
+}
+
+export function coversOf(exercise) {
+  return COVERS[exercise.id] ?? []
+}
+
+// Each of a list's areas, and whether one of its exercises covers it.
+// `section` is the plan id, or 'core' for the Core section.
+export function coverage(list, section) {
+  const covered = new Set(list.flatMap(coversOf))
+  return (PLAN_AREAS[section] ?? []).map(([id, label]) => ({ id, label, covered: covered.has(id) }))
+}
+
+// The areas a change would leave uncovered that are covered now.
+export function gapsAfter(before, after, section) {
+  const now = coverage(before, section)
+  const next = coverage(after, section)
+  return now.filter((a, i) => a.covered && !next[i].covered).map(a => a.label)
 }

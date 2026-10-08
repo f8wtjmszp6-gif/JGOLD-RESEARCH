@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
-import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT } from '../data/exercises'
+import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE } from '../data/exercises'
 
 const STORAGE_KEY = 'workout-tracker-v2'
 
@@ -156,6 +156,18 @@ function cardioWeekOf(s) {
   return { ...by, total: by.class + by.walk + by.other }
 }
 
+// A kind's logged sessions, in log order: walks (counting any logged before
+// lengths were saved), or other cardio.
+function sessionsOfKind(s, kind) {
+  return kind === 'walk' ? cardioSessionsOf(s).filter(x => x.kind === 'walk') : (s.cardio ?? []).filter(x => x.kind === kind)
+}
+
+// Writes a kind's sessions back; walks keep their count in step.
+function writeSessions(s, kind, list) {
+  const next = { ...s, cardio: [...(s.cardio ?? []).filter(x => x.kind !== kind), ...list] }
+  return kind === 'walk' ? { ...next, activities: { ...s.activities, walk: list.length } } : next
+}
+
 // Drops the latest logged session of a kind.
 function dropLastCardio(list, kind) {
   const i = list.findLastIndex(x => x.kind === kind)
@@ -181,7 +193,9 @@ function defaultIds(workoutId) {
 }
 
 function listIds(s, workoutId, section) {
-  const saved = s[LIST_KEY[section]]?.[workoutId] ?? (section === 'core' ? s.order?.[workoutId] : null) ?? defaultIds(workoutId)
+  const saved = section === 'core'
+    ? s.coreLists?.[workoutId] ?? (s.order?.[workoutId]?.some(id => EXERCISE_BY_ID[id] && isCore(EXERCISE_BY_ID[id])) ? s.order[workoutId] : DEFAULT_CORE[workoutId] ?? [])
+    : s.order?.[workoutId] ?? defaultIds(workoutId)
   const keep = id => {
     const ex = EXERCISE_BY_ID[id]
     return ex && (section === 'core' ? isCore(ex) : fitsPlan(ex, workoutId))
@@ -687,13 +701,48 @@ export function useStore() {
   // Logs a class with your answers, and remembers them for the next one.
   function logClass(answers) {
     const { cardio, minutes, hard, strength, areas, stretch, stretchMinutes } = answers
-    const entry = { at: new Date().toISOString(), cardio, minutes, hard, strength, areas, stretch, stretchMinutes }
+    const entry = { at: answers.at ?? new Date().toISOString(), cardio, minutes, hard, strength, areas, stretch, stretchMinutes }
     update(s => ({
       ...s,
       activities: { ...s.activities, class: countOf(s, 'class') + 1 },
       classLog: [...classesOf(s), entry],
       lastClass: { cardio, minutes, hard, strength, areas, stretch, stretchMinutes },
     }))
+  }
+
+  // ── Editing what you logged ──────────────────────────────────────────────
+  // Each takes the item's place in its list (as `classes`, `walks`,
+  // `otherCardio` and `ownStretches` give them) and a patch — new answers,
+  // and `at` to move it to another day.
+  function editClass(index, patch) {
+    update(s => ({ ...s, classLog: classesOf(s).map((c, i) => (i === index ? { ...c, ...patch } : c)) }))
+  }
+
+  function deleteClass(index) {
+    update(s => {
+      const list = classesOf(s).filter((_, i) => i !== index)
+      return { ...s, classLog: list, activities: { ...s.activities, class: list.length } }
+    })
+  }
+
+  // kind: 'walk' or 'other'
+  function editCardio(kind, index, patch) {
+    update(s => writeSessions(s, kind, sessionsOfKind(s, kind).map((x, i) => (i === index ? { ...x, ...patch } : x))))
+  }
+
+  function deleteCardio(kind, index) {
+    update(s => writeSessions(s, kind, sessionsOfKind(s, kind).filter((_, i) => i !== index)))
+  }
+
+  function editOwnStretch(index, patch) {
+    update(s => ({ ...s, stretchLog: ownStretchesOf(s).map((x, i) => (i === index ? { ...x, ...patch } : x)) }))
+  }
+
+  function deleteOwnStretch(index) {
+    update(s => {
+      const list = ownStretchesOf(s).filter((_, i) => i !== index)
+      return { ...s, stretchLog: list, stretchExtra: list.length }
+    })
   }
 
   function getNewClass() {
@@ -719,14 +768,14 @@ export function useStore() {
   }
 
   // A walk with its own length and effort; the next walk starts from these.
-  function addWalk(minutes, hard) {
+  function addWalk(minutes, hard, at = new Date().toISOString()) {
     update(s => {
       const kept = cardioSessionsOf(s).filter(x => x.kind === 'walk')
       const others = (s.cardio ?? []).filter(x => x.kind !== 'walk')
       return {
         ...s,
         activities: { ...s.activities, walk: countOf(s, 'walk') + 1 },
-        cardio: [...others, ...kept, { kind: 'walk', minutes, hard, at: new Date().toISOString() }],
+        cardio: [...others, ...kept, { kind: 'walk', minutes, hard, at }],
         cardioSettings: { ...s.cardioSettings, walk: { minutes, hard } },
       }
     })
@@ -735,8 +784,8 @@ export function useStore() {
   // This week's walks, each with its length (oldest first).
   const walks = cardioSessionsOf(state).filter(x => x.kind === 'walk')
 
-  function addOtherCardio(minutes, hard) {
-    update(s => ({ ...s, cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at: new Date().toISOString() }] }))
+  function addOtherCardio(minutes, hard, at = new Date().toISOString()) {
+    update(s => ({ ...s, cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at }] }))
   }
 
   function removeOtherCardio() {
@@ -764,11 +813,11 @@ export function useStore() {
   const classes = classesOf(state)
 
   // A stretch session on your own, with how long it was.
-  function addOwnStretch(minutes) {
+  function addOwnStretch(minutes, at = new Date().toISOString()) {
     update(s => ({
       ...s,
       stretchExtra: (Number(s.stretchExtra) || 0) + 1,
-      stretchLog: [...ownStretchesOf(s), { at: new Date().toISOString(), minutes }],
+      stretchLog: [...ownStretchesOf(s), { at, minutes }],
       lastOwnStretch: minutes,
     }))
   }
@@ -950,6 +999,12 @@ export function useStore() {
     classes,
     logClass,
     getNewClass,
+    editClass,
+    deleteClass,
+    editCardio,
+    deleteCardio,
+    editOwnStretch,
+    deleteOwnStretch,
     getCardioSetting,
     setCardioSetting,
     otherCardio,
