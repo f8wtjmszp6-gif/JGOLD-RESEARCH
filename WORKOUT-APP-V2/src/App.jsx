@@ -57,6 +57,7 @@ export default function App() {
 }
 
 function Header({ onReset, onHistory, onTrends, week, stretch, cardio, store }) {
+  const logged = { class: store.classes.length, cardio: store.otherCardio.length }
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
@@ -91,7 +92,7 @@ function Header({ onReset, onHistory, onTrends, week, stretch, cardio, store }) 
       </div>
       <div className="mt-4">
         {/* This week's body map sits in the card's title line. */}
-        <WeekCard week={week} stretch={stretch} cardio={cardio} figure={<MuscleMap store={store} />} live />
+        <WeekCard week={week} stretch={stretch} cardio={cardio} figure={<MuscleMap store={store} />} live logged={logged} />
       </div>
     </div>
   )
