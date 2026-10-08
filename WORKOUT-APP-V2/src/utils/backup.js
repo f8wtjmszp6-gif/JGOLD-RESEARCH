@@ -50,9 +50,16 @@ export async function readBackup(file) {
   return payload
 }
 
-// "today", "yesterday", "3 days ago"
-export function backupAge(iso) {
+// "today", "yesterday", "3 days ago", then the date ("on Sep 28").
+// Counted in calendar days on this phone's clock, so a backup last night
+// reads "yesterday" the next morning even though it's under 24 hours old.
+export function backupAge(iso, now = new Date()) {
   if (!iso) return null
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
+  const then = new Date(iso)
+  const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((midnight(now) - midnight(then)) / 86400000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return 'on ' + then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }

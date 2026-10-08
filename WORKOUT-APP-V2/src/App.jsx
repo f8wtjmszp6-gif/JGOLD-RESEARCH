@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Home from './components/Home'
 import MuscleMap from './components/MuscleMap'
 import WeekCard from './components/WeekCard'
+import { useTheme } from './hooks/useTheme'
 import History from './components/History'
 import TrendsScreen from './components/Trends'
 import WorkoutDetail from './components/WorkoutDetail'
@@ -40,6 +41,7 @@ export default function App() {
             onTrends={() => setView('trends')}
             week={store.week}
             stretch={store.stretchWeek}
+            cardio={store.cardioWeek}
             store={store}
           />
           <div className="flex-1 min-h-0 overflow-hidden">
@@ -54,7 +56,7 @@ export default function App() {
   )
 }
 
-function Header({ onReset, onHistory, onTrends, week, stretch, store }) {
+function Header({ onReset, onHistory, onTrends, week, stretch, cardio, store }) {
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
@@ -65,10 +67,6 @@ function Header({ onReset, onHistory, onTrends, week, stretch, store }) {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* This week's body map, as a small widget beside reset. */}
-          <div className="bg-white shadow-sm rounded-xl px-2 py-1">
-            <MuscleMap store={store} />
-          </div>
           <HeaderBtn onClick={onTrends} label="Trends">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 19h16" />
@@ -88,10 +86,12 @@ function Header({ onReset, onHistory, onTrends, week, stretch, store }) {
               <polyline points="3 3 3 9 9 9" />
             </svg>
           </HeaderBtn>
+          <ThemeButton />
         </div>
       </div>
       <div className="mt-4">
-        <WeekCard week={week} stretch={stretch} />
+        {/* This week's body map sits in the card's title line. */}
+        <WeekCard week={week} stretch={stretch} cardio={cardio} figure={<MuscleMap store={store} />} live />
       </div>
     </div>
   )
@@ -112,6 +112,25 @@ function UndoBar({ store }) {
         </button>
       </div>
     </div>
+  )
+}
+
+// Sun in dark mode (tap for light), moon in light mode (tap for dark).
+function ThemeButton() {
+  const { dark, toggle } = useTheme()
+  return (
+    <HeaderBtn onClick={toggle} label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+      {dark ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <circle cx="12" cy="12" r="4.2" />
+          <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+        </svg>
+      ) : (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z" />
+        </svg>
+      )}
+    </HeaderBtn>
   )
 }
 

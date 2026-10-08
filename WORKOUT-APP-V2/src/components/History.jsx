@@ -43,7 +43,7 @@ export default function History({ store, onBack }) {
         )}
 
         {weeks.map(w => (
-          <WeekCard key={w.end} week={w.week} stretch={w.stretch} title={weekRange(w)}>
+          <WeekCard key={w.end} week={w.week} stretch={w.stretch} cardio={w.cardio} title={weekRange(w)}>
             <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-stone-100">
               {w.plans.map(p => <PlanBadge key={p.id} plan={p} />)}
             </div>

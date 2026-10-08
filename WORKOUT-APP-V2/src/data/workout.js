@@ -14,8 +14,8 @@ export const BAR_STEP = 1
 export const workouts = {
   push: {
     id: 'push',
-    name: 'Chest, Shoulders & Triceps',
-    short: 'Push',
+    name: 'Chest, shoulders & triceps',
+    short: 'Chest & Shoulders',
     exercises: [
       { id: 'bench-press', name: 'Bench Press', sets: 3, reps: '6–8', weight: { bar: 25, value: 105 } },
       { id: 'overhead-press', name: 'Overhead Press', sets: 3, reps: '8–10', weight: { bar: 25, value: 55 } },
@@ -23,18 +23,13 @@ export const workouts = {
       { id: 'lateral-raises', name: 'Lateral Raises', sets: 3, reps: '12–14', weight: { bar: 0, value: 12 } },
       { id: 'overhead-tricep-extension', name: 'Overhead Tricep Extension', sets: 3, reps: '10–12', weight: { bar: 0, value: 40 } },
     ],
-    stretches: [
-      { id: 'lateral-neck-tilts', name: 'Lateral Neck Tilts', duration: 30, perSide: true },
-      { id: 'neck-rotations', name: 'Neck Rotations', duration: 30, perSide: true },
-      { id: 'levator-scapulae', name: 'Levator Scapulae Stretch', duration: 30, perSide: true },
-      { id: 'doorway-pec', name: 'Doorway Pec Stretch', duration: 45, perSide: true, alt: 'Wall Pec Stretch' },
-      { id: 'overhead-tricep-stretch', name: 'Overhead Tricep Stretch', duration: 30, perSide: true },
-    ],
+    // Chest, front and side shoulders, triceps, upper traps
+    stretches: ['doorway-pec', 'behind-back-clasp', 'cross-body-shoulder', 'overhead-tricep-stretch', 'upper-trap'],
   },
 
   legsQuad: {
     id: 'legsQuad',
-    name: 'Quads, Glutes, Hips & Core',
+    name: 'Quads, glutes, inner & outer thighs, core',
     short: 'Quads & Glutes',
     exercises: [
       { id: 'cable-squat', name: 'Cable-Assisted Squat', sets: 3, reps: '6–8', weight: { bar: 0, value: 170 } },
@@ -44,18 +39,14 @@ export const workouts = {
       { id: 'plank', name: 'Plank', sets: 3, reps: '45s', isTime: true, durationSeconds: 45, weight: { bar: 0, value: 0, assist: true } },
       { id: 'dead-bugs', name: 'Dead Bugs', sets: 3, reps: '12–14', perSide: true, weight: { bar: 0, value: 0, assist: true } },
     ],
-    stretches: [
-      { id: 'hip-flexor', name: 'Kneeling Hip Flexor Stretch', duration: 60, perSide: true, alt: 'Couch Stretch' },
-      { id: 'quad-stretch', name: 'Standing Quad Stretch', duration: 45, perSide: true, alt: 'Kneeling Quad Stretch' },
-      { id: 'figure-4', name: 'Figure-4', duration: 60, perSide: true, alt: 'Pigeon Pose' },
-      { id: '90-90', name: '90-90 Hip Stretch', duration: 60, perSide: true },
-    ],
+    // Hip flexors, quads, glutes, outer hip, inner thighs
+    stretches: ['hip-flexor', 'quad-stretch', 'figure-4', '90-90', 'butterfly'],
   },
 
   pull: {
     id: 'pull',
-    name: 'Back, Rear Delts, Biceps & Core',
-    short: 'Pull',
+    name: 'Back, traps, rear delts, biceps & core',
+    short: 'Back & Biceps',
     exercises: [
       { id: 'barbell-rows', name: 'Barbell Rows', sets: 3, reps: '8–10', weight: { bar: 45, value: 95 } },
       { id: 'pull-ups', name: 'Pull-Ups', sets: 3, reps: '8–10', weight: { bar: 0, value: 35, assist: true } },
@@ -65,18 +56,14 @@ export const workouts = {
       { id: 'hammer-curls', name: 'Hammer Curls', sets: 3, reps: '10–12', weight: { bar: 0, value: 20 } },
       { id: 'hanging-leg-raises', name: 'Hanging Leg Raises', sets: 3, reps: '12–14', weight: { bar: 0, value: 0, assist: true } },
     ],
-    stretches: [
-      { id: 'cross-body-shoulder', name: 'Cross-Body Shoulder Stretch', duration: 30, perSide: true },
-      { id: 'spinal-twist', name: 'Supine Spinal Twist', duration: 45, perSide: true, alt: 'Seated Spinal Twist' },
-      { id: 'childs-pose', name: "Child's Pose", duration: 45, perSide: false },
-      { id: 'wrist-flexor', name: 'Kneeling Wrist Flexor Stretch', duration: 30, perSide: true, alt: 'Prayer Wrist Stretch' },
-    ],
+    // Lats, upper back, rear shoulders, biceps, forearms, traps
+    stretches: ['lat-stretch', 'childs-pose', 'thread-the-needle', 'bicep-wall', 'wrist-flexor', 'levator-scapulae'],
   },
 
   legsPost: {
     id: 'legsPost',
-    name: 'Hamstrings, Calves, Posterior & Core',
-    short: 'Hams & Calves',
+    name: 'Hamstrings, glutes, lower back, calves & obliques',
+    short: 'Hamstrings & Calves',
     exercises: [
       { id: 'romanian-deadlift', name: 'Romanian Deadlift', sets: 3, reps: '6–8', weight: { bar: 45, value: 125 } },
       { id: 'back-extensions', name: 'Weighted Back Extensions', sets: 3, reps: '10–12', weight: { bar: 0, value: 35 } },
@@ -84,13 +71,8 @@ export const workouts = {
       { id: 'seated-calf-raise', name: 'Seated Calf Raise', sets: 3, reps: '12–14', weight: { bar: 0, value: 55 } },
       { id: 'woodchoppers', name: 'Woodchoppers', sets: 2, reps: '12–14', perSide: true, weight: { bar: 0, value: 20 } },
     ],
-    stretches: [
-      { id: 'hamstring-stretch', name: 'Supine Hamstring Stretch', duration: 45, perSide: true, alt: 'Standing Hamstring Stretch' },
-      { id: 'wall-calf-stretch', name: 'Standing Wall Calf Stretch', duration: 30, perSide: true },
-      { id: 'bent-knee-calf', name: 'Bent-Knee Calf Stretch', duration: 30, perSide: true },
-      { id: 'cobra-pose', name: 'Cobra Pose', duration: 30, perSide: false },
-      { id: 'side-bend', name: 'Standing Side Bend', duration: 30, perSide: true },
-    ],
+    // Hamstrings, glutes, lower back, both calf muscles
+    stretches: ['hamstring-stretch', 'pigeon-pose', 'knees-to-chest', 'wall-calf-stretch', 'bent-knee-calf'],
   },
 }
 
@@ -103,22 +85,41 @@ export const COMPOUND_LIFTS = new Set([
 export const REST_COMPOUND = 150
 export const REST_ACCESSORY = 90
 
-// A standalone full-body routine for days without a gym workout, built from
-// the gym days' own stretches so durations and per-side settings carry over.
-const ROUTINE_STRETCHES = [
-  'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'cross-body-shoulder',
-  'spinal-twist', 'figure-4', 'wall-calf-stretch', 'childs-pose',
-]
+// A standalone full-body routine for days without a gym workout: a second
+// weekly dose for every major area, plus neck and posture. Ids from the
+// stretch bank (data/stretches.js).
 export const STRETCH_ROUTINE = {
   id: 'routine',
   name: 'Full-Body Stretch',
   short: 'Full-Body Stretch',
   exercises: [],
+  stretches: [
+    'cat-cow', 'worlds-greatest', 'downward-dog', 'hip-flexor', 'pigeon-pose', 'hamstring-stretch', 'butterfly',
+    'doorway-pec', 'thread-the-needle', 'childs-pose', 'spinal-twist', 'chin-tucks', 'lateral-neck-tilts',
+  ],
 }
 
 // Weekly goal for both home cards — workouts and stretching: 3 a week
 // meets it, 4 is the stretch target.
 export const WEEKLY_GOAL = { min: 3, max: 4 }
+
+// Weekly cardio, in minutes, from the health guidelines: 150 is the minimum
+// for most of the benefit, 300 the ideal. A hard minute counts as two.
+export const CARDIO_GOAL = { min: 150, max: 300 }
+
+// One walk (or other cardio), until you change it. Gym workouts are
+// strength training and don't add cardio minutes.
+// A run, ride or other cardio session counts as a workout once it's long
+// enough: 30 minutes hard or 45 easy. Shorter ones still add cardio minutes.
+export const CARDIO_WORKOUT_MINUTES = { hard: 30, easy: 45 }
+export function cardioIsWorkout(session) {
+  return session.minutes >= CARDIO_WORKOUT_MINUTES[session.hard ? 'hard' : 'easy']
+}
+
+export const CARDIO_DEFAULTS = {
+  walk: { minutes: 30, hard: false },
+  other: { minutes: 30, hard: false },
+}
 
 // Which body regions each workout trains, per view, for the home screen's
 // Muscles this week figure. Pushing works the front of the upper body and
@@ -142,11 +143,44 @@ export const MUSCLE_GROUPS = [
   { id: 'core', label: 'Core', exercises: ['plank', 'dead-bugs', 'hanging-leg-raises', 'woodchoppers'] },
 ]
 
-// Display order of the gym workouts on the home screen.
-{
-  const all = Object.values(workouts).flatMap(x => x.stretches)
-  STRETCH_ROUTINE.stretches = ROUTINE_STRETCHES.map(id => all.find(x => x.id === id))
+// A workout class, as the Log a class sheet asks about it: cardio (how long,
+// how hard), strength (which areas), and whether it was stretching (yoga,
+// mobility) and for how long. The sheet opens with everything off; turning
+// cardio or stretching on fills in your last class's times.
+export const CLASS_DEFAULT = {
+  cardio: false, minutes: 45, hard: true,
+  strength: false, areas: [],
+  stretch: false, stretchMinutes: 30,
 }
+
+// Stretching on its own — the Full-Body Stretch, a session on your own —
+// counts as a workout from 30 minutes. (Any stretching is a stretch day.)
+export const STRETCH_WORKOUT_MINUTES = 30
+
+// A class counts as a workout if it had cardio or strength. Stretching alone
+// counts only from this many minutes; any stretching is still a stretch day.
+export const CLASS_STRETCH_WORKOUT_MINUTES = STRETCH_WORKOUT_MINUTES
+export function classIsWorkout(c) {
+  return c.cardio || (c.strength && c.areas.length > 0) ||
+    (c.stretch && (c.stretchMinutes ?? CLASS_DEFAULT.stretchMinutes) >= CLASS_STRETCH_WORKOUT_MINUTES)
+}
+
+// Classes logged before the sheet asked anything: 45 hard minutes, full body.
+export const CLASS_LEGACY = {
+  cardio: true, minutes: 45, hard: true,
+  strength: true, areas: ['upper', 'lower', 'core'],
+  stretch: false,
+}
+
+// The body areas a class's strength work can cover, and the body-map
+// regions each lights up, per view.
+export const CLASS_AREAS = [
+  { id: 'upper', label: 'Upper', front: ['shoulders', 'chest', 'arms'], back: ['shoulders', 'arms', 'back'] },
+  { id: 'lower', label: 'Lower', front: ['hips', 'thighs', 'calves'], back: ['hips', 'thighs', 'calves'] },
+  { id: 'core', label: 'Core', front: ['core'], back: [] },
+]
+
+// Display order of the gym workouts on the home screen.
 
 export const GYM_ORDER = ['push', 'legsQuad', 'pull', 'legsPost']
 
@@ -156,7 +190,7 @@ export const GYM_ORDER = ['push', 'legsQuad', 'pull', 'legsPost']
 //   tile / mark – the activity's color: a light gradient tile behind its figure, and the
 //                 solid fill for its days on the week bar.
 export const activities = [
-  { id: 'class', name: 'Workout Class', short: 'Class', note: 'OrangeTheory or any class', icon: '🔥', one: 'class', many: 'classes', tile: 'from-violet-50 to-violet-100', mark: 'bg-violet-600' },
+  { id: 'class', name: 'Workout Class', short: 'Class', note: 'HIIT, spin, bootcamp, yoga', icon: '🔥', one: 'class', many: 'classes', tile: 'from-violet-50 to-violet-100', mark: 'bg-violet-600' },
   { id: 'walk', name: 'Walking', short: 'Walk', note: 'Got a walk in instead', icon: '🚶', one: 'walk', many: 'walks', tile: 'from-emerald-50 to-emerald-100', mark: 'bg-emerald-600' },
   { id: 'rest', name: 'Rest', short: 'Rest', note: 'Recovery day', icon: '😴', one: 'rest day', many: 'rest days', tile: 'from-indigo-50 to-indigo-100', mark: 'bg-indigo-400' },
 ]
@@ -167,3 +201,13 @@ export const activities = [
 // clears 3:1 on white. Gray fails as a category color and orange beside red
 // fails outright, so re-run the validator before changing any of them.
 export const GYM_MARK = 'bg-orange-600'
+
+// Cardio sessions that count as workouts, after gym and class on the
+// Workouts bar. Cyan was validated against orange-600 and violet-600 (rose,
+// the obvious "cardio" color, fails beside orange for red-green colorblindness).
+export const CARDIO_MARK = 'bg-cyan-600'
+
+// Stretching long enough to count as a workout, last on the Workouts bar.
+// Pink-600 passed the validator against orange, violet and cyan; the teals
+// that match the stretch figures sit too close to cyan.
+export const STRETCH_MARK = 'bg-pink-600'

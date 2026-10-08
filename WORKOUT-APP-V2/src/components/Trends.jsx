@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { workouts, GYM_ORDER, MUSCLE_GROUPS } from '../data/workout'
 import { calendarWeekOf } from '../hooks/useStore'
+import { cardioLevel } from '../utils/goal'
+import { EXERCISE_BANK } from '../data/exercises'
 
 const WEEKS = 12
 
-// Every exercise by id, for the muscle-group grid.
-const EXERCISES = Object.fromEntries(Object.values(workouts).flatMap(w => w.exercises).map(e => [e.id, e]))
 const DAY = 86400000
 
 // "YYYY-MM-DD" Monday → Date, and back.
@@ -61,6 +61,11 @@ function Trends({ store }) {
   const weeks = lastWeeks(store.history)
   const [group, setGroup] = useState(MUSCLE_GROUPS[0])
   const [open, setOpen] = useState(null) // exercise shown in the detail sheet
+  // A group's charts: exercises from the bank that are in one of your
+  // workouts now, or that you've done in a saved week.
+  const inWorkouts = new Set(GYM_ORDER.flatMap(id => store.getExercises(id).map(x => x.id)))
+  const done = new Set(store.history.flatMap(w => Object.keys(w.lifts ?? {})))
+  const shown = EXERCISE_BANK.filter(x => x.group === group.id && (inWorkouts.has(x.id) || done.has(x.id)))
 
   if (!weeks.length) {
     return (
@@ -93,8 +98,11 @@ function Trends({ store }) {
       </div>
       {/* Fill the space: one or two exercises stack full width; an odd one
           out at the end of a longer list spans both columns. */}
-      <div className={`grid gap-2 ${group.exercises.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-        {group.exercises.map(id => EXERCISES[id]).map((ex, i, list) => {
+      {shown.length === 0 && (
+        <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">None of your workouts has a {group.label.toLowerCase()} exercise right now.</p>
+      )}
+      <div className={`grid gap-2 ${shown.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        {shown.map((ex, i, list) => {
           const wide = list.length <= 2 || (list.length % 2 === 1 && i === list.length - 1)
           return (
             <ExerciseTrend
@@ -118,11 +126,19 @@ function Trends({ store }) {
 
 // One square per week for workouts and for stretching, greener toward the
 // 3–4 goal, ✓ when met. Same green ramp as the This week card.
-const LEVELS = ['bg-stone-100', 'bg-emerald-200', 'bg-emerald-300', 'bg-emerald-500', 'bg-emerald-700']
+// In dark mode more weeks read brighter, from shades the dark palette leaves alone.
+const LEVELS = [
+  'bg-stone-100',
+  'bg-emerald-200 dark:bg-emerald-700',
+  'bg-emerald-300 dark:bg-emerald-600',
+  'bg-emerald-500',
+  'bg-emerald-700 dark:bg-emerald-400',
+]
 function WeekGrid({ weeks }) {
   const rows = [
-    ['Workouts', w => w.week.gym + w.week.class],
+    ['Workouts', w => w.week.gym + w.week.class + (w.week.cardio ?? 0) + (w.week.stretchWork ?? 0)],
     ['Stretching', w => w.stretch.total],
+    ['Cardio', w => (w.cardio ? cardioLevel(w.cardio.total) : 0), w => (w.cardio ? `${w.cardio.total} min` : 'not tracked')],
   ]
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5">
@@ -130,7 +146,7 @@ function WeekGrid({ weeks }) {
         <p className="text-sm font-medium text-stone-500">Last {weeks.length} {weeks.length === 1 ? 'week' : 'weeks'}</p>
         <p className="text-xs text-stone-400">✓ = goal met</p>
       </div>
-      {rows.map(([label, value]) => (
+      {rows.map(([label, value, text = value]) => (
         <div key={label} className="flex items-center gap-2 mb-1.5">
           <span className="w-[68px] text-xs font-semibold text-stone-500 shrink-0">{label}</span>
           <div className="flex-1 grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`, maxWidth: `${weeks.length * 26}px` }}>
@@ -139,7 +155,7 @@ function WeekGrid({ weeks }) {
               return (
                 <div
                   key={monday.getTime()}
-                  title={`Week of ${short(monday)}: ${entry ? v : 'not saved'}`}
+                  title={`Week of ${short(monday)}: ${entry ? text(entry) : 'not saved'}`}
                   className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]}`}
                 >
                   {v >= 3 ? '✓' : ''}
@@ -304,8 +320,8 @@ function BigChart({ points }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Chart of ${points.length} weeks`}>
       {ticks.map(v => (
         <g key={v}>
-          <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#f0efed" />
-          <text x={L - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="#a8a29e">{fmt(v)}</text>
+          <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--color-stone-100)" />
+          <text x={L - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--color-stone-400)">{fmt(v)}</text>
         </g>
       ))}
       {points.length > 1 && (
@@ -315,10 +331,10 @@ function BigChart({ points }) {
         />
       )}
       {points.map((p, i) => (
-        <circle key={i} cx={x(i)} cy={y(p.m.v)} r={p.pr ? 5 : 3.5} fill={p.pr ? '#f54900' : '#fff'} stroke="#f54900" strokeWidth="2" />
+        <circle key={i} cx={x(i)} cy={y(p.m.v)} r={p.pr ? 5 : 3.5} fill={p.pr ? '#f54900' : 'var(--surface)'} stroke="#f54900" strokeWidth="2" />
       ))}
       {dates.map(i => (
-        <text key={i} x={x(i)} y={H - 4} textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#a8a29e">
+        <text key={i} x={x(i)} y={H - 4} textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--color-stone-400)">
           {short(points[i].monday)}
         </text>
       ))}
@@ -376,7 +392,7 @@ function Balance({ weeks }) {
       </div>
       {counts.map(({ id, done }) => (
         <div key={id} className="flex items-center gap-2.5 my-2">
-          <span className="w-[104px] text-xs font-semibold text-stone-700 truncate">{workouts[id].short}</span>
+          <span className="w-[128px] shrink-0 text-xs font-semibold text-stone-700 truncate">{workouts[id].short}</span>
           <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full ${behind.some(b => b.id === id) ? 'bg-orange-300' : 'bg-orange-600'}`}

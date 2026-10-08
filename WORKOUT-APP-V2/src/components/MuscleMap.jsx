@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { workouts, GYM_ORDER, MUSCLE_MAP } from '../data/workout'
+import { workouts, GYM_ORDER, MUSCLE_MAP, CLASS_AREAS } from '../data/workout'
 
 // Same silhouette as the workout body maps; regions are bands clipped to it.
 const SILHOUETTE = (
@@ -24,10 +24,15 @@ const REGIONS = {
   calves: [[17, 66.5, 30, 13]],
 }
 // How hard each region was worked this week: a finished workout that trains
-// it adds 1, a started one ½, and every class adds 1 everywhere (full body).
+// it adds 1, a started one ½, and a class adds 1 to the areas its strength
+// work covered (upper, lower, core).
 function regionScores(status, classes, view) {
   const scores = {}
-  for (const r of Object.keys(REGIONS)) scores[r] = classes
+  for (const r of Object.keys(REGIONS)) scores[r] = 0
+  for (const c of classes) {
+    if (!c.strength) continue
+    for (const a of CLASS_AREAS) if (c.areas.includes(a.id)) for (const r of a[view]) scores[r] += 1
+  }
   for (const id of GYM_ORDER) {
     for (const r of MUSCLE_MAP[id][view]) scores[r] += status[id] === 2 ? 1 : status[id] === 1 ? 0.5 : 0
   }
@@ -56,13 +61,13 @@ function Figure({ status, classes, view }) {
       <defs>
         <clipPath id={clip}>{SILHOUETTE}</clipPath>
       </defs>
-      <g fill="#e7e5e4">{SILHOUETTE}</g>
+      <g fill="var(--color-stone-200)">{SILHOUETTE}</g>
       <g clipPath={`url(#${clip})`}>
         {shown.filter(r => fillFor(scores[r])).map(r => REGIONS[r].map(([x, y, w, h], i) => (
           <rect key={r + i} x={x} y={y} width={w} height={h} fill={fillFor(scores[r])} stroke={fillFor(scores[r])} strokeWidth="0.8" />
         )))}
       </g>
-      <g fill="none" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" opacity=".85">
+      <g fill="none" stroke="var(--surface)" strokeWidth="1.2" strokeLinecap="round" opacity=".85">
         {view === 'back'
           ? <><path d="M32 21 V48" /><path d="M24 25 Q26 30 30 29M40 25 Q38 30 34 29" /></>
           : <><path d="M24 31 Q32 33.5 40 31" /><path d="M32 33 V43" /></>}
@@ -79,14 +84,14 @@ export default function MuscleMap({ store }) {
     const { done, total } = store.workoutProgress(id)
     status[id] = total > 0 && done === total ? 2 : done > 0 ? 1 : 0
   }
-  const classes = store.getActivityCount('class')
+  const classes = store.classes
   const done = GYM_ORDER.filter(id => status[id] === 2).map(id => workouts[id].short)
 
   return (
     <div
       className="flex items-center gap-0.5"
       role="img"
-      aria-label={`Muscles this week: ${done.length ? done.join(', ') + ' done' : 'no plans finished yet'}${classes ? `, ${classes} ${classes === 1 ? 'class' : 'classes'}` : ''}`}
+      aria-label={`Muscles this week: ${done.length ? done.join(', ') + ' done' : 'no plans finished yet'}${classes.length ? `, ${classes.length} ${classes.length === 1 ? 'class' : 'classes'}` : ''}`}
     >
       <Figure status={status} classes={classes} view="front" />
       <Figure status={status} classes={classes} view="back" />

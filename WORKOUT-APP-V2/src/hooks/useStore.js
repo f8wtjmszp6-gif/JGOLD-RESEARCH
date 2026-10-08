@@ -1,5 +1,8 @@
 import { useCallback, useState } from 'react'
-import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY } from '../data/workout'
+import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY } from '../data/workout'
+
+import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
+import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT } from '../data/exercises'
 
 const STORAGE_KEY = 'workout-tracker-v2'
 
@@ -9,12 +12,17 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     exerciseSettings  { [exerciseId]: { bar, weight, reps: [n, …], holds: [seconds, …] } }
 //     setup             { [exerciseId]: { mode: 'reps' | 'hold', perSide, restOn, rest } }
 //     warmups           { [workoutId]: { on, minutes } }
-//     order             { [workoutId]: [exerciseId, …] }  (your exercise order)
+//     order             { [workoutId]: [exerciseId, …] }  (a plan's exercises, in order, from the bank)
+//     coreLists         { [workoutId]: [exerciseId, …] }  (its Core section)
+//     coreOn            { [workoutId]: bool }              (whether the Core section is on)
+//     stretchLists      { [workoutId | 'routine']: [stretchId, …] }  (your stretches, from the bank)
 //     assist            { [exerciseId]: bool }
 //     customDurations   { [stretchId]: seconds }
 //     perSide           { [stretchId]: bool }
 //     stretchSets       { [stretchId]: count }  (rounds of a stretch, default 1)
 //     stretchRest       { [stretchId]: seconds } (rest between those rounds, default 20)
+//     cardioSettings    { walk | other: { minutes, hard } }  (length of one session)
+//     lastClass         your answers for the last class logged (its length and effort carry over)
 //     lastBackupAt      ISO time of the last backup file you saved
 //     history           [weekSummary, …] newest first — saved by each reset, never cleared
 //     lastResetAt       ISO time of the last reset (the start of the current week)
@@ -22,7 +30,10 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool } }
 //     activities        { class | walk | rest: count }
-//     stretchExtra      count of stretch sessions done on your own (the hero's +)
+//     stretchExtra      count of stretch sessions done on your own
+//     stretchLog        [{ at, minutes }, …] — how long each of those was
+//     cardio            [{ kind: 'walk' | 'other', minutes, hard }, …] — one per session
+//     classLog          [{ at, cardio, minutes, hard, strength, areas, stretch, stretchMinutes }, …] — one per class
 
 function lowReps(repsStr) {
   const n = parseInt(String(repsStr).split('–')[0])
@@ -44,7 +55,7 @@ function setupOf(s, exercise) {
     mode: saved?.mode ?? (exercise.isTime ? 'hold' : 'reps'),
     perSide: saved?.perSide ?? !!exercise.perSide,
     restOn: saved?.restOn ?? false,
-    rest: saved?.rest ?? (COMPOUND_LIFTS.has(exercise.id) ? REST_COMPOUND : REST_ACCESSORY),
+    rest: saved?.rest ?? (COMPOUND_LIFTS.has(exercise.id) || exercise.compound ? REST_COMPOUND : REST_ACCESSORY),
   }
 }
 
@@ -99,28 +110,178 @@ function countOf(s, id) {
   return Number(s.activities?.[id]) || 0
 }
 
+// How long one class or walk is, and whether it's hard (vigorous) work.
+function cardioSettingOf(s, kind) {
+  return { ...CARDIO_DEFAULTS[kind], ...s.cardioSettings?.[kind] }
+}
+
+// This week's classes with what you did in each. The class count is the
+// source of truth; classes it has that the log doesn't (logged before the
+// questions existed) count as the default: 45 hard minutes, full body.
+function classesOf(s) {
+  const n = countOf(s, 'class')
+  const log = (s.classLog ?? []).slice(0, n)
+  return [...log, ...Array.from({ length: n - log.length }, () => CLASS_LEGACY)]
+}
+
+function lastClassOf(s) {
+  return { ...CLASS_DEFAULT, ...s.lastClass }
+}
+
+// Where the Log a class sheet starts: everything off, with the last class's
+// length and effort ready for when you turn cardio on.
+function newClassOf(s) {
+  const { minutes, hard, stretchMinutes } = lastClassOf(s)
+  return { ...CLASS_DEFAULT, minutes, hard, stretchMinutes }
+}
+
+// Every cardio session this week: each class with cardio, plus walks and
+// other cardio. A walk is logged at its length when you tap +; any the
+// count has that the log doesn't count at today's length.
+function cardioSessionsOf(s) {
+  const logged = s.cardio ?? []
+  const out = classesOf(s).filter(c => c.cardio).map(c => ({ kind: 'class', minutes: c.minutes, hard: c.hard }))
+  out.push(...logged.filter(x => x.kind === 'other'))
+  const walks = logged.filter(x => x.kind === 'walk').slice(0, countOf(s, 'walk'))
+  const missing = countOf(s, 'walk') - walks.length
+  out.push(...walks, ...Array.from({ length: missing }, () => ({ kind: 'walk', ...cardioSettingOf(s, 'walk') })))
+  return out
+}
+
+// Cardio minutes as the health guidelines count them: a hard minute counts
+// as two easy ones. Split by kind for history, plus the total.
+function cardioWeekOf(s) {
+  const by = { class: 0, walk: 0, other: 0 }
+  for (const x of cardioSessionsOf(s)) by[x.kind] += x.minutes * (x.hard ? 2 : 1)
+  return { ...by, total: by.class + by.walk + by.other }
+}
+
+// Drops the latest logged session of a kind.
+function dropLastCardio(list, kind) {
+  const i = list.findLastIndex(x => x.kind === kind)
+  return i < 0 ? list : list.filter((_, j) => j !== i)
+}
+
 // A gym workout counts toward the week only once every set of every exercise
 // is ticked. (The warm-up and stretches aren't required.)
 function workoutComplete(s, workoutId) {
-  const list = workouts[workoutId].exercises
+  const list = exercisesOf(s, workoutId)
   return list.length > 0 && list.every(ex => ticksOf(s, workoutId, ex).every(Boolean))
 }
 
-// A workout's exercise ids in your order. Any exercise not in the saved
-// order (e.g. added to the program later) goes at the end.
-function orderIds(s, workoutId) {
-  const ids = (workouts[workoutId]?.exercises ?? []).map(e => e.id)
-  const saved = (s.order?.[workoutId] ?? []).filter(id => ids.includes(id))
-  return [...saved, ...ids.filter(id => !saved.includes(id))]
+// A plan's exercises come in two lists, each picked from the exercise bank:
+//   main – what the plan is for; only exercises that fit it (see fitsPlan)
+//   core – its Core section at the end, shown while that's switched on
+// Saved under `order` and `coreLists`. Earlier saves kept core exercises in
+// `order`; they're read as the Core section until it's edited.
+const LIST_KEY = { main: 'order', core: 'coreLists' }
+
+function defaultIds(workoutId) {
+  return (workouts[workoutId]?.exercises ?? []).map(e => e.id)
 }
 
-// What a week is made of: finished gym workouts, plus each class, walk and
-// rest logged.
+function listIds(s, workoutId, section) {
+  const saved = s[LIST_KEY[section]]?.[workoutId] ?? (section === 'core' ? s.order?.[workoutId] : null) ?? defaultIds(workoutId)
+  const keep = id => {
+    const ex = EXERCISE_BY_ID[id]
+    return ex && (section === 'core' ? isCore(ex) : fitsPlan(ex, workoutId))
+  }
+  const ids = saved.filter(keep)
+  return section === 'main' && ids.length === 0 ? defaultIds(workoutId).filter(keep) : ids
+}
+
+function coreOnOf(s, workoutId) {
+  return s.coreOn?.[workoutId] ?? CORE_ON_BY_DEFAULT[workoutId] ?? false
+}
+
+// The plan's exercises as you do them: the main list, then Core if it's on.
+function exerciseIdsOf(s, workoutId) {
+  return [...listIds(s, workoutId, 'main'), ...(coreOnOf(s, workoutId) ? listIds(s, workoutId, 'core') : [])]
+}
+
+function exercisesOf(s, workoutId) {
+  return exerciseIdsOf(s, workoutId).map(id => EXERCISE_BY_ID[id])
+}
+
+// Which list an exercise in a plan sits in.
+function sectionOf(exercise) {
+  return isCore(exercise) ? 'core' : 'main'
+}
+
+// Drops ticks on exercises that are no longer in either of a plan's lists.
+function pruneTicks(s, workoutId) {
+  const inPlan = new Set([...listIds(s, workoutId, 'main'), ...listIds(s, workoutId, 'core')])
+  const ticks = s.checks?.[workoutId]?.exercises ?? {}
+  const kept = Object.fromEntries(Object.entries(ticks).filter(([id]) => inPlan.has(id)))
+  return writeChecks(s, workoutId, cur => ({ ...cur, exercises: kept }))
+}
+
+// Writing the main list also pins the Core section as it is, so Core isn't
+// read from the new main list (where older saves kept it).
+function writeList(s, workoutId, section, ids) {
+  const key = LIST_KEY[section]
+  const pinned = section === 'main' && !s.coreLists?.[workoutId]
+    ? { coreLists: { ...s.coreLists, [workoutId]: listIds(s, workoutId, 'core') } }
+    : {}
+  return pruneTicks({ ...s, ...pinned, [key]: { ...s[key], [workoutId]: ids } }, workoutId)
+}
+
+// What a week is made of: finished gym workouts, classes that count as
+// workouts (see classIsWorkout), each walk and rest logged, and other cardio
+// sessions long enough to count as workouts.
 function weekOf(s) {
   return {
     gym: GYM_ORDER.filter(id => workoutComplete(s, id)).length,
     ...Object.fromEntries(activities.map(a => [a.id, countOf(s, a.id)])),
+    class: classesOf(s).filter(classIsWorkout).length,
+    cardio: (s.cardio ?? []).filter(x => x.kind === 'other' && cardioIsWorkout(x)).length,
+    stretchWork: stretchWorkoutsOf(s),
   }
+}
+
+// Your stretch sessions on your own this week. The count is the source of
+// truth; sessions logged before lengths were asked have no minutes.
+function ownStretchesOf(s) {
+  const n = Number(s.stretchExtra) || 0
+  const log = (s.stretchLog ?? []).slice(0, n)
+  return [...log, ...Array.from({ length: n - log.length }, () => ({ minutes: null }))]
+}
+
+// A list's stretches — a gym workout's or the Full-Body Stretch — as you've
+// set them up from the stretch bank, or its starting stretches.
+// Only stretches that fit the list count (see stretchFits); if none of a saved
+// list does, it falls back to the starting stretches.
+function stretchesOf(s, listId) {
+  const pick = ids => ids.map(id => STRETCH_BY_ID[id]).filter(x => x && stretchFits(x, listId))
+  const saved = pick(s.stretchLists?.[listId] ?? [])
+  return saved.length ? saved : pick(defaultStretchIds(listId))
+}
+
+// Writes a list's stretch ids, dropping the tick of any stretch that left it.
+function writeStretchList(s, listId, ids) {
+  const ticks = s.checks?.[listId]?.stretches ?? {}
+  const kept = Object.fromEntries(Object.entries(ticks).filter(([id]) => ids.includes(id)))
+  return writeChecks({ ...s, stretchLists: { ...s.stretchLists, [listId]: ids } }, listId, cur => ({ ...cur, stretches: kept }))
+}
+
+// How long the Full-Body Stretch takes with your settings: every hold (both
+// sides where it's per side), every set, and the rests between sets.
+function routineSecondsOf(s) {
+  return stretchesOf(s, STRETCH_ROUTINE.id).reduce((sum, x) => {
+    const sets = s.stretchSets?.[x.id] ?? 1
+    const hold = (s.customDurations?.[x.id] ?? x.duration) * ((s.perSide?.[x.id] ?? x.perSide) ? 2 : 1)
+    return sum + hold * sets + (s.stretchRest?.[x.id] ?? 20) * (sets - 1)
+  }, 0)
+}
+
+const longEnough = minutes => minutes >= STRETCH_WORKOUT_MINUTES
+
+// Stretching that counts as a workout: the Full-Body Stretch, finished, if
+// it runs 30+ minutes, and each 30+ minute session on your own.
+function stretchWorkoutsOf(s) {
+  const routineDone = stretchesOf(s, STRETCH_ROUTINE.id).every(x => s.checks?.[STRETCH_ROUTINE.id]?.stretches?.[x.id])
+  const routine = routineDone && longEnough(Math.round(routineSecondsOf(s) / 60)) ? 1 : 0
+  return routine + ownStretchesOf(s).filter(x => x.minutes !== null && longEnough(x.minutes)).length
 }
 
 // Stretch days: each gym workout whose stretches are all ticked, the
@@ -128,11 +289,12 @@ function weekOf(s) {
 function stretchWeekOf(s) {
   const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
   const st = {
-    gym: GYM_ORDER.filter(id => all(id, workouts[id].stretches)).length,
-    routine: all(STRETCH_ROUTINE.id, STRETCH_ROUTINE.stretches) ? 1 : 0,
+    gym: GYM_ORDER.filter(id => all(id, stretchesOf(s, id))).length,
+    routine: all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0,
+    class: classesOf(s).filter(c => c.stretch).length,
     extra: Number(s.stretchExtra) || 0,
   }
-  return { ...st, total: st.gym + st.routine + st.extra }
+  return { ...st, total: st.gym + st.routine + st.class + st.extra }
 }
 
 // A week as saved in history: the same numbers as the live cards, plus how
@@ -144,7 +306,7 @@ function summarize(s, endedAt) {
   const plans = GYM_ORDER.map(id => {
     let done = 0
     let total = 0
-    for (const ex of workouts[id].exercises) {
+    for (const ex of exercisesOf(s, id)) {
       const { reps, weight } = settingsOf(s, ex)
       const ticks = ticksOf(s, id, ex)
       total += ticks.length
@@ -166,6 +328,8 @@ function summarize(s, endedAt) {
     end: endedAt,
     week: weekOf(s),
     stretch: stretchWeekOf(s),
+    cardio: cardioWeekOf(s),
+    classes: classesOf(s),
     plans,
     lifted: Math.round(lifted),
     lifts,
@@ -201,12 +365,14 @@ function mergeWeeks(a, b) {
     end: b.end,
     week: sum(a.week, b.week),
     stretch: sum(a.stretch, b.stretch),
+    ...(a.cardio || b.cardio ? { cardio: sum(a.cardio ?? {}, b.cardio ?? {}) } : {}),
     plans: b.plans.map(p => {
       const q = a.plans.find(x => x.id === p.id)
       return { ...p, done: Math.min(p.total, p.done + (q?.done ?? 0)) }
     }),
     lifted: a.lifted + b.lifted,
     lifts: { ...a.lifts, ...b.lifts },
+    ...(a.classes || b.classes ? { classes: [...(a.classes ?? []), ...(b.classes ?? [])] } : {}),
   }
 }
 
@@ -321,7 +487,7 @@ export function useStore() {
   function workoutProgress(workoutId) {
     let done = 0
     let total = 0
-    for (const ex of workouts[workoutId].exercises) {
+    for (const ex of exercisesOf(state, workoutId)) {
       const t = ticksOf(state, workoutId, ex)
       total += t.length
       done += t.filter(Boolean).length
@@ -331,31 +497,76 @@ export function useStore() {
 
   // ── Exercise order per workout (remembered) ──────────────────────────────
   function getExercises(workoutId) {
-    const list = workouts[workoutId]?.exercises ?? []
-    return orderIds(state, workoutId).map(id => list.find(e => e.id === id))
+    return exercisesOf(state, workoutId)
+  }
+
+  // The plan's two lists, and whether Core is on.
+  function getExerciseSections(workoutId) {
+    const ex = section => listIds(state, workoutId, section).map(id => EXERCISE_BY_ID[id])
+    return { main: ex('main'), core: ex('core'), coreOn: coreOnOf(state, workoutId) }
+  }
+
+  function setCoreOn(workoutId, on) {
+    update(s => ({ ...s, coreOn: { ...s.coreOn, [workoutId]: on } }))
   }
 
   function isCustomOrder(workoutId) {
-    return !!state.order?.[workoutId]
+    return !!state.order?.[workoutId] || !!state.coreLists?.[workoutId]
+  }
+
+  // Puts one exercise from the bank in another's place, in the same list.
+  function swapExercise(workoutId, oldId, newId) {
+    update(s => {
+      const section = sectionOf(EXERCISE_BY_ID[oldId])
+      const ids = listIds(s, workoutId, section)
+      const fits = section === 'core' ? isCore(EXERCISE_BY_ID[newId]) : fitsPlan(EXERCISE_BY_ID[newId], workoutId)
+      if (ids.includes(newId) || !fits) return s
+      return writeList(s, workoutId, section, ids.map(id => (id === oldId ? newId : id)))
+    })
+  }
+
+  // Adds to the main list or, for a core exercise, the Core section.
+  function addExercise(workoutId, id) {
+    update(s => {
+      const ex = EXERCISE_BY_ID[id]
+      const section = sectionOf(ex)
+      if (section === 'main' && !fitsPlan(ex, workoutId)) return s
+      const ids = listIds(s, workoutId, section)
+      return ids.includes(id) ? s : writeList(s, workoutId, section, [...ids, id])
+    })
+  }
+
+  // The main list always keeps at least one exercise; Core can be emptied.
+  function removeExercise(workoutId, id) {
+    update(s => {
+      const section = sectionOf(EXERCISE_BY_ID[id])
+      const ids = listIds(s, workoutId, section)
+      if (section === 'main' && ids.length <= 1) return s
+      return writeList(s, workoutId, section, ids.filter(x => x !== id))
+    })
   }
 
   // Moves an exercise up (-1) or down (+1) one place.
   function moveExercise(workoutId, exerciseId, delta) {
     update(s => {
-      const ids = orderIds(s, workoutId)
+      const section = sectionOf(EXERCISE_BY_ID[exerciseId])
+      const ids = listIds(s, workoutId, section)
       const i = ids.indexOf(exerciseId)
       const j = i + delta
       if (i < 0 || j < 0 || j >= ids.length) return s
       ;[ids[i], ids[j]] = [ids[j], ids[i]]
-      return { ...s, order: { ...s.order, [workoutId]: ids } }
+      return writeList(s, workoutId, section, ids)
     })
   }
 
+  // Back to the plan's starting exercises (main and Core), in their order.
   function resetOrder(workoutId) {
     update(s => {
       const order = { ...s.order }
+      const coreLists = { ...s.coreLists }
       delete order[workoutId]
-      return { ...s, order }
+      delete coreLists[workoutId]
+      return pruneTicks({ ...s, order, coreLists }, workoutId)
     })
   }
 
@@ -382,6 +593,61 @@ export function useStore() {
     return state.checks?.[workoutId]?.stretches?.[id] ?? false
   }
 
+  // ── Stretch lists (remembered) ───────────────────────────────────────────
+  function getStretches(listId) {
+    return stretchesOf(state, listId)
+  }
+
+  function isCustomStretches(listId) {
+    return !!state.stretchLists?.[listId]
+  }
+
+  // Puts one stretch from the bank in another's place.
+  function swapStretch(listId, oldId, newId) {
+    update(s => {
+      const ids = stretchesOf(s, listId).map(x => x.id)
+      if (ids.includes(newId) || !stretchFits(STRETCH_BY_ID[newId] ?? {}, listId)) return s
+      return writeStretchList(s, listId, ids.map(id => (id === oldId ? newId : id)))
+    })
+  }
+
+  function addStretch(listId, id) {
+    update(s => {
+      const ids = stretchesOf(s, listId).map(x => x.id)
+      if (ids.includes(id) || !STRETCH_BY_ID[id] || !stretchFits(STRETCH_BY_ID[id], listId)) return s
+      return writeStretchList(s, listId, [...ids, id])
+    })
+  }
+
+  // A list always keeps at least one stretch.
+  function removeStretch(listId, id) {
+    update(s => {
+      const ids = stretchesOf(s, listId).map(x => x.id)
+      return ids.length <= 1 ? s : writeStretchList(s, listId, ids.filter(x => x !== id))
+    })
+  }
+
+  function moveStretch(listId, id, delta) {
+    update(s => {
+      const ids = stretchesOf(s, listId).map(x => x.id)
+      const i = ids.indexOf(id)
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= ids.length) return s
+      ;[ids[i], ids[j]] = [ids[j], ids[i]]
+      return writeStretchList(s, listId, ids)
+    })
+  }
+
+  // Back to the starting stretches (ticks on ones that leave are dropped).
+  function resetStretches(listId) {
+    update(s => {
+      const next = writeStretchList(s, listId, defaultStretchIds(listId))
+      const lists = { ...next.stretchLists }
+      delete lists[listId]
+      return { ...next, stretchLists: lists }
+    })
+  }
+
   function toggleStretch(workoutId, id) {
     update(s => writeChecks(s, workoutId, cur => ({
       ...cur,
@@ -394,18 +660,77 @@ export function useStore() {
     return countOf(state, id)
   }
 
+  // A walk also logs its cardio minutes, at its current length. A class
+  // logged this way repeats your last class (the sheet uses logClass).
   function addActivity(id) {
-    update(s => ({ ...s, activities: { ...s.activities, [id]: countOf(s, id) + 1 } }))
+    if (id === 'class') return logClass(lastClassOf(state))
+    update(s => {
+      const next = { ...s, activities: { ...s.activities, [id]: countOf(s, id) + 1 } }
+      if (!CARDIO_DEFAULTS[id]) return next
+      const kept = cardioSessionsOf(s).filter(x => x.kind === id)
+      const others = (s.cardio ?? []).filter(x => x.kind !== id)
+      return { ...next, cardio: [...others, ...kept, { kind: id, ...cardioSettingOf(s, id) }] }
+    })
   }
 
   function removeActivity(id) {
-    update(s => ({ ...s, activities: { ...s.activities, [id]: Math.max(0, countOf(s, id) - 1) } }))
+    update(s => ({
+      ...s,
+      activities: { ...s.activities, [id]: Math.max(0, countOf(s, id) - 1) },
+      ...(id === 'class'
+        ? { classLog: classesOf(s).slice(0, -1) }
+        : { cardio: dropLastCardio(s.cardio ?? [], id) }),
+    }))
+  }
+
+  // ── Classes ──────────────────────────────────────────────────────────────
+  // Logs a class with your answers, and remembers them for the next one.
+  function logClass(answers) {
+    const { cardio, minutes, hard, strength, areas, stretch, stretchMinutes } = answers
+    const entry = { at: new Date().toISOString(), cardio, minutes, hard, strength, areas, stretch, stretchMinutes }
+    update(s => ({
+      ...s,
+      activities: { ...s.activities, class: countOf(s, 'class') + 1 },
+      classLog: [...classesOf(s), entry],
+      lastClass: { cardio, minutes, hard, strength, areas, stretch, stretchMinutes },
+    }))
+  }
+
+  function getNewClass() {
+    return newClassOf(state)
+  }
+
+  // ── Cardio ───────────────────────────────────────────────────────────────
+  function getCardioSetting(kind) {
+    return cardioSettingOf(state, kind)
+  }
+
+  function setCardioSetting(kind, patch) {
+    update(s => ({ ...s, cardioSettings: { ...s.cardioSettings, [kind]: { ...cardioSettingOf(s, kind), ...patch } } }))
+  }
+
+  // Cardio that isn't a class or a walk — a run, a bike ride — logged with
+  // its own minutes and effort.
+  const otherCardio = (state.cardio ?? []).filter(x => x.kind === 'other')
+
+  // Clock minutes logged this week for a kind (class, walk or other).
+  function getCardioMinutes(kind) {
+    return cardioSessionsOf(state).filter(x => x.kind === kind).reduce((n, x) => n + x.minutes, 0)
+  }
+
+  function addOtherCardio(minutes, hard) {
+    update(s => ({ ...s, cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at: new Date().toISOString() }] }))
+  }
+
+  function removeOtherCardio() {
+    update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'other') }))
   }
 
   // Anything to clear? Drives whether the reset button is enabled.
   const hasChecks =
     Object.values(state.activities ?? {}).some(v => Number(v) > 0) ||
     Number(state.stretchExtra) > 0 ||
+    (state.cardio ?? []).length > 0 ||
     Object.values(state.checks ?? {}).some(c =>
       Object.values(c.exercises ?? {}).some(t => t.some(Boolean)) ||
       Object.values(c.stretches ?? {}).some(Boolean) ||
@@ -413,15 +738,40 @@ export function useStore() {
 
   // This week, computed the same way it's saved to history on reset.
   const week = weekOf(state)
-  // Only gym workouts and classes count toward the weekly goal; walks show
-  // as a bonus and rest days just show.
-  const workoutsLogged = week.gym + week.class
+  // Gym workouts, classes, and long enough cardio or stretching count toward
+  // the weekly goal; walks show as a bonus and rest days just show.
+  const workoutsLogged = week.gym + week.class + week.cardio + week.stretchWork
 
   const stretchWeek = stretchWeekOf(state)
+  const cardioWeek = cardioWeekOf(state)
+  const classes = classesOf(state)
 
-  function addStretchExtra(delta) {
-    update(s => ({ ...s, stretchExtra: Math.max(0, (Number(s.stretchExtra) || 0) + delta) }))
+  // A stretch session on your own, with how long it was.
+  function addOwnStretch(minutes) {
+    update(s => ({
+      ...s,
+      stretchExtra: (Number(s.stretchExtra) || 0) + 1,
+      stretchLog: [...ownStretchesOf(s), { at: new Date().toISOString(), minutes }],
+      lastOwnStretch: minutes,
+    }))
   }
+
+  // Drops the latest session on your own.
+  function removeOwnStretch() {
+    update(s => {
+      const list = ownStretchesOf(s).slice(0, -1)
+      return { ...s, stretchExtra: list.length, stretchLog: list }
+    })
+  }
+
+  // Older callers: +1 logs a session at your last length.
+  function addStretchExtra(delta) {
+    if (delta > 0) addOwnStretch(state.lastOwnStretch ?? 15)
+    else removeOwnStretch()
+  }
+
+  const ownStretches = ownStretchesOf(state)
+  const routineMinutes = Math.round(routineSecondsOf(state) / 60)
 
   // Unticks every set and stretch and zeroes the activity counts. Your
   // numbers and settings are left alone.
@@ -442,7 +792,10 @@ export function useStore() {
         lastResetAt: now,
         checks: {},
         activities: {},
+        cardio: [],
+        classLog: [],
         stretchExtra: 0,
+        stretchLog: [],
       }
     })
   }
@@ -541,6 +894,11 @@ export function useStore() {
     workoutProgress,
     getExercises,
     isCustomOrder,
+    getExerciseSections,
+    setCoreOn,
+    swapExercise,
+    addExercise,
+    removeExercise,
     moveExercise,
     resetOrder,
     getWarmup,
@@ -548,6 +906,13 @@ export function useStore() {
     getWarmupDone,
     setWarmupDone,
     getStretchDone,
+    getStretches,
+    isCustomStretches,
+    swapStretch,
+    addStretch,
+    removeStretch,
+    moveStretch,
+    resetStretches,
     toggleStretch,
     getActivityCount,
     addActivity,
@@ -564,7 +929,22 @@ export function useStore() {
     week,
     workoutsLogged,
     stretchWeek,
+    cardioWeek,
+    classes,
+    logClass,
+    getNewClass,
+    getCardioSetting,
+    setCardioSetting,
+    otherCardio,
+    getCardioMinutes,
+    addOtherCardio,
+    removeOtherCardio,
     addStretchExtra,
+    addOwnStretch,
+    removeOwnStretch,
+    ownStretches,
+    lastOwnStretch: state.lastOwnStretch ?? 15,
+    routineMinutes,
     resetChecks,
     getSetup,
     setSetup,
