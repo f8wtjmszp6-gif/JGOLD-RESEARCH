@@ -718,6 +718,23 @@ export function useStore() {
     return cardioSessionsOf(state).filter(x => x.kind === kind).reduce((n, x) => n + x.minutes, 0)
   }
 
+  // A walk with its own length and effort; the next walk starts from these.
+  function addWalk(minutes, hard) {
+    update(s => {
+      const kept = cardioSessionsOf(s).filter(x => x.kind === 'walk')
+      const others = (s.cardio ?? []).filter(x => x.kind !== 'walk')
+      return {
+        ...s,
+        activities: { ...s.activities, walk: countOf(s, 'walk') + 1 },
+        cardio: [...others, ...kept, { kind: 'walk', minutes, hard, at: new Date().toISOString() }],
+        cardioSettings: { ...s.cardioSettings, walk: { minutes, hard } },
+      }
+    })
+  }
+
+  // This week's walks, each with its length (oldest first).
+  const walks = cardioSessionsOf(state).filter(x => x.kind === 'walk')
+
   function addOtherCardio(minutes, hard) {
     update(s => ({ ...s, cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at: new Date().toISOString() }] }))
   }
@@ -936,6 +953,8 @@ export function useStore() {
     getCardioSetting,
     setCardioSetting,
     otherCardio,
+    walks,
+    addWalk,
     getCardioMinutes,
     addOtherCardio,
     removeOtherCardio,

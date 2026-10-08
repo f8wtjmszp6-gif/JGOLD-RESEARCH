@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CARDIO_DEFAULTS, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../data/workout'
-import { SettingsSheet, StepperRow, Segmented, ToggleRow, GearIcon } from './WorkoutDetail'
+import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../data/workout'
+import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
 import pushImg from '../assets/workouts/push.svg'
 import legsQuadImg from '../assets/workouts/legsQuad.svg'
 import pullImg from '../assets/workouts/pull.svg'
@@ -30,28 +30,21 @@ const activityImages = {
 }
 
 export default function Home({ store, onOpenWorkout }) {
-  // Which sheet is open: logging a class, the walk's settings, or adding other cardio.
+  // Which sheet is open: logging a class, adding a walk, or adding other cardio.
   const [sheet, setSheet] = useState(null)
   const byId = id => activities.find(a => a.id === id)
-  const activityCard = a => {
-    const count = store.getActivityCount(a.id)
-    const cardio = CARDIO_DEFAULTS[a.id] && store.getCardioSetting(a.id)
-    return (
-      <ActivityCard
-        key={a.id}
-        activity={a}
-        image={activityImages[a.id]}
-        count={count}
-        // A walk shows its length: "30 min · Easy", then "2 walks · 60 min".
-        detail={cardio && (count
-          ? `${count} ${count === 1 ? a.one : a.many} · ${store.getCardioMinutes(a.id)} min`
-          : `${cardio.minutes} min · ${cardio.hard ? 'Hard' : 'Easy'}`)}
-        onSettings={cardio && (() => setSheet(a.id))}
-        onAdd={() => store.addActivity(a.id)}
-        onRemove={() => store.removeActivity(a.id)}
-      />
-    )
-  }
+  const activityCard = a => (
+    <ActivityCard
+      key={a.id}
+      activity={a}
+      image={activityImages[a.id]}
+      count={store.getActivityCount(a.id)}
+      onAdd={() => store.addActivity(a.id)}
+      onRemove={() => store.removeActivity(a.id)}
+    />
+  )
+  const walk = byId('walk')
+  const walks = store.walks
   const other = store.otherCardio
   const otherMinutes = store.getCardioMinutes('other')
 
@@ -73,7 +66,21 @@ export default function Home({ store, onOpenWorkout }) {
       </Section>
 
       <Section title="Cardio and rest">
-        {activityCard(byId('walk'))}
+        {/* Each walk is logged with its own length: + asks how long. */}
+        <ActivityCard
+          activity={walk}
+          image={activityImages.walk}
+          count={walks.length}
+          detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
+          onAdd={() => setSheet('walk')}
+          onRemove={() => store.removeActivity('walk')}
+        >
+          {walks.length > 0 && (
+            <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+              {walks.map((x, i) => <CardioLine key={i} session={x} showWorkout={false} />)}
+            </div>
+          )}
+        </ActivityCard>
         <ActivityCard
           activity={OTHER_CARDIO}
           image={runImg}
@@ -112,9 +119,7 @@ export default function Home({ store, onOpenWorkout }) {
       {sheet === 'other' && <AddCardioSheet store={store} onClose={() => setSheet(null)} />}
       {sheet === 'stretch' && <AddStretchSheet store={store} onClose={() => setSheet(null)} />}
       {sheet === 'class' && <LogClassSheet store={store} onClose={() => setSheet(null)} />}
-      {sheet === 'walk' && (
-        <CardioSettingsSheet kind="walk" activity={byId('walk')} store={store} onClose={() => setSheet(null)} />
-      )}
+      {sheet === 'walk' && <AddCardioSheet kind="walk" store={store} onClose={() => setSheet(null)} />}
     </div>
   )
 }
@@ -189,13 +194,14 @@ function ClassLine({ entry }) {
 
 // One other-cardio session: its day, length and effort, and whether it was
 // long enough to count as a workout.
-function CardioLine({ session }) {
+// `showWorkout` is off for walks, which never count as workouts.
+function CardioLine({ session, showWorkout = true }) {
   const day = session.at ? new Date(session.at).toLocaleDateString('en-US', { weekday: 'short' }) : 'Earlier'
   return (
     <div className="flex items-center gap-1.5 flex-wrap text-sm">
       <span className="w-12 font-semibold text-stone-600">{day}</span>
       <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{session.minutes} min {session.hard ? 'hard' : 'easy'}</span>
-      {cardioIsWorkout(session) && <span className={`${TAG} bg-cyan-50 text-cyan-700`}>Workout</span>}
+      {showWorkout && cardioIsWorkout(session) && <span className={`${TAG} bg-cyan-50 text-cyan-700`}>Workout</span>}
     </div>
   )
 }
@@ -287,53 +293,33 @@ function LogClassSheet({ store, onClose }) {
   )
 }
 
-// How long a walk is, and how hard. Applies to the next one you log.
-function CardioSettingsSheet({ kind, activity, store, onClose }) {
-  const { minutes, hard } = store.getCardioSetting(kind)
-  return (
-    <SettingsSheet title={activity.name} onClose={onClose}>
-      <StepperRow
-        label="Length"
-        value={minutes}
-        step={5}
-        min={5}
-        max={240}
-        editable
-        suffix=" min"
-        onChange={v => store.setCardioSetting(kind, { minutes: v })}
-      />
-      <Segmented
-        label="Effort"
-        value={hard ? 'hard' : 'easy'}
-        options={EFFORT}
-        onChange={v => store.setCardioSetting(kind, { hard: v === 'hard' })}
-      />
-      <EffortNote />
-    </SettingsSheet>
-  )
-}
-
-// Logs one session of other cardio. Starts from the last one you added.
-function AddCardioSheet({ store, onClose }) {
-  const last = store.getCardioSetting('other')
+// Logs a walk (kind "walk") or other cardio. Starts from the last one you
+// added. Only other cardio can count as a workout, so only it shows how close
+// it is.
+function AddCardioSheet({ kind = 'other', store, onClose }) {
+  const isWalk = kind === 'walk'
+  const last = store.getCardioSetting(kind)
   const [minutes, setMinutes] = useState(last.minutes)
   const [hard, setHard] = useState(last.hard)
 
-  const workout = cardioIsWorkout({ minutes, hard })
+  const workout = !isWalk && cardioIsWorkout({ minutes, hard })
   const need = CARDIO_WORKOUT_MINUTES[hard ? 'hard' : 'easy'] - minutes
 
   function add() {
-    store.addOtherCardio(minutes, hard)
-    store.setCardioSetting('other', { minutes, hard })
+    if (isWalk) store.addWalk(minutes, hard)
+    else {
+      store.addOtherCardio(minutes, hard)
+      store.setCardioSetting('other', { minutes, hard })
+    }
     onClose()
   }
 
   return (
-    <SettingsSheet title="Add cardio" closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={isWalk ? 'Add a walk' : 'Add cardio'} closeLabel="Cancel" onClose={onClose}>
       <StepperRow label="Length" value={minutes} step={5} min={5} max={240} editable suffix=" min" onChange={setMinutes} />
       <Segmented label="Effort" value={hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => setHard(v === 'hard')} />
       {/* 30 min hard or 45 easy makes it a workout, not just cardio minutes. */}
-      {workout ? (
+      {isWalk ? null : workout ? (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
       ) : (
         <p className="text-sm text-stone-500">
@@ -489,7 +475,7 @@ function WorkoutCard({ workout, progress, onOpen }) {
   )
 }
 
-function ActivityCard({ activity, image, count, detail, onSettings, onAdd, onRemove, children }) {
+function ActivityCard({ activity, image, count, detail, onAdd, onRemove, children }) {
   const active = count > 0
 
   return (
@@ -501,21 +487,9 @@ function ActivityCard({ activity, image, count, detail, onSettings, onAdd, onRem
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-stone-900 truncate">{activity.name}</p>
-            {/* With settings, the length line is the way in: "45 min · Hard ⚙". */}
-            {onSettings ? (
-              <button
-                onClick={onSettings}
-                aria-label={`${activity.name} settings`}
-                className="flex items-center gap-1 max-w-full text-sm text-stone-400 active:opacity-60"
-              >
-                <span className="truncate">{detail}</span>
-                <span className="shrink-0 scale-[0.85]"><GearIcon /></span>
-              </button>
-            ) : (
-              <p className="text-sm text-stone-400 truncate">
-                {detail ?? (active ? `${count} ${count === 1 ? activity.one : activity.many}` : activity.note)}
-              </p>
-            )}
+            <p className="text-sm text-stone-400 truncate">
+              {detail ?? (active ? `${count} ${count === 1 ? activity.one : activity.many}` : activity.note)}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
