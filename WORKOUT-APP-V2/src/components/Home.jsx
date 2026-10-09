@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
+import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, GYM_MARK, CARDIO_MARK, STRETCH_MARK } from '../data/workout'
 import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
 import { weekDays, sameDay, dayLabel, inDayOrder } from '../utils/days'
 import pushImg from '../assets/workouts/push.svg'
@@ -30,7 +30,49 @@ const activityImages = {
   rest: restImg,
 }
 
+// The homepage shows one group at a time, picked by these tabs. The last tab
+// you used is remembered on this device.
+const TABS = [['gym', 'Gym'], ['cardio', 'Cardio'], ['stretch', 'Stretch'], ['rest', 'Rest']]
+const TAB_KEY = 'workout-v2-home-tab'
+function savedTab() {
+  try {
+    const t = localStorage.getItem(TAB_KEY)
+    return TABS.some(([id]) => id === t) ? t : 'gym'
+  } catch {
+    return 'gym'
+  }
+}
+
+// What in each tab counts toward the This week goals, shown from ⓘ:
+// [goal, its color, what counts, footnote].
+const WHAT_COUNTS = {
+  gym: [
+    ['Workouts', GYM_MARK, ['Finishing every set of a plan', 'A class where you did cardio or strength', `A stretch-only class of ${CLASS_STRETCH_WORKOUT_MINUTES} min or more`]],
+    ['Stretching', STRETCH_MARK, ['Ticking all of a plan’s stretches', 'A class where you stretched']],
+    ['Cardio minutes', CARDIO_MARK, ['A class’s cardio time'], 'Hard minutes count double.'],
+  ],
+  cardio: [
+    ['Cardio minutes', CARDIO_MARK, ['Every walk and cardio session'], 'Hard minutes count double.'],
+    ['Workouts', GYM_MARK, [`Other cardio of ${CARDIO_WORKOUT_MINUTES.hard} min hard or ${CARDIO_WORKOUT_MINUTES.easy} min easy`]],
+  ],
+  stretch: [
+    ['Stretching', STRETCH_MARK, ['Finishing the full-body routine', 'A session on your own']],
+    ['Workouts', GYM_MARK, [`Either one at ${STRETCH_WORKOUT_MINUTES} min or more`]],
+  ],
+  rest: [],
+}
+
 export default function Home({ store, onOpenWorkout }) {
+  const [tab, setTabState] = useState(savedTab)
+  const [showCounts, setShowCounts] = useState(false)
+  function setTab(t) {
+    setTabState(t)
+    try {
+      localStorage.setItem(TAB_KEY, t)
+    } catch {
+      // Private browsing: the tab just isn't remembered.
+    }
+  }
   // The open sheet: { type: 'class' | 'walk' | 'other' | 'stretch', edit? },
   // where `edit` is { index, entry } when changing something already logged.
   const [sheet, setSheet] = useState(null)
@@ -54,72 +96,107 @@ export default function Home({ store, onOpenWorkout }) {
 
   return (
     <div className="h-full overflow-y-auto px-5 pb-6">
-      <Section title="Workout plans">
-        {GYM_ORDER.map(id => (
-          <WorkoutCard
-            key={id}
-            workout={workouts[id]}
-            progress={store.workoutProgress(id)}
-            onOpen={() => onOpenWorkout(id)}
-          />
-        ))}
-      </Section>
-
-      <Section title="Gym class">
-        <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={edit => open('class', edit)} />
-      </Section>
-
-      <Section title="Cardio and rest">
-        {/* Each walk is logged with its own length: + asks how long. */}
-        <ActivityCard
-          activity={walk}
-          image={activityImages.walk}
-          count={walks.length}
-          detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
-          onAdd={() => open('walk')}
-          onRemove={() => store.removeActivity('walk')}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
+          {TABS.map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowCounts(true)}
+          aria-label="What counts toward your goals"
+          className="w-10 h-10 rounded-xl bg-white shadow-sm text-stone-400 flex items-center justify-center active:bg-stone-100 shrink-0"
         >
-          {walks.length > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => open('walk', e)} />)}
-            </div>
-          )}
-        </ActivityCard>
-        <ActivityCard
-          activity={OTHER_CARDIO}
-          image={runImg}
-          count={other.length}
-          detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${otherMinutes} min` : undefined}
-          onAdd={() => open('other')}
-          onRemove={store.removeOtherCardio}
-        >
-          {other.length > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('other', e)} />)}
-            </div>
-          )}
-        </ActivityCard>
-        {activityCard(byId('rest'))}
-      </Section>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5M12 7.6v.1" strokeWidth="2.4" /></svg>
+        </button>
+      </div>
 
-      <Section title="Stretching">
-        <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
-        <ActivityCard
-          activity={OWN_STRETCH}
-          image={stretchImg}
-          count={store.ownStretches.length}
-          detail={store.ownStretches.length ? ownDetail(store.ownStretches) : undefined}
-          onAdd={() => open('stretch')}
-          onRemove={store.removeOwnStretch}
-        >
-          {store.ownStretches.length > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-              {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => open('stretch', e)} />)}
-            </div>
-          )}
-        </ActivityCard>
-      </Section>
+      {tab === 'gym' && <>
+        <Section title="Workout plans">
+          {GYM_ORDER.map(id => (
+            <WorkoutCard
+              key={id}
+              workout={workouts[id]}
+              progress={store.workoutProgress(id)}
+              onOpen={() => onOpenWorkout(id)}
+            />
+          ))}
+        </Section>
 
+        <Section title="Gym class">
+          <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={edit => open('class', edit)} />
+        </Section>
+      </>}
+
+      {tab === 'cardio' && (
+        <Section title="Cardio">
+          {/* Each walk is logged with its own length: + asks how long. */}
+          <ActivityCard
+            activity={walk}
+            image={activityImages.walk}
+            count={walks.length}
+            detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
+            onAdd={() => open('walk')}
+            onRemove={() => store.removeActivity('walk')}
+          >
+            {walks.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+                {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => open('walk', e)} />)}
+              </div>
+            )}
+          </ActivityCard>
+          <ActivityCard
+            activity={OTHER_CARDIO}
+            image={runImg}
+            count={other.length}
+            detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${otherMinutes} min` : undefined}
+            onAdd={() => open('other')}
+            onRemove={store.removeOtherCardio}
+          >
+            {other.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+                {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('other', e)} />)}
+              </div>
+            )}
+          </ActivityCard>
+        </Section>
+      )}
+
+      {tab === 'stretch' && (
+        <Section title="Stretching">
+          <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
+          <ActivityCard
+            activity={OWN_STRETCH}
+            image={stretchImg}
+            count={store.ownStretches.length}
+            detail={store.ownStretches.length ? ownDetail(store.ownStretches) : undefined}
+            onAdd={() => open('stretch')}
+            onRemove={store.removeOwnStretch}
+          >
+            {store.ownStretches.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+                {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => open('stretch', e)} />)}
+              </div>
+            )}
+          </ActivityCard>
+        </Section>
+      )}
+
+      {tab === 'rest' && (
+        <Section title="Rest">
+          {activityCard(byId('rest'))}
+        </Section>
+      )}
+
+      {showCounts && <WhatCountsSheet tab={tab} onClose={() => setShowCounts(false)} />}
       {sheet?.type === 'other' && <AddCardioSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
@@ -405,6 +482,31 @@ function DeleteButton({ what, onDelete }) {
     >
       {sure ? `Tap again to delete this ${what}` : `Delete ${what}`}
     </button>
+  )
+}
+
+// ⓘ: what in a tab counts toward the This week goals, grouped by goal.
+function WhatCountsSheet({ tab, onClose }) {
+  const label = TABS.find(([id]) => id === tab)[1]
+  const goals = WHAT_COUNTS[tab]
+  return (
+    <SettingsSheet title={`What counts on ${label}`} onClose={onClose}>
+      {goals.length === 0 && (
+        <p className="text-sm text-stone-600 leading-relaxed">Rest days don’t count toward a goal. They show on This week so you can see your recovery.</p>
+      )}
+      {goals.map(([goal, mark, items, note]) => (
+        <div key={goal} className="space-y-1">
+          <p className="flex items-center gap-2 font-semibold text-stone-900">
+            <span className={`w-2.5 h-2.5 rounded-full ${mark}`} />
+            {goal}
+          </p>
+          <ul className="list-disc pl-[18px] text-sm text-stone-600 leading-relaxed">
+            {items.map(x => <li key={x}>{x}</li>)}
+          </ul>
+          {note && <p className="pl-[18px] text-xs text-stone-400">{note}</p>}
+        </div>
+      ))}
+    </SettingsSheet>
   )
 }
 

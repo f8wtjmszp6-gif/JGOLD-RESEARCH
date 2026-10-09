@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
-import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE } from '../data/exercises'
+import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
 
 const STORAGE_KEY = 'workout-tracker-v2'
 
@@ -16,7 +16,8 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     coreLists         { [workoutId]: [exerciseId, …] }  (its Core section)
 //     coreOn            { [workoutId]: bool }              (whether the Core section is on)
 //     stretchLists      { [workoutId | 'routine']: [stretchId, …] }  (your stretches, from the bank)
-//     assist            { [exerciseId]: bool }
+//     equipment         { [exerciseId]: 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'bodyweight' | 'assisted' }
+//     assist            { [exerciseId]: bool }  (kept in step with equipment; older saves only have this)
 //     customDurations   { [stretchId]: seconds }
 //     perSide           { [stretchId]: bool }
 //     stretchSets       { [stretchId]: count }  (rounds of a stretch, default 1)
@@ -73,6 +74,17 @@ function settingsOf(s, exercise) {
     weight: saved?.weight ?? exercise.weight.value,
     reps: saved?.[key] ?? Array(exercise.sets).fill(fallback),
   }
+}
+
+// What an exercise is done with: your pick, else what the old Assist switch
+// said (assisted with weight on it, bodyweight without), else the bank's.
+function equipmentOf(s, exercise) {
+  const picked = s.equipment?.[exercise.id]
+  if (picked) return picked
+  const assist = s.assist?.[exercise.id]
+  if (assist) return settingsOf(s, exercise).weight > 0 ? 'assisted' : 'bodyweight'
+  const fallback = defaultEquipment(exercise)
+  return assist === false && fallback === 'assisted' ? 'bodyweight' : fallback
 }
 
 // Which sets of an exercise are ticked — one entry per remembered set.
@@ -332,7 +344,7 @@ function summarize(s, endedAt) {
         const mode = setupOf(s, ex).mode
         const sets = reps.filter((_, i) => ticks[i])
         if (mode === 'reps') lifted += sets.reduce((n, r) => n + r * weight, 0)
-        lifts[ex.id] = { mode, weight, sets, assist: s.assist?.[ex.id] ?? !!ex.weight.assist }
+        lifts[ex.id] = { mode, weight, sets, assist: equipmentOf(s, ex) === 'assisted' }
       }
     }
     return { id, done, total }
@@ -907,12 +919,16 @@ export function useStore() {
   }
 
   // ── Per-item settings (remembered) ───────────────────────────────────────
-  function getAssist(exerciseId, defaultAssist) {
-    return state.assist?.[exerciseId] ?? defaultAssist
+  function getEquipment(exercise) {
+    return equipmentOf(state, exercise)
   }
 
-  function setAssist(exerciseId, isAssist) {
-    update(s => ({ ...s, assist: { ...s.assist, [exerciseId]: isAssist } }))
+  function setEquipment(exercise, equipment) {
+    update(s => ({
+      ...s,
+      equipment: { ...s.equipment, [exercise.id]: equipment },
+      assist: { ...s.assist, [exercise.id]: equipment === 'assisted' },
+    }))
   }
 
   function getCustomDuration(itemId, defaultDuration) {
@@ -1022,8 +1038,8 @@ export function useStore() {
     resetChecks,
     getSetup,
     setSetup,
-    getAssist,
-    setAssist,
+    getEquipment,
+    setEquipment,
     getCustomDuration,
     setCustomDuration,
     getPerSide,

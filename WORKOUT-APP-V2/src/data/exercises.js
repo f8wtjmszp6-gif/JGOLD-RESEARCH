@@ -373,3 +373,44 @@ export function gapsAfter(before, after, section) {
   const next = coverage(after, section)
   return now.filter((a, i) => a.covered && !next[i].covered).map(a => a.label)
 }
+
+// What an exercise is done with. It decides how its weight reads: a barbell
+// shows its bar and plates, a dumbbell the weight of one, an assist machine
+// the help it gives (less is harder), bodyweight anything added on top.
+export const EQUIPMENT = [
+  { id: 'barbell', label: 'Barbell' },
+  { id: 'dumbbell', label: 'Dumbbell' },
+  { id: 'cable', label: 'Cable' },
+  { id: 'machine', label: 'Machine' },
+  { id: 'bodyweight', label: 'Body' },
+  { id: 'assisted', label: 'Assisted' },
+]
+const CABLE = [
+  'cable-squat', 'face-pulls', 'woodchoppers', 'cable-fly', 'lat-pulldown', 'seated-cable-row',
+  'straight-arm-pulldown', 'cable-lateral-raise', 'cable-curl', 'tricep-pushdown', 'low-to-high-cable-fly',
+  'close-grip-pulldown', 'single-arm-pulldown', 'cable-front-raise', 'cable-rear-delt-fly', 'external-rotation',
+  'cable-hammer-curl', 'bayesian-curl', 'rope-pushdown', 'overhead-cable-extension', 'single-arm-pushdown',
+  'cable-kickback', 'cable-crunch', 'pallof-press', 'cable-pull-through',
+]
+// Machines, plus plate-loaded lifts on one end of a bar (landmine, T-bar),
+// where plates-per-side math doesn't apply.
+const MACHINE = [
+  'hip-abduction', 'hip-adduction', 'standing-calf-raise', 'seated-calf-raise', 'pec-deck', 'chest-press-machine',
+  'chest-supported-row', 'incline-chest-press-machine', 'machine-row', 'machine-shoulder-press', 'reverse-pec-deck',
+  'machine-curl', 'dip-machine', 'hack-squat', 'pendulum-squat', 'belt-squat', 'leg-press', 'leg-extension',
+  'lying-leg-curl', 'seated-leg-curl', 'single-leg-press', 'standing-leg-curl', 'hip-thrust-machine',
+  'donkey-calf-raise', 'leg-press-calf-raise', 'ab-crunch-machine',
+  't-bar-row', 'landmine-press', 'meadows-row', 'landmine-shoulder-press', 'landmine-rotation',
+]
+// Bodyweight with a plate or belt added.
+const WEIGHTED_BODY = ['back-extensions', 'weighted-dips']
+
+export function defaultEquipment(exercise) {
+  const { bar, value, assist } = exercise.weight
+  if (assist) return value > 0 ? 'assisted' : 'bodyweight'
+  if (bar > 0) return 'barbell'
+  if (CABLE.includes(exercise.id)) return 'cable'
+  if (MACHINE.includes(exercise.id)) return 'machine'
+  if (WEIGHTED_BODY.includes(exercise.id)) return 'bodyweight'
+  return 'dumbbell'
+}

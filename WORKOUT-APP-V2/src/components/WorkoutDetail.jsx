@@ -2,8 +2,9 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { playBeep, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
 import { workouts, STRETCH_ROUTINE, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
-import { EXERCISE_BANK, EXERCISE_BY_ID, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, ratingLabel, coverage, coversOf, gapsAfter } from '../data/exercises'
-import { HowToToggle, HowToBody } from './HowTo'
+import { EXERCISE_BANK, EQUIPMENT, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf, gapsAfter } from '../data/exercises'
+import { HOWTO } from '../data/howto'
+import { HowToBody } from './HowTo'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchFits, stretchRating } from '../data/stretches'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
@@ -27,6 +28,12 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
   const [showWorkoutSettings, setShowWorkoutSettings] = useState(false)
   const [editingStretches, setEditingStretches] = useState(false)
   const warmup = store.getWarmup(workoutId)
+  // One exercise is open at a time: the one you tapped, else the first one
+  // not finished. Finishing it moves on to the next.
+  const [openId, setOpenId] = useState(null)
+  const exercises = store.getExercises(workoutId)
+  const unfinished = exercises.find(x => !store.getLog(workoutId, x).sets.every(set => set.done))
+  const openExercise = exercises.some(x => x.id === openId) ? openId : unfinished?.id
 
   // The one timer on screen, shown in the bar at the bottom.
   //   kind  – 'rest' | 'hold' | 'stretch'
@@ -221,7 +228,7 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
           />
         )}
 
-        {tab === 'exercises' && store.getExercises(workoutId).map((exercise, i, list) => (
+        {tab === 'exercises' && exercises.map((exercise, i, list) => (
           <Fragment key={exercise.id}>
           {/* The Core section starts at the first core exercise. */}
           {isCore(exercise) && !isCore(list[i - 1] ?? {}) && (
@@ -232,7 +239,13 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
             exercise={exercise}
             workoutId={workoutId}
             store={store}
-            onSetDone={setsLeft => startRest(exercise, setsLeft)}
+            open={exercise.id === openExercise}
+            onOpen={() => setOpenId(exercise.id)}
+            onClose={() => setOpenId(null)}
+            onSetDone={setsLeft => {
+              startRest(exercise, setsLeft)
+              if (setsLeft === 0) setOpenId(null)
+            }}
             onTimer={store.getSetup(exercise).mode === 'hold' ? () => startHold(exercise) : null}
           />
           </Fragment>
@@ -410,8 +423,7 @@ function BarBtn({ className, onClick, children }) {
 // `editing` (the header gear) opens the edit sheet.
 function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEditing }) {
   const list = store.getStretches(workout.id)
-  // The stretch picker: adding, or swapping out `swap`.
-  const [picker, setPicker] = useState(null) // { swap?: stretch }
+  const [adding, setAdding] = useState(false)
   const totalStretchSeconds = list.reduce(
     (sum, s) => {
       const sets = store.getStretchSets(s.id)
@@ -435,7 +447,6 @@ function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEd
         <StretchCard
           key={stretch.id}
           stretch={stretch}
-          onSwap={() => setPicker({ swap: stretch })}
           checked={store.getStretchDone(workout.id, stretch.id)}
           onToggle={() => store.toggleStretch(workout.id, stretch.id)}
           customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
@@ -456,22 +467,20 @@ function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEd
         />
       ))}
 
-      {editing && !picker && (
+      {editing && !adding && (
         <SettingsSheet title="Edit stretches" onClose={() => setEditing(false)}>
-          <StretchListEditor listId={workout.id} store={store} onAdd={() => setPicker({})} />
+          <StretchListEditor listId={workout.id} store={store} onAdd={() => setAdding(true)} />
         </SettingsSheet>
       )}
-      {picker && (
+      {adding && (
         <StretchPicker
           listId={workout.id}
           store={store}
-          swap={picker.swap}
           onPick={id => {
-            if (picker.swap) store.swapStretch(workout.id, picker.swap.id, id)
-            else store.addStretch(workout.id, id)
-            setPicker(null)
+            store.addStretch(workout.id, id)
+            setAdding(false)
           }}
-          onClose={() => setPicker(null)}
+          onClose={() => setAdding(false)}
         />
       )}
     </>
@@ -500,7 +509,6 @@ function StretchListEditor({ listId, store, onAdd }) {
           <div key={x.id} className="flex items-center gap-1.5 rounded-xl bg-stone-50 pl-3 pr-1.5 py-1.5">
             <span className="text-xs font-semibold text-stone-400 w-4 shrink-0">{i + 1}</span>
             <span className="flex-1 min-w-0 truncate text-sm text-stone-700">{x.name}</span>
-            <RatingMeter rating={stretchRating(x, listId)} />
             {icon('M18 15l-6-6-6 6', i === 0, () => store.moveStretch(listId, x.id, -1), `Move ${x.name} up`)}
             {icon('M6 9l6 6 6-6', i === list.length - 1, () => store.moveStretch(listId, x.id, 1), `Move ${x.name} down`)}
             {icon('M6 6l12 12M18 6L6 18', list.length <= 1, () => store.removeStretch(listId, x.id), `Remove ${x.name}`)}
@@ -513,31 +521,26 @@ function StretchListEditor({ listId, store, onAdd }) {
       >
         + Add stretch
       </button>
-      {store.isCustomStretches(listId) && (
-        <button onClick={() => store.resetStretches(listId)} className="text-xs font-medium text-accent-500 active:opacity-60">
-          Reset to default stretches
-        </button>
-      )}
     </>
   )
 }
 
 // The stretches that fit the list and aren't in it yet, by body area, best
-// first. Swapping shows the swapped stretch's area first; adding, the areas
-// this workout works.
-function StretchPicker({ listId, store, swap, onPick, onClose }) {
+// first, starting with the areas this workout works.
+function StretchPicker({ listId, store, onPick, onClose }) {
   return (
     <BankPicker
-      title={swap ? `Swap ${swap.name}` : 'Add a stretch'}
+      title="Add a stretch"
       noun="stretches"
       kind="stretch"
       sections={STRETCH_AREAS}
       sectionOf={x => x.area}
       bank={STRETCH_BANK.filter(x => stretchFits(x, listId))}
       rate={x => stretchRating(x, listId)}
-      rateFor={listId === STRETCH_ROUTINE.id ? 'full body' : workouts[listId]?.short}
       exclude={store.getStretches(listId).map(x => x.id)}
-      first={swap ? [swap.area] : SUGGESTED_AREAS[listId] ?? []}
+      current={store.getStretches(listId)}
+      currentLabel={listId === STRETCH_ROUTINE.id ? 'In the routine' : 'In these stretches'}
+      first={SUGGESTED_AREAS[listId] ?? []}
       onPick={onPick}
       onClose={onClose}
     />
@@ -548,54 +551,33 @@ function StretchPicker({ listId, store, swap, onPick, onClose }) {
 // Only exercises that fit: for the main list, what the plan is for; for the
 // Core section, core exercises.
 // Exercises that cover an area the list is missing are marked "Fills" and
-// listed first. A swap that would leave an area uncovered asks first.
-function ExercisePicker({ workoutId, store, swap, section, onPick, onClose }) {
+// listed first.
+function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
   const core = section === 'core'
   const area = core ? 'core' : workoutId
   const sections = store.getExerciseSections(workoutId)
   const list = core ? sections.core : sections.main
-  const base = swap ? list.filter(x => x.id !== swap.id) : list
-  const missing = coverage(base, area).filter(a => !a.covered)
+  const missing = coverage(list, area).filter(a => !a.covered)
   const fills = x => missing.filter(a => coversOf(x).includes(a.id)).map(a => a.label)
   const names = missing.map(a => a.label).join(' and ')
-  const lost = swap ? gapsAfter(list, base, area) : []
-  const [confirm, setConfirm] = useState(null) // id waiting on "swap anyway"
-
-  function pick(id) {
-    if (swap && gapsAfter(list, [...base, EXERCISE_BY_ID[id]], area).length) setConfirm(id)
-    else onPick(id)
-  }
-
-  if (confirm) {
-    const left = gapsAfter(list, [...base, EXERCISE_BY_ID[confirm]], area).join(' and ')
-    return (
-      <ConfirmSheet
-        title={`Leave ${left} uncovered?`}
-        body={`${EXERCISE_BY_ID[confirm].name} doesn't work ${left}, so this workout won't either.`}
-        confirmLabel="Swap anyway"
-        onConfirm={() => onPick(confirm)}
-        onClose={() => setConfirm(null)}
-      />
-    )
-  }
 
   return (
     <BankPicker
       fills={fills}
-      banner={lost.length
-        ? `Swapping out ${swap.name} leaves ${lost.join(' and ')} uncovered. Exercises marked Fills keep it covered.`
-        : missing.length ? `Not covered yet: ${names}. Exercises marked Fills cover it.` : null}
-      title={swap ? `Swap ${swap.name}` : core ? 'Add a core exercise' : 'Add an exercise'}
+      banner={missing.length ? `Not covered yet: ${names}. Exercises marked Fills cover it.` : null}
+      title={core ? 'Add a core exercise' : 'Add an exercise'}
       noun="exercises"
       kind="exercise"
       sections={MUSCLE_GROUPS}
       sectionOf={x => x.group}
       bank={EXERCISE_BANK.filter(x => (core ? isCore(x) : fitsPlan(x, workoutId)))}
       rate={x => ratingFor(x, core ? 'core' : workoutId)}
-      rateFor={core ? 'core' : workouts[workoutId]?.short}
       exclude={store.getExercises(workoutId).map(x => x.id)}
-      first={swap ? [swap.group] : core ? [] : SUGGESTED_GROUPS[workoutId] ?? []}
-      onPick={pick}
+      current={list}
+      currentLabel={core ? 'In your core section' : 'In this workout'}
+      countLabel={core ? 'in core' : 'in workout'}
+      first={core ? [] : SUGGESTED_GROUPS[workoutId] ?? []}
+      onPick={onPick}
       onClose={onClose}
     />
   )
@@ -635,43 +617,146 @@ function CoverageRow({ list, area }) {
   )
 }
 
-// How well an exercise targets its plan, as three rising bars (like signal
-// strength): 3 Best, 2 Good, 1 Okay.
-const METER_FILL = { 3: 'bg-emerald-600', 2: 'bg-stone-500', 1: 'bg-stone-400' }
-function RatingMeter({ rating, label }) {
-  return (
-    <span className="flex items-center gap-1.5 shrink-0" role="img" aria-label={`${ratingLabel(rating)} for this workout`}>
-      {label && <span className={`text-xs ${rating === 3 ? 'font-semibold text-emerald-700' : 'text-stone-400'}`}>{ratingLabel(rating)}</span>}
-      <span className="flex items-end gap-[2px] h-3">
-        {[1, 2, 3].map(i => (
-          <span key={i} className={`w-[3px] rounded-sm ${i <= rating ? METER_FILL[rating] : 'bg-stone-200'}`} style={{ height: `${4 + i * 2.7}px` }} />
-        ))}
-      </span>
-    </span>
-  )
-}
+// A bank, one group at a time. Tabs pick the group (suggested first; groups
+// with something that fills a gap before those). Each tab lists what's already
+// in the list from that group, then the bank's Recommended picks for it, and
+// "Show more" adds the rest under plain headings instead of grades.
+// Search looks through every group.
+const TIERS = [
+  [3, g => `Recommended for ${g}`],
+  [2, (g, kind) => `Also ${kind === 'stretch' ? 'stretches' : 'works'} ${g}`],
+  [1, (g, kind) => `${kind === 'stretch' ? 'Stretches' : 'Hits'} ${g} less directly`],
+]
+const SEARCH_TIERS = { 3: 'Recommended', 2: 'Also works', 1: 'Less direct' }
 
-// A searchable list of a bank, in sections, suggested sections first, minus
-// what's already in the list.
-// With `rate`, each row shows how well it targets what it's for (rated for
-// `rateFor`), best first within each section.
-function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, first, rate, rateFor, fills, banner, onPick, onClose }) {
+function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, fills, banner, onPick, onClose }) {
   const [query, setQuery] = useState('')
   const [info, setInfo] = useState(null) // the item whose how-to is open
+  const [more, setMore] = useState(false)
   const skip = new Set(exclude)
-  const rank = x => (first.includes(x.id) ? first.indexOf(x.id) : first.length)
   const q = query.trim().toLowerCase()
-  const groups = [...sections]
+  const rank = x => (first.includes(x.id) ? first.indexOf(x.id) : first.length)
+  const fillCount = x => fills?.(x).length ?? 0
+  const order = list => [...list].sort((a, b) => fillCount(b) - fillCount(a))
+  const left = bank.filter(x => !skip.has(x.id))
+  const tabs = [...sections]
     .sort((a, b) => rank(a) - rank(b))
-    .map(sec => ({
-      sec,
-      items: bank
-        .filter(x => sectionOf(x) === sec.id && !skip.has(x.id) && (!q || x.name.toLowerCase().includes(q)))
-        .sort((a, b) => (fills ? fills(b).length - fills(a).length : 0) || (rate ? rate(b) - rate(a) : 0)),
-    }))
-    .filter(g => g.items.length)
-    // Groups with an exercise that fills a gap come first.
-    .sort((a, b) => (fills ? Number(fills(b.items[0]).length > 0) - Number(fills(a.items[0]).length > 0) : 0))
+    .filter(sec => left.some(x => sectionOf(x) === sec.id) || current.some(x => sectionOf(x) === sec.id))
+    .sort((a, b) => Number(left.some(x => sectionOf(x) === b.id && fillCount(x))) - Number(left.some(x => sectionOf(x) === a.id && fillCount(x))))
+  const [tab, setTab] = useState(() => tabs[0]?.id)
+  const sec = tabs.find(s => s.id === tab) ?? tabs[0]
+  const group = sec?.label.toLowerCase()
+
+  function pickTab(id) {
+    setTab(id)
+    setMore(false)
+    setInfo(null)
+  }
+
+  // One row: name (with "Fills"), ✓ if it's already in, ⓘ.
+  function row(x, have) {
+    const name = (
+      <span className="min-w-0">
+        <span className={have ? 'font-semibold text-emerald-900' : ''}>{x.name}</span>
+        {!have && fillCount(x) > 0 && <span className="block text-xs font-semibold text-emerald-700 mt-0.5">Fills: {fills(x).join(', ')}</span>}
+      </span>
+    )
+    return (
+      <div key={x.id} className={have ? 'bg-emerald-50' : ''}>
+        <div className="flex items-center">
+          {have ? (
+            <div className="flex-1 min-w-0 flex items-center justify-between gap-2 pl-3.5 pr-1 py-2.5 text-sm text-stone-800">
+              {name}
+              <span className="text-emerald-700 font-bold" aria-label={`${x.name} is added`}>✓</span>
+            </div>
+          ) : (
+            <button onClick={() => onPick(x.id)} className="flex-1 min-w-0 flex items-center pl-3.5 pr-1 py-2.5 text-left text-sm text-stone-800 active:bg-stone-100">
+              {name}
+            </button>
+          )}
+          <button
+            onClick={() => setInfo(info === x.id ? null : x.id)}
+            aria-label={`How to do ${x.name}`}
+            aria-expanded={info === x.id}
+            className={`w-10 h-10 mr-1 rounded-lg flex items-center justify-center shrink-0 active:bg-stone-100 ${info === x.id ? 'text-accent-500' : 'text-stone-400'}`}
+          >
+            <InfoIcon />
+          </button>
+        </div>
+        {info === x.id && (
+          <div className="px-3.5 pb-3.5">
+            <HowToBody item={x} kind={kind} />
+            {!have && (
+              <button
+                onClick={() => onPick(x.id)}
+                className="mt-3 w-full py-2.5 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 transition-colors"
+              >
+                Add this
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const heading = (children, green) => (
+    <p className={`px-3.5 pt-3 pb-1 text-xs uppercase tracking-wider font-medium ${green ? 'text-emerald-700' : 'text-stone-400'}`}>{children}</p>
+  )
+  const box = 'rounded-xl bg-stone-50 overflow-hidden divide-y divide-stone-100'
+
+  let body
+  if (q) {
+    const hits = left.filter(x => x.name.toLowerCase().includes(q))
+    body = hits.length === 0
+      ? <p className="text-sm text-stone-400">No {noun} match “{query}”.</p>
+      : (
+        <div className={box}>
+          {[3, 2, 1].map(r => {
+            const rows = order(hits.filter(x => rate(x) === r))
+            return rows.length > 0 && (
+              <Fragment key={r}>
+                {heading(SEARCH_TIERS[r], r === 3)}
+                {rows.map(x => row(x))}
+              </Fragment>
+            )
+          })}
+        </div>
+      )
+  } else if (sec) {
+    const mine = current.filter(x => sectionOf(x) === sec.id)
+    const inTab = left.filter(x => sectionOf(x) === sec.id)
+    const tiers = TIERS.map(([r, label]) => [r, label(group, kind), order(inTab.filter(x => rate(x) === r))])
+    // Anything that fills a gap shows without "Show more", whatever its tier.
+    const extra = inTab.filter(x => rate(x) < 3 && !fillCount(x)).length
+    body = (
+      <div className={box}>
+        {mine.length > 0 && (
+          <>
+            {heading(currentLabel)}
+            {mine.map(x => row(x, true))}
+          </>
+        )}
+        {tiers.map(([r, label, rows]) => {
+          const shown = r === 3 || more ? rows : rows.filter(x => fillCount(x))
+          return shown.length > 0 && (
+            <Fragment key={r}>
+              {heading(label, r === 3)}
+              {shown.map(x => row(x))}
+            </Fragment>
+          )
+        })}
+        {tiers[0][2].length === 0 && !more && (
+          <p className="px-3.5 py-2.5 text-sm text-stone-400">The recommended {noun} for {group} are all in.</p>
+        )}
+        {(extra > 0 || more) && (
+          <button onClick={() => setMore(!more)} className="w-full px-3.5 py-3 text-left text-sm font-semibold text-accent-500 active:bg-stone-100">
+            {more ? 'Show fewer' : `Show ${extra} more`}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
@@ -683,59 +768,29 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, fir
         placeholder={`Search ${noun}`}
         className="w-full rounded-xl bg-stone-100 px-3.5 py-2.5 text-base text-stone-900 placeholder:text-stone-400 outline-none select-text"
       />
-      {rate && (
-        <div className="flex items-center gap-3 text-xs text-stone-500 -mt-2">
-          <span>How well each fits {rateFor === 'core' ? 'your core' : rateFor}:</span>
-          {[3, 2, 1].map(r => (
-            <span key={r} className="flex items-center gap-1"><RatingMeter rating={r} />{ratingLabel(r)}</span>
-          ))}
-        </div>
-      )}
       {banner && <p className="rounded-xl bg-orange-50 text-orange-700 text-sm px-3.5 py-2.5 leading-relaxed">{banner}</p>}
-      {groups.length === 0 && <p className="text-sm text-stone-400">No {noun} match “{query}”.</p>}
-      {groups.map(({ sec, items }) => (
-        <div key={sec.id}>
-          <p className="text-xs text-stone-400 uppercase tracking-wider font-medium mb-1.5">
-            {sec.label}{first.includes(sec.id) && <span className="normal-case tracking-normal text-accent-500"> · suggested</span>}
-          </p>
-          <div className="divide-y divide-stone-100 rounded-xl bg-stone-50">
-            {items.map(x => (
-              <div key={x.id}>
-                <div className="flex items-center">
-                  <button onClick={() => onPick(x.id)} className="flex-1 min-w-0 flex items-center justify-between gap-2 pl-3.5 pr-1 py-2.5 text-left text-sm text-stone-800 active:bg-stone-100">
-                    <span className="min-w-0">
-                      {x.name}
-                      {fills?.(x).length > 0 && (
-                        <span className="block text-xs font-semibold text-emerald-700 mt-0.5">Fills: {fills(x).join(', ')}</span>
-                      )}
-                    </span>
-                    {rate && <RatingMeter rating={rate(x)} label />}
-                  </button>
-                  <button
-                    onClick={() => setInfo(info === x.id ? null : x.id)}
-                    aria-label={`How to do ${x.name}`}
-                    aria-expanded={info === x.id}
-                    className={`w-10 h-10 mr-1 rounded-lg flex items-center justify-center shrink-0 active:bg-stone-100 ${info === x.id ? 'text-accent-500' : 'text-stone-400'}`}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5M12 7.6v.1" strokeWidth="2.4" /></svg>
-                  </button>
-                </div>
-                {info === x.id && (
-                  <div className="px-3.5 pb-3.5">
-                    <HowToBody item={x} kind={kind} />
-                    <button
-                      onClick={() => onPick(x.id)}
-                      className="mt-3 w-full py-2.5 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 transition-colors"
-                    >
-                      {title.startsWith('Swap') ? 'Swap this in' : 'Add this'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+      {!q && tabs.length > 1 && (
+        <div className="-mx-1 px-1 overflow-x-auto">
+          <div className="bg-stone-100 rounded-xl p-1 flex min-w-full w-max">
+            {tabs.map(s => {
+              const n = current.filter(x => sectionOf(x) === s.id).length
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => pickTab(s.id)}
+                  className={`flex-1 whitespace-nowrap px-3 py-1.5 rounded-lg text-sm leading-tight transition-colors ${
+                    s.id === sec?.id ? 'bg-white text-stone-900 shadow-sm font-semibold' : 'text-stone-500'
+                  }`}
+                >
+                  {s.label}
+                  <span className="block text-[11px] font-normal text-stone-400">{n} {countLabel}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
-      ))}
+      )}
+      {body}
     </SettingsSheet>
   )
 }
@@ -767,13 +822,12 @@ function ExerciseOrder({ workoutId, store }) {
       </svg>
     </button>
   )
-  const rows = (list, minOne, ratedFor) => (
+  const rows = (list, minOne) => (
     <div className="space-y-1.5">
       {list.map((ex, i) => (
         <div key={ex.id} className="flex items-center gap-1.5 rounded-xl bg-stone-50 pl-3 pr-1.5 py-1.5">
           <span className="text-xs font-semibold text-stone-400 w-4 shrink-0">{i + 1}</span>
           <span className="flex-1 min-w-0 truncate text-sm text-stone-700">{ex.name}</span>
-          <RatingMeter rating={ratingFor(ex, ratedFor)} />
           {icon('M18 15l-6-6-6 6', i === 0, () => store.moveExercise(workoutId, ex.id, -1), `Move ${ex.name} up`)}
           {icon('M6 9l6 6 6-6', i === list.length - 1, () => store.moveExercise(workoutId, ex.id, 1), `Move ${ex.name} down`)}
           {icon('M6 6l12 12M18 6L6 18', minOne && list.length <= 1, () => remove(ex), `Remove ${ex.name}`)}
@@ -792,21 +846,16 @@ function ExerciseOrder({ workoutId, store }) {
   return (
     <>
       <CoverageRow list={main} area={workoutId} />
-      {rows(main, true, workoutId)}
+      {rows(main, true)}
       {addBtn('+ Add exercise', 'main')}
       {/* The Core section's own list, while Core is on (switch at the top). */}
       {coreOn && (
         <div className="pt-4 border-t border-stone-100 space-y-3">
           <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Core</p>
           <CoverageRow list={core} area="core" />
-          {core.length > 0 ? rows(core, false, 'core') : <p className="text-sm text-stone-400">No core exercises yet.</p>}
+          {core.length > 0 ? rows(core, false) : <p className="text-sm text-stone-400">No core exercises yet.</p>}
           {addBtn('+ Add core exercise', 'core')}
         </div>
-      )}
-      {store.isCustomOrder(workoutId) && (
-        <button onClick={() => store.resetOrder(workoutId)} className="text-xs font-medium text-accent-500 active:opacity-60">
-          Reset to default exercises
-        </button>
       )}
       {removing && (
         <ConfirmSheet
@@ -871,12 +920,40 @@ function TabBtn({ active, onClick, children }) {
   )
 }
 
-export function GearIcon() {
+export function GearIcon({ size = 17 }) {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
+  )
+}
+
+function InfoIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5M12 7.6v.1" strokeWidth="2.4" /></svg>
+  )
+}
+
+// ⓘ next to an exercise's or stretch's gear: how to do it, in a sheet.
+function HowToButton({ item, kind, className }) {
+  const [open, setOpen] = useState(false)
+  if (!HOWTO[item.id]) return null
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label={`How to do ${item.name}`}
+        className={`${className} rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors`}
+      >
+        <InfoIcon size={20} />
+      </button>
+      {open && (
+        <SettingsSheet title={item.name} onClose={() => setOpen(false)}>
+          <HowToBody item={item} kind={kind} />
+        </SettingsSheet>
+      )}
+    </>
   )
 }
 
@@ -1026,7 +1103,7 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
       </button>
       </>)}
 
-      <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform ml-0.5">
+      <button onClick={onToggle} aria-label={`${done ? 'Untick' : 'Tick'} set ${index + 1}`} className="shrink-0 active:scale-95 transition-transform ml-0.5">
         <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
           done ? 'border-accent-500 bg-accent-500' : 'border-stone-200 bg-white'
         }`}>
@@ -1042,47 +1119,49 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
 }
 
 // ── Exercise card ────────────────────────────────────────────────────────────
-function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
+// Open, it's the full card with its sets. Folded, it's one line: finished
+// exercises tinted with a tick, the rest with a dot per set. Tap to open.
+function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTimer, onSetDone }) {
   const [showSettings, setShowSettings] = useState(false)
-  const [swapping, setSwapping] = useState(false)
-  // A finished exercise collapses to one line; tapping it reopens the card.
-  const [expanded, setExpanded] = useState(false)
 
   const log = store.getLog(workoutId, exercise)
-  const assist = store.getAssist(exercise.id, exercise.weight.assist ?? false)
+  const equipment = store.getEquipment(exercise)
+  const assist = equipment === 'assisted'
   const setup = store.getSetup(exercise)
   const hold = setup.mode === 'hold'
 
   const allDone = log.sets.every(x => x.done)
   const someDone = log.sets.some(x => x.done)
 
-  // Adding or unticking a set reopens the card; finishing again collapses it.
-  const [prevAllDone, setPrevAllDone] = useState(allDone)
-  if (allDone !== prevAllDone) {
-    setPrevAllDone(allDone)
-    if (!allDone) setExpanded(false)
-  }
-  const collapsed = allDone && !expanded
-  const perSide = log.bar > 0 ? (log.weight - log.bar) / 2 : null
   const holdTime = log.sets[0]?.reps ?? 0
+  const summary = loadSummary(equipment, log)
 
-  let summary
-  if (hold) {
-    summary = log.weight > 0 ? `+${fmt(log.weight)} lbs` : 'Bodyweight'
-  } else if (log.weight === 0 && log.bar === 0) {
-    summary = assist ? 'Assisted' : 'Bodyweight'
-  } else {
-    const wp = `${fmt(log.weight)} lbs${log.bar > 0 ? ` · ${fmt(perSide)} lb/side` : ''}`
-    summary = assist ? `Assisted · ${wp}` : wp
+  if (!open && !allDone) {
+    return (
+      <button
+        onClick={onOpen}
+        className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-white shadow-sm text-left active:opacity-70"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
+          <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
+        </span>
+        <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.sets.filter(x => x.done).length} of ${log.sets.length} sets done`}>
+          {log.sets.map((x, i) => (
+            <span key={i} className={`w-2 h-2 rounded-full ${x.done ? 'bg-accent-500' : 'bg-stone-200'}`} />
+          ))}
+        </span>
+      </button>
+    )
   }
 
-  if (collapsed) {
+  if (!open) {
     const done = hold
       ? `${log.sets.length} × ${log.sets[0]?.reps ?? 0}s`
       : `${log.weight > 0 ? `${fmt(log.weight)} lbs · ` : ''}${log.sets.map(x => x.reps).join(', ')}`
     return (
       <button
-        onClick={() => setExpanded(true)}
+        onClick={onOpen}
         className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-accent-50 border border-accent-200 text-left active:opacity-70"
       >
         <span className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
@@ -1108,35 +1187,30 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
             {exercise.name}
             {setup.perSide && <span className="text-stone-400 font-normal text-sm ml-1">(per side)</span>}
           </p>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="mt-1 flex items-center gap-1 text-left active:opacity-60"
-          >
-            <span className={`text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
-              {summary}
-            </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
-          </button>
+          <p className={`mt-1 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
+            {summary}
+          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          <HowToButton item={exercise} kind="exercise" className="w-10 h-10" />
           <button
             onClick={() => setShowSettings(true)}
             aria-label={`${exercise.name} settings`}
-            className="w-8 h-8 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
+            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
           >
-            <GearIcon />
+            <GearIcon size={20} />
           </button>
           {onTimer && (
             <button
               onClick={onTimer}
-              className="w-8 h-8 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
+              className="w-10 h-10 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
             >
-              <ClockIcon />
+              <ClockIcon size={19} />
             </button>
           )}
           <button
-            onClick={() => store.toggleExercise(workoutId, exercise)}
-            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors text-xs font-bold ${
+            onClick={() => { store.toggleExercise(workoutId, exercise); if (!allDone) onClose() }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-xs font-bold ${
               allDone ? 'bg-accent-500 text-white' : 'bg-stone-100 text-stone-400 active:bg-stone-200'
             }`}
             aria-label={allDone ? 'Untick all sets' : 'Tick all sets'}
@@ -1146,16 +1220,9 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
         </div>
       </div>
 
-      {/* Program target, for reference — the set rows hold your own numbers */}
-      <div className="flex items-center gap-2 mt-1.5">
-        {/* The program's target only means something in its own mode. */}
-        {hold === !!exercise.isTime && (
-          <p className="text-xs text-stone-400">Program target {exercise.sets} × {exercise.reps}</p>
-        )}
-        {setup.restOn && (
-          <span className="text-xs font-medium text-accent-600 bg-accent-50 px-1.5 py-0.5 rounded-md">Rest {fmtClock(setup.rest * 1000)}</span>
-        )}
-      </div>
+      {setup.restOn && (
+        <span className="inline-block mt-1.5 text-xs font-medium text-accent-600 bg-accent-50 px-1.5 py-0.5 rounded-md">Rest {fmtClock(setup.rest * 1000)}</span>
+      )}
 
       {/* Sets */}
       <div className="mt-2.5 space-y-1.5">
@@ -1192,7 +1259,7 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
           </button>
         )}
         {allDone && (
-          <button onClick={() => setExpanded(false)} className="text-xs font-medium text-stone-400 ml-auto active:text-stone-600">
+          <button onClick={onClose} className="text-xs font-medium text-stone-400 ml-auto active:text-stone-600">
             Collapse
           </button>
         )}
@@ -1205,16 +1272,33 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
 
       {showSettings && (
         <SettingsSheet title={exercise.name} onClose={() => setShowSettings(false)}>
-          <HowToToggle item={exercise} kind="exercise" />
-          <SheetSection title="Sets">
-            <Segmented
-              label="Counted in"
-              value={setup.mode}
-              options={[['reps', 'Reps'], ['hold', 'Hold']]}
-              onChange={mode => store.setSetup(exercise, { mode })}
-            />
-            {hold ? (
-              <>
+          <EquipmentPicker value={equipment} onChange={v => store.setEquipment(exercise, v)} />
+          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} />
+          {/* Set-once settings, one row each. */}
+          <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
+            {equipment === 'barbell' && (
+              <div className="px-4 py-2.5">
+                <StepperRow
+                  label="Bar"
+                  value={log.bar}
+                  step={BAR_STEP}
+                  min={BAR_MIN}
+                  max={BAR_MAX}
+                  suffix=" lbs"
+                  onChange={v => store.setBar(exercise, v)}
+                />
+              </div>
+            )}
+            <div className="px-4 py-2.5">
+              <Segmented
+                label="Counted in"
+                value={setup.mode}
+                options={[['reps', 'Reps'], ['hold', 'Hold']]}
+                onChange={mode => store.setSetup(exercise, { mode })}
+              />
+            </div>
+            {hold && (
+              <div className="px-4 py-2.5 space-y-2">
                 <StepperRow
                   label="Hold time"
                   value={holdTime}
@@ -1224,73 +1308,27 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
                   suffix="s"
                   onChange={v => store.setHoldTime(exercise, v)}
                 />
-                <p className="text-xs text-stone-400 -mt-1">Tap the clock on the card to time each set — it ticks the set when time’s up.</p>
-              </>
-            ) : (
-              <p className="text-xs text-stone-400 -mt-1">Each set is a number of reps — adjust them on the card as you go.</p>
+                <p className="text-xs text-stone-400">Tap the clock on the card to time each set — it ticks the set when time’s up.</p>
+              </div>
             )}
-            <ToggleRow
-              label="Per side"
-              detail={hold ? 'Hold each side — the timer runs twice' : 'Do the reps on each side'}
-              on={setup.perSide}
-              onChange={perSide => store.setSetup(exercise, { perSide })}
-            />
-          </SheetSection>
-          {hold ? (
-            <SheetSection title="Load">
-              <StepperRow
-                label="Added weight"
-                value={log.weight}
-                step={0.5}
-                min={0}
-                editable
-                onChange={v => store.setWeight(exercise, v)}
+            <div className="px-4 py-3">
+              <ToggleRow
+                label="Per side"
+                detail={hold ? 'Hold each side — the timer runs twice' : 'Do the reps on each side'}
+                on={setup.perSide}
+                onChange={perSide => store.setSetup(exercise, { perSide })}
               />
-              <p className="text-xs text-stone-400 -mt-1">Leave at 0 for bodyweight — add a plate once holds get easy.</p>
-            </SheetSection>
-          ) : (
-          <SheetSection title="Load">
-          <StepperRow
-            label="Weight"
-            value={log.weight}
-            step={0.5}
-            min={0}
-            editable
-            onChange={v => store.setWeight(exercise, v)}
-          />
-          <StepperRow
-            label="Bar"
-            value={log.bar}
-            step={BAR_STEP}
-            min={BAR_MIN}
-            max={BAR_MAX}
-            onChange={v => store.setBar(exercise, v)}
-          />
-          {log.bar > 0 && (
-            <div className="flex items-center justify-between rounded-xl bg-accent-50 px-3.5 py-3">
-              <span className="text-sm text-stone-500">Plates per side</span>
-              <span className="text-accent-600 font-bold">
-                {perSide > 0 ? `${fmt(perSide)} lb each side` : 'Empty bar'}
-              </span>
             </div>
-          )}
-          <ToggleRow
-            label="Assist"
-            detail="Not lifting the full load (assisted or bodyweight)"
-            on={assist}
-            onChange={v => store.setAssist(exercise.id, v)}
-          />
-          </SheetSection>
-          )}
-          <SheetSection title="Rest timer">
-            <Segmented
-              label="Between sets"
-              value={setup.restOn ? 'on' : 'off'}
-              options={[['off', 'Off'], ['on', 'On']]}
-              onChange={v => store.setSetup(exercise, { restOn: v === 'on' })}
-            />
+            <div className="px-4 py-3">
+              <ToggleRow
+                label="Rest between sets"
+                detail="A timer after each set"
+                on={setup.restOn}
+                onChange={restOn => store.setSetup(exercise, { restOn })}
+              />
+            </div>
             {setup.restOn && (
-              <>
+              <div className="px-4 py-2.5 space-y-2">
                 <StepperRow
                   label="Rest length"
                   value={setup.rest}
@@ -1299,28 +1337,130 @@ function ExerciseCard({ exercise, workoutId, store, onTimer, onSetDone }) {
                   format={s => fmtClock(s * 1000)}
                   onChange={rest => store.setSetup(exercise, { rest })}
                 />
-                <p className="text-xs text-stone-400 -mt-1">Starts automatically each time you tick a set.</p>
-              </>
+                <p className="text-xs text-stone-400">Starts automatically each time you tick a set.</p>
+              </div>
             )}
-          </SheetSection>
-          <button
-            onClick={() => { setShowSettings(false); setSwapping(true) }}
-            className="w-full py-3 rounded-xl bg-stone-100 text-stone-700 text-sm font-semibold active:bg-stone-200 transition-colors"
-          >
-            Swap exercise
-          </button>
+          </div>
         </SettingsSheet>
       )}
-      {swapping && (
-        <ExercisePicker
-          workoutId={workoutId}
-          store={store}
-          swap={exercise}
-          section={isCore(exercise) ? 'core' : 'main'}
-          onPick={id => { store.swapExercise(workoutId, exercise.id, id); setSwapping(false) }}
-          onClose={() => setSwapping(false)}
-        />
+    </div>
+  )
+}
+
+// The weight as the card shows it under the name, by equipment.
+function loadSummary(equipment, log) {
+  const w = `${fmt(log.weight)} lbs`
+  if (equipment === 'bodyweight') return log.weight > 0 ? `Bodyweight + ${w}` : 'Bodyweight'
+  if (equipment === 'assisted') return `Assisted · ${w}`
+  if (equipment === 'barbell' && log.bar > 0 && log.weight > log.bar) return `${w} · ${fmt((log.weight - log.bar) / 2)} lb/side`
+  return w
+}
+
+// What an exercise is done with, as a row of icon buttons.
+const EQUIPMENT_ICON = {
+  barbell: <><path d="M2 12h20" /><path d="M5 7v10M8 8v8M16 8v8M19 7v10" /></>,
+  dumbbell: <><path d="M8 12h8" /><rect x="4" y="8" width="4" height="8" rx="1" /><rect x="16" y="8" width="4" height="8" rx="1" /></>,
+  cable: <><path d="M12 3v11M8 3h8" /><circle cx="12" cy="17" r="3" /></>,
+  machine: <><rect x="7" y="4" width="10" height="16" rx="1.5" /><path d="M7 9h10M7 13h10M7 17h10" /></>,
+  bodyweight: <><circle cx="12" cy="5" r="2" /><path d="M12 7v7M8 10h8M12 14l-3 6M12 14l3 6" /></>,
+  assisted: <path d="M12 20V6M7 11l5-5 5 5" />,
+}
+function EquipmentPicker({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-6 gap-1 rounded-xl bg-stone-100 p-1" role="radiogroup" aria-label="Equipment">
+      {EQUIPMENT.map(e => (
+        <button
+          key={e.id}
+          role="radio"
+          aria-checked={value === e.id}
+          onClick={() => onChange(e.id)}
+          className={`flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold transition-colors ${
+            value === e.id ? 'bg-white text-accent-500 shadow-sm' : 'text-stone-400'
+          }`}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">{EQUIPMENT_ICON[e.id]}</svg>
+          {e.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// The weight, big, with − / + either side (tap the number to type it) and a
+// line on what it means for the equipment. A barbell also draws its plates.
+const PLATES = [45, 35, 25, 10, 5, 2.5]
+const PLATE_HEIGHT = { 45: 46, 35: 40, 25: 34, 10: 26, 5: 20, 2.5: 15 }
+function platesFor(perSide) {
+  const plates = []
+  let left = perSide
+  for (const p of PLATES) {
+    while (left >= p - 1e-9) {
+      plates.push(p)
+      left -= p
+    }
+  }
+  return { plates, left: Math.round(left * 100) / 100 }
+}
+// − / + move to the next round number: 5s on a barbell, 2.5s otherwise.
+const stepTo = (v, step, dir) => Math.max(0, (dir > 0 ? Math.floor(v / step + 1e-9) + 1 : Math.ceil(v / step - 1e-9) - 1) * step)
+
+function LoadHero({ equipment, weight, bar, onChange }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const step = equipment === 'barbell' ? 5 : 2.5
+  const perSide = equipment === 'barbell' && bar > 0 ? Math.max(0, (weight - bar) / 2) : null
+  const { plates, left } = platesFor(perSide ?? 0)
+  const unit = { dumbbell: 'lbs each', assisted: 'lbs help' }[equipment] ?? 'lbs'
+  const note = {
+    barbell: bar > 0 ? `${fmt(bar)} lb bar · ${perSide > 0 ? `${fmt(perSide)} lb each side` : 'empty bar'}` : 'Set the bar weight below',
+    dumbbell: 'The weight of one dumbbell',
+    cable: 'The number on the stack',
+    machine: 'The number on the stack or plates loaded',
+    bodyweight: weight > 0 ? 'Added with a belt, vest or plate' : 'Your bodyweight. Add weight once it gets easy.',
+    assisted: 'Help from the machine or band. Lower = harder.',
+  }[equipment]
+
+  function save() {
+    setEditing(false)
+    const n = parseFloat(draft)
+    if (!isNaN(n) && n >= 0) onChange(Math.round(n * 100) / 100)
+  }
+
+  const btn = 'w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 text-2xl font-medium active:bg-stone-200 transition-colors'
+  return (
+    <div className="flex flex-col items-center gap-2 py-1">
+      <div className="flex items-center gap-5">
+        <button onClick={() => onChange(stepTo(weight, step, -1))} className={btn} aria-label="Less weight">−</button>
+        {editing ? (
+          <input
+            type="number"
+            inputMode="decimal"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            autoFocus
+            className="w-28 text-center text-4xl font-bold bg-stone-100 rounded-xl py-1 text-stone-900 outline-none"
+          />
+        ) : (
+          <button onClick={() => { setDraft(String(weight)); setEditing(true) }} className="min-w-28 text-center active:opacity-60">
+            <span className="text-5xl font-bold tracking-tight text-stone-900">{equipment === 'bodyweight' ? '+' : ''}{fmt(weight)}</span>
+            <span className="ml-1.5 text-base font-medium text-stone-400">{unit}</span>
+          </button>
+        )}
+        <button onClick={() => onChange(stepTo(weight, step, 1))} className={btn} aria-label="More weight">+</button>
+      </div>
+      {perSide > 0 && (
+        <div className="flex items-center h-12" aria-hidden="true">
+          {[...plates].reverse().map((p, i) => <span key={`l${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
+          <span className="w-24 h-2 rounded-full bg-stone-400" />
+          {plates.map((p, i) => <span key={`r${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
+        </div>
       )}
+      <p className="text-sm text-stone-500 text-center">
+        {note}
+        {perSide > 0 && plates.length > 0 && <span className="block text-xs text-stone-400">Each side: {plates.map(fmt).join(' + ')}{left > 0 ? ` + ${fmt(left)}` : ''}</span>}
+      </p>
     </div>
   )
 }
@@ -1371,7 +1511,7 @@ export function ToggleRow({ label, detail, on, onChange }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
-function StretchCard({ stretch, onSwap, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
+function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
@@ -1392,18 +1532,16 @@ function StretchCard({ stretch, onSwap, checked, onToggle, onTimer, customDurati
         </button>
         <div className="flex-1 min-w-0">
           <p className={`font-semibold ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}</p>
-          <button onClick={() => setShowSettings(true)} className="flex items-center gap-1 mt-0.5 text-left active:opacity-60 min-w-0 max-w-full overflow-hidden">
-            <span className="text-stone-400 text-sm whitespace-nowrap shrink-0">{customDuration}s{perSide ? ' per side' : ''}{sets > 1 ? ` × ${sets}` : ''}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
-          </button>
+          <p className="mt-0.5 text-stone-400 text-sm whitespace-nowrap">{customDuration}s{perSide ? ' per side' : ''}{sets > 1 ? ` × ${sets}` : ''}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          <HowToButton item={stretch} kind="stretch" className="w-10 h-10" />
           <button
             onClick={() => setShowSettings(true)}
             aria-label={`${stretch.name} settings`}
-            className="w-9 h-9 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
+            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
           >
-            <GearIcon />
+            <GearIcon size={20} />
           </button>
           <button
             onClick={onTimer}
@@ -1416,7 +1554,6 @@ function StretchCard({ stretch, onSwap, checked, onToggle, onTimer, customDurati
 
       {showSettings && (
         <SettingsSheet title={stretch.name} onClose={() => setShowSettings(false)}>
-          <HowToToggle item={stretch} kind="stretch" />
           <StepperRow
             label="Duration"
             value={customDuration}
@@ -1450,12 +1587,6 @@ function StretchCard({ stretch, onSwap, checked, onToggle, onTimer, customDurati
             on={perSide}
             onChange={onPerSideChange}
           />
-          <button
-            onClick={() => { setShowSettings(false); onSwap() }}
-            className="w-full py-3 rounded-xl bg-stone-100 text-stone-700 text-sm font-semibold active:bg-stone-200 transition-colors"
-          >
-            Swap stretch
-          </button>
         </SettingsSheet>
       )}
     </div>
