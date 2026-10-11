@@ -215,3 +215,13 @@ html.dark .text-pink-700 { color: oklch(82.3% 0.12 346.018); }
 html.dark .text-pink-600 { color: oklch(71.8% 0.202 349.761); }
 html.dark .text-rose-700 { color: oklch(81% 0.117 11.638); }
 html.dark .text-rose-600 { color: oklch(71.2% 0.194 13.428); }
+
+/* The settings drawer slides in from the right over a fading shade. */
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

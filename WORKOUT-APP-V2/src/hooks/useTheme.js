@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-// Light or dark, saved on this device. Until you choose, it follows the
-// phone's setting (index.html applies it before the first paint).
+// Light, dark, or auto (the phone's setting), saved on this device.
+// index.html applies it before the first paint.
 const KEY = 'workout-v2-theme'
 const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null
 
@@ -33,15 +33,16 @@ export function useTheme() {
 
   useEffect(() => apply(dark), [dark])
 
-  function toggle() {
-    const next = dark ? 'light' : 'dark'
+  // 'light' or 'dark' sticks on this device; 'auto' follows the phone.
+  function setMode(mode) {
     try {
-      localStorage.setItem(KEY, next)
+      if (mode === 'auto') localStorage.removeItem(KEY)
+      else localStorage.setItem(KEY, mode)
     } catch {
       // Storage blocked — it still switches for this visit.
     }
-    setChoice(next)
+    setChoice(mode === 'auto' ? null : mode)
   }
 
-  return { dark, toggle }
+  return { dark, mode: choice ?? 'auto', setMode }
 }

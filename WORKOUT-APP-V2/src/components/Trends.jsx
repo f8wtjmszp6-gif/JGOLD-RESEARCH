@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDragToClose } from '../hooks/useDragToClose'
 import { workouts, GYM_ORDER, MUSCLE_GROUPS } from '../data/workout'
 import { calendarWeekOf } from '../hooks/useStore'
-import { cardioLevel } from '../utils/goal'
+import { goalLevel } from '../utils/goal'
 import { EXERCISE_BANK } from '../data/exercises'
 
 const WEEKS = 12
@@ -80,7 +81,7 @@ function Trends({ store }) {
 
   return (
     <>
-      <WeekGrid weeks={weeks} />
+      <WeekGrid weeks={weeks} goals={store.goals} />
 
       <p className="text-xs text-stone-400 uppercase tracking-wider font-medium mt-5 mb-2 px-1">Strength</p>
       <div className="bg-stone-100 rounded-xl p-1 grid grid-cols-6 mb-2.5">
@@ -134,11 +135,13 @@ const LEVELS = [
   'bg-emerald-500',
   'bg-emerald-700 dark:bg-emerald-400',
 ]
-function WeekGrid({ weeks }) {
+function WeekGrid({ weeks, goals }) {
+  const workouts = w => w.week.gym + w.week.class + (w.week.cardio ?? 0) + (w.week.stretchWork ?? 0)
+  // Each row as a level toward your goal (3 = met), and what it was.
   const rows = [
-    ['Workouts', w => w.week.gym + w.week.class + (w.week.cardio ?? 0) + (w.week.stretchWork ?? 0)],
-    ['Stretching', w => w.stretch.total],
-    ['Cardio', w => (w.cardio ? cardioLevel(w.cardio.total) : 0), w => (w.cardio ? `${w.cardio.total} min` : 'not tracked')],
+    ['Workouts', w => goalLevel(workouts(w), goals.workouts), workouts],
+    ['Stretching', w => goalLevel(w.stretch.total, goals.stretch), w => w.stretch.total],
+    ['Cardio', w => (w.cardio ? goalLevel(w.cardio.total, goals.cardio) : 0), w => (w.cardio ? `${w.cardio.total} min` : 'not tracked')],
   ]
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5">
@@ -241,12 +244,21 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
   const change = points.length > 1 ? latest.v - points[0].m.v : 0
   const improved = change * latest.better > 0
   const prs = points.filter(p => p.pr).length
+  // Pull the sheet down to close it.
+  const panel = useRef(null)
+  const { offset, dragging, fade } = useDragToClose(panel, onClose)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center touch-none" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
-        className="bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto"
-        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        ref={panel}
+        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
+        style={{
+          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+          transform: `translateY(${offset}px)`,
+          transition: dragging ? 'none' : 'transform 180ms ease-out',
+        }}
         onClick={e => e.stopPropagation()}
       >
         <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />

@@ -11,10 +11,12 @@ export function goalTint(count) {
   return TINTS[Math.min(count, TINTS.length - 1)]
 }
 
-// Cardio minutes on the same 0–4 scale: the 150 minimum reads as 3 (goal
-// met), the 300 ideal as 4.
-export function cardioLevel(minutes) {
-  return minutes >= 300 ? 4 : Math.min(3, Math.floor(minutes / 50))
+// Progress toward a goal on the card's 0–4 scale: reaching the min reads as 3
+// (goal met), the max as 4, and below the min it climbs in steps.
+export function goalLevel(count, goal) {
+  if (count >= goal.max) return 4
+  if (count >= goal.min) return 3
+  return Math.min(2, Math.floor((3 * count) / goal.min))
 }
 
 // A single green for every filled slot, deepening with the count.
@@ -23,24 +25,11 @@ export function goalFill(count) {
   return FILLS[Math.min(count, FILLS.length - 1)]
 }
 
-// What's left this week: the day, days left in the calendar week (Mon–Sun,
-// today included), and what's still needed to reach each weekly minimum —
-// 3 workouts, 3 stretch sessions, 150 cardio minutes.
-export function weekLeft({ workouts, stretches, cardio }, goals, now = new Date()) {
-  const daysLeft = 7 - ((now.getDay() + 6) % 7)
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
-  const needs = []
-  if (workouts < goals.workouts) needs.push(plural(goals.workouts - workouts, 'more workout', 'more workouts'))
-  if (stretches < goals.stretches) needs.push(plural(goals.stretches - stretches, 'stretch session', 'stretch sessions'))
-  if (cardio !== null && cardio < goals.cardio) needs.push(`${goals.cardio - cardio} cardio min`)
+// Today's short name and the days left in the calendar week (Mon–Sun,
+// today included).
+export function weekDay(now = new Date()) {
   return {
     day: now.toLocaleDateString('en-US', { weekday: 'short' }),
-    daysLeft,
-    needs,
+    daysLeft: 7 - ((now.getDay() + 6) % 7),
   }
-}
-
-// "a, b and c"
-export function listJoin(items) {
-  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }

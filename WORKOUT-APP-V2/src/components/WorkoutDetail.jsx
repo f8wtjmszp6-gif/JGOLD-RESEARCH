@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { playBeep, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
+import { useDragToClose } from '../hooks/useDragToClose'
 import { workouts, STRETCH_ROUTINE, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
 import { EXERCISE_BANK, EQUIPMENT, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf, gapsAfter } from '../data/exercises'
 import { HOWTO } from '../data/howto'
@@ -25,15 +27,35 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
   const workout = workouts[workoutId] ?? STRETCH_ROUTINE
   const isRoutine = workout.exercises.length === 0
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
-  const [showWorkoutSettings, setShowWorkoutSettings] = useState(false)
-  const [editingStretches, setEditingStretches] = useState(false)
+  const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
   const warmup = store.getWarmup(workoutId)
-  // One exercise is open at a time: the one you tapped, else the first one
-  // not finished. Finishing it moves on to the next.
+  // Every exercise starts folded; tapping one opens it (and folds any other).
+  // Finishing it folds it again.
   const [openId, setOpenId] = useState(null)
   const exercises = store.getExercises(workoutId)
-  const unfinished = exercises.find(x => !store.getLog(workoutId, x).sets.every(set => set.done))
-  const openExercise = exercises.some(x => x.id === openId) ? openId : unfinished?.id
+  const openExercise = exercises.some(x => x.id === openId) ? openId : null
+
+  // Drag an exercise by its handle within its own list (main or Core).
+  const listRef = useRef(null)
+  const exerciseDrag = useDragReorder(
+    listRef,
+    id => {
+      const { main, core } = store.getExerciseSections(workoutId)
+      return (main.some(x => x.id === id) ? main : core).map(x => x.id)
+    },
+    (id, to) => store.moveExerciseTo(workoutId, id, to),
+  )
+
+  // Swiping an exercise away: removing the only exercise for an area asks first.
+  const [removing, setRemoving] = useState(null) // { ex, gaps } waiting on "remove anyway"
+  function removeExercise(ex) {
+    const { main, core } = store.getExerciseSections(workoutId)
+    const inCore = core.some(x => x.id === ex.id)
+    const list = inCore ? core : main
+    const gaps = gapsAfter(list, list.filter(x => x.id !== ex.id), inCore ? 'core' : workoutId)
+    if (gaps.length) setRemoving({ ex, gaps })
+    else store.removeExercise(workoutId, ex.id)
+  }
 
   // The one timer on screen, shown in the bar at the bottom.
   //   kind  – 'rest' | 'hold' | 'stretch'
@@ -45,6 +67,13 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
     const a = active
     if (!a) return
 
+    // A warm-up goes straight into its next set; the beep says change pace.
+    if (a.kind === 'warmup' && a.set < a.sets) {
+      const part = a.parts[a.set]
+      setActive({ ...a, set: a.set + 1, title: warmupSetLabel(part), total: part.minutes * 60000 })
+      start(part.minutes * 60000)
+      return
+    }
     // A rest between stretch sets ends by waiting for Start, like a side switch.
     if (a.phase === 'rest') {
       setActive({ ...a, phase: 'switch' })
@@ -127,8 +156,10 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
     })
   }
 
+  // Runs the warm-up's sets back to back (see the countdown's end above).
   function startWarmup() {
-    run({ kind: 'warmup', title: `${warmup.minutes} min`, total: warmup.minutes * 60000 })
+    const parts = warmup.sets
+    run({ kind: 'warmup', title: warmupSetLabel(parts[0]), total: parts[0].minutes * 60000, sets: parts.length, parts })
   }
 
   function startStretch(stretch) {
@@ -165,6 +196,37 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
     else stopTimer()
   }
 
+  // One exercise in the list: dragged by its handle, swiped to remove.
+  const sections = store.getExerciseSections(workoutId)
+  const finished = x => store.getLog(workoutId, x).sets.every(set => set.done)
+  const partDone = list => list.length > 0 && list.every(finished)
+  const partProgress = list => `${list.filter(finished).length} of ${list.length}`
+  const exerciseCard = exercise => {
+    const open = exercise.id === openExercise
+    const card = (
+      <ExerciseCard
+        exercise={exercise}
+        workoutId={workoutId}
+        store={store}
+        grip={exerciseDrag.handlers(exercise.id)}
+        open={open}
+        onOpen={() => setOpenId(exercise.id)}
+        onClose={() => setOpenId(null)}
+        onSetDone={setsLeft => {
+          startRest(exercise, setsLeft)
+          if (setsLeft === 0) setOpenId(null)
+        }}
+        onTimer={store.getSetup(exercise).mode === 'hold' ? () => startHold(exercise) : null}
+      />
+    )
+    // Folded or open, swipe it left to remove it.
+    return (
+      <div key={exercise.id} data-row={exercise.id} style={exerciseDrag.style(exercise.id)} className={exerciseDrag.dragging === exercise.id ? 'rounded-2xl shadow-lg' : ''}>
+        <SwipeRow label={exercise.name} onRemove={() => removeExercise(exercise)}>{card}</SwipeRow>
+      </div>
+    )
+  }
+
   // What comes after a rest, read live so ticking during the rest updates it.
   let next = null
   if (active?.kind === 'rest' && active.exercise) {
@@ -176,7 +238,6 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
   const exerciseList = store.getExercises(workoutId)
   const exerciseDone = exerciseList.filter(e => store.getLog(workoutId, e).sets.every(x => x.done)).length
   const stretchList = store.getStretches(workout.id)
-  const showingStretches = isRoutine || tab === 'stretches'
   const stretchDone = stretchList.filter(s => store.getStretchDone(workoutId, s.id)).length
 
   return (
@@ -191,16 +252,6 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
         </button>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{workout.short}</h1>
-          {/* The gear edits what you're looking at: on Exercises, the workout's
-              settings (warm-up, exercises); on Stretches — and the Full-Body
-              Stretch — its list of stretches. */}
-          <button
-            onClick={() => (showingStretches ? setEditingStretches(true) : setShowWorkoutSettings(true))}
-            aria-label={showingStretches ? (isRoutine ? 'Edit stretches' : `Edit ${workout.short} stretches`) : `${workout.short} settings`}
-            className="w-10 h-10 rounded-xl bg-white shadow-sm text-stone-500 flex items-center justify-center active:bg-stone-100 transition-colors shrink-0"
-          >
-            <GearIcon />
-          </button>
         </div>
         <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : workout.name}</p>
       </div>
@@ -218,77 +269,79 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
       </div>}
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto px-5 space-y-2 ${active ? 'pb-28' : 'pb-6'}`}>
-        {tab === 'exercises' && warmup.on && (
-          <WarmupCard
-            minutes={warmup.minutes}
-            done={store.getWarmupDone(workoutId)}
-            onStart={startWarmup}
-            onToggle={() => store.setWarmupDone(workoutId, !store.getWarmupDone(workoutId))}
-          />
+      <div ref={listRef} className={`flex-1 overflow-y-auto px-5 space-y-2 ${active ? 'pb-28' : 'pb-6'}`}>
+        {/* The plan in three parts: an optional warm-up, the main workout,
+            and an optional Core section. */}
+        {tab === 'exercises' && (
+          <>
+            <PartHead title="Warm-up" right={store.getWarmup(workoutId).on && store.getWarmupDone(workoutId) ? 'Done ✓' : null} done />
+            <WarmupCard workoutId={workoutId} store={store} onStart={startWarmup} />
+
+            <PartHead
+              title="Main workout"
+              pill={<CoveragePill list={sections.main} area={workoutId} />}
+              right={partProgress(sections.main)}
+              done={partDone(sections.main)}
+            />
+            {sections.main.map(exerciseCard)}
+            <GapRows list={sections.main} area={workoutId} onAdd={() => setAdding('main')} />
+            <AddRow label="Add exercise" onClick={() => setAdding('main')} />
+
+            {sections.coreOn ? (
+              <>
+                <PartHead
+                  title="Core"
+                  pill={<CoveragePill list={sections.core} area="core" />}
+                  right={sections.core.length ? partProgress(sections.core) : null}
+                  done={partDone(sections.core)}
+                />
+                {sections.core.map(exerciseCard)}
+                <GapRows list={sections.core} area="core" onAdd={() => setAdding('core')} />
+                <AddRow label="Add core exercise" onClick={() => setAdding('core')} />
+              </>
+            ) : (
+              <>
+                <PartHead title="Core" />
+                <AddRow
+                  label="Add core"
+                  note="abs & obliques"
+                  onClick={() => {
+                    store.setCoreOn(workoutId, true)
+                    // No core exercises yet (Chest & Shoulders starts with none): pick one.
+                    if (sections.core.length === 0) setAdding('core')
+                  }}
+                />
+              </>
+            )}
+          </>
         )}
 
-        {tab === 'exercises' && exercises.map((exercise, i, list) => (
-          <Fragment key={exercise.id}>
-          {/* The Core section starts at the first core exercise. */}
-          {isCore(exercise) && !isCore(list[i - 1] ?? {}) && (
-            <p className="text-xs text-stone-400 uppercase tracking-wider font-medium px-1 pt-2">Core</p>
-          )}
-          <ExerciseCard
-            key={exercise.id}
-            exercise={exercise}
-            workoutId={workoutId}
-            store={store}
-            open={exercise.id === openExercise}
-            onOpen={() => setOpenId(exercise.id)}
-            onClose={() => setOpenId(null)}
-            onSetDone={setsLeft => {
-              startRest(exercise, setsLeft)
-              if (setsLeft === 0) setOpenId(null)
-            }}
-            onTimer={store.getSetup(exercise).mode === 'hold' ? () => startHold(exercise) : null}
-          />
-          </Fragment>
-        ))}
-
         {tab === 'stretches' && (
-          <StretchesTab workout={workout} store={store} onTimer={startStretch} editing={editingStretches} onEditingChange={setEditingStretches} />
+          <StretchesTab workout={workout} store={store} onTimer={startStretch} />
         )}
       </div>
 
-      {showWorkoutSettings && (
-        <SettingsSheet title={`${workout.short} settings`} onClose={() => setShowWorkoutSettings(false)}>
-          {/* The plan's optional parts first: Core, then the warm-up. */}
-          <SheetSection title="Add to this workout">
-            <ToggleRow
-              label="Core"
-              detail="A core section at the end of the workout"
-              on={store.getExerciseSections(workoutId).coreOn}
-              onChange={v => store.setCoreOn(workoutId, v)}
-            />
-            <ToggleRow
-              label="Warm-up"
-              detail="A timed warm-up at the top of the workout"
-              on={warmup.on}
-              onChange={on => store.setWarmup(workoutId, { on })}
-            />
-            {warmup.on && (
-              <StepperRow
-                label="Length"
-                value={warmup.minutes}
-                step={1}
-                min={1}
-                max={30}
-                editable
-                suffix=" min"
-                onChange={minutes => store.setWarmup(workoutId, { minutes })}
-              />
-            )}
-          </SheetSection>
-          <SheetSection title="Exercises">
-            <ExerciseOrder workoutId={workoutId} store={store} />
-          </SheetSection>
-        </SettingsSheet>
+      {adding && (
+        <ExercisePicker
+          workoutId={workoutId}
+          store={store}
+          section={adding}
+          onPick={id => { store.addExercise(workoutId, id); setAdding(null) }}
+          onClose={() => {
+            // Backing out of "Add core" before picking anything leaves Core off.
+            if (adding === 'core' && sections.core.length === 0) store.setCoreOn(workoutId, false)
+            setAdding(null)
+          }}
+        />
+      )}
+      {removing && (
+        <ConfirmSheet
+          title={`Leave ${removing.gaps.join(' and ')} uncovered?`}
+          body={`${removing.ex.name} is the only exercise here for ${removing.gaps.join(' and ')}.`}
+          confirmLabel="Remove anyway"
+          onConfirm={() => { store.removeExercise(workoutId, removing.ex.id); setRemoving(null) }}
+          onClose={() => setRemoving(null)}
+        />
       )}
 
       {active && (
@@ -420,10 +473,13 @@ function BarBtn({ className, onClick, children }) {
   )
 }
 
-// `editing` (the header gear) opens the edit sheet.
-function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEditing }) {
+// A list's stretches: drag one by its handle to reorder, swipe it away to
+// remove it (never the last), + Add stretch at the end.
+function StretchesTab({ workout, store, onTimer }) {
   const list = store.getStretches(workout.id)
   const [adding, setAdding] = useState(false)
+  const listRef = useRef(null)
+  const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
   const totalStretchSeconds = list.reduce(
     (sum, s) => {
       const sets = store.getStretchSets(s.id)
@@ -443,10 +499,13 @@ function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEd
         <span className="text-accent-600 font-bold">{fmtDuration(totalStretchSeconds)}</span>
       </div>
 
+      <div ref={listRef} className="space-y-2">
       {list.map(stretch => (
+        <div key={stretch.id} data-row={stretch.id} style={drag.style(stretch.id)} className={drag.dragging === stretch.id ? 'rounded-2xl shadow-lg' : ''}>
+        <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => store.removeStretch(workout.id, stretch.id) : null}>
         <StretchCard
-          key={stretch.id}
           stretch={stretch}
+          grip={drag.handlers(stretch.id)}
           checked={store.getStretchDone(workout.id, stretch.id)}
           onToggle={() => store.toggleStretch(workout.id, stretch.id)}
           customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
@@ -465,13 +524,12 @@ function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEd
             rest: store.getStretchRest(stretch.id),
           })}
         />
+        </SwipeRow>
+        </div>
       ))}
+      </div>
+      <AddRow label="Add stretch" onClick={() => setAdding(true)} />
 
-      {editing && !adding && (
-        <SettingsSheet title="Edit stretches" onClose={() => setEditing(false)}>
-          <StretchListEditor listId={workout.id} store={store} onAdd={() => setAdding(true)} />
-        </SettingsSheet>
-      )}
       {adding && (
         <StretchPicker
           listId={workout.id}
@@ -483,44 +541,6 @@ function StretchesTab({ workout, store, onTimer, editing, onEditingChange: setEd
           onClose={() => setAdding(false)}
         />
       )}
-    </>
-  )
-}
-
-// A list's stretches with ↑ / ↓ to reorder and ✕ to remove (never the last).
-function StretchListEditor({ listId, store, onAdd }) {
-  const list = store.getStretches(listId)
-  const icon = (d, disabled, onClick, label) => (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="w-9 h-9 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center active:bg-stone-200 disabled:opacity-30"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d={d} />
-      </svg>
-    </button>
-  )
-  return (
-    <>
-      <div className="space-y-1.5">
-        {list.map((x, i) => (
-          <div key={x.id} className="flex items-center gap-1.5 rounded-xl bg-stone-50 pl-3 pr-1.5 py-1.5">
-            <span className="text-xs font-semibold text-stone-400 w-4 shrink-0">{i + 1}</span>
-            <span className="flex-1 min-w-0 truncate text-sm text-stone-700">{x.name}</span>
-            {icon('M18 15l-6-6-6 6', i === 0, () => store.moveStretch(listId, x.id, -1), `Move ${x.name} up`)}
-            {icon('M6 9l6 6 6-6', i === list.length - 1, () => store.moveStretch(listId, x.id, 1), `Move ${x.name} down`)}
-            {icon('M6 6l12 12M18 6L6 18', list.length <= 1, () => store.removeStretch(listId, x.id), `Remove ${x.name}`)}
-          </div>
-        ))}
-      </div>
-      <button
-        onClick={onAdd}
-        className="w-full py-3 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 transition-colors"
-      >
-        + Add stretch
-      </button>
     </>
   )
 }
@@ -598,23 +618,163 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) {
   )
 }
 
-// Which of a list's areas are covered: "Chest ✓ · Side delts — missing".
-function CoverageRow({ list, area }) {
+// How many of a list's areas it covers, as a pill on its heading: green
+// "All 4 areas ✓", or orange "3 of 4 areas" while one is missing.
+function CoveragePill({ list, area }) {
   const areas = coverage(list, area)
   if (!areas.length) return null
+  const covered = areas.filter(a => a.covered).length
+  const all = covered === areas.length
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="text-stone-500 font-medium">Covers:</span>
-      {areas.map(a => (
-        <span
-          key={a.id}
-          className={`px-2 py-0.5 rounded-md font-semibold ${a.covered ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}
+    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${all ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+      {all ? `All ${areas.length} areas ✓` : `${covered} of ${areas.length} areas`}
+    </span>
+  )
+}
+
+// An orange row for each area the list is missing; tapping it opens the bank,
+// where exercises that fill the gap come first.
+function GapRows({ list, area, onAdd }) {
+  return coverage(list, area).filter(a => !a.covered).map(a => (
+    <button
+      key={a.id}
+      onClick={onAdd}
+      className="w-full flex items-center gap-2 rounded-2xl border-[1.5px] border-dashed border-orange-300 bg-orange-50 px-4 py-3 text-left active:opacity-70"
+    >
+      <span className="text-orange-700 text-xl leading-none">+</span>
+      <span className="font-semibold text-orange-700">Add an exercise for {a.label.toLowerCase()}</span>
+    </button>
+  ))
+}
+
+// A dashed "+ Add …" row at the end of a list.
+function AddRow({ label, note, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-2 rounded-2xl border-[1.5px] border-dashed border-stone-300 px-4 py-3 text-left active:bg-stone-100"
+    >
+      <span className="text-accent-500 text-xl leading-none">+</span>
+      <span className="font-semibold text-stone-500">{label}</span>
+      {note && <span className="ml-auto text-xs text-stone-400">{note}</span>}
+    </button>
+  )
+}
+
+// A row you can swipe left to reveal Remove, like deleting an email. Without
+// onRemove (the last stretch, say) it doesn't swipe. Dragging by a handle
+// (data-grip) never starts a swipe, and a swipe never counts as a tap.
+const SWIPE_WIDTH = 88
+function SwipeRow({ label, onRemove, children }) {
+  const [x, setX] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const gesture = useRef(null) // { startX, startY, base, dir, swiped }
+
+  function down(e) {
+    if (!onRemove || e.target.closest('[data-grip]')) return
+    gesture.current = { startX: e.clientX, startY: e.clientY, base: x, dir: null }
+  }
+  function move(e) {
+    const g = gesture.current
+    if (!g) return
+    const dx = e.clientX - g.startX
+    const dy = e.clientY - g.startY
+    if (!g.dir) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        g.dir = 'x'
+        e.currentTarget.setPointerCapture(e.pointerId)
+        setDragging(true)
+      } else if (Math.abs(dy) > 8) {
+        gesture.current = null
+        return
+      }
+    }
+    if (g.dir === 'x') setX(Math.max(-SWIPE_WIDTH, Math.min(0, g.base + dx)))
+  }
+  function up() {
+    const g = gesture.current
+    gesture.current = g?.dir === 'x' ? { swiped: true } : null
+    if (g?.dir === 'x') setX(x < -SWIPE_WIDTH / 2 ? -SWIPE_WIDTH : 0)
+    setDragging(false)
+  }
+  // Swallow the click that ends a swipe; a tap on a swiped-open row closes it.
+  function clickCapture(e) {
+    if (gesture.current?.swiped || x !== 0) {
+      e.stopPropagation()
+      e.preventDefault()
+      if (!gesture.current?.swiped) setX(0)
+    }
+    gesture.current = null
+  }
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden">
+      {onRemove && (
+        <button
+          onClick={() => { setX(0); onRemove() }}
+          aria-label={`Remove ${label}`}
+          tabIndex={x === 0 ? -1 : 0}
+          className="absolute inset-y-0 right-0 bg-red-600 text-white text-sm font-semibold active:bg-red-700"
+          // Hidden at rest, so it can't peek around the row's rounded corners.
+          style={{ width: SWIPE_WIDTH, visibility: x === 0 && !dragging ? 'hidden' : 'visible' }}
         >
-          {a.label} {a.covered ? '✓' : '— missing'}
-        </span>
-      ))}
+          Remove
+        </button>
+      )}
+      <div
+        className="relative touch-pan-y"
+        style={{ transform: `translateX(${x}px)`, transition: dragging ? 'none' : 'transform 200ms' }}
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onClickCapture={clickCapture}
+      >
+        {children}
+      </div>
     </div>
   )
+}
+
+// Drag-to-reorder by a handle: the row follows your finger within its list
+// while the others slide aside, and letting go calls onDrop(id, newIndex).
+// Rows are found by their data-row attribute inside `container`.
+function useDragReorder(container, idsFor, onDrop) {
+  const [drag, setDrag] = useState(null) // { id, ids, from, to, startY, dy, rects }
+  function start(e, id) {
+    const ids = idsFor(id)
+    const rects = ids.map(x => container.current.querySelector(`[data-row="${x}"]`).getBoundingClientRect())
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const from = ids.indexOf(id)
+    setDrag({ id, ids, from, to: from, startY: e.clientY, dy: 0, rects })
+  }
+  function move(e) {
+    if (!drag) return
+    const dy = e.clientY - drag.startY
+    const r = drag.rects[drag.from]
+    const center = r.top + r.height / 2 + dy
+    const to = drag.rects.filter((x, i) => i !== drag.from && x.top + x.height / 2 < center).length
+    setDrag({ ...drag, dy, to })
+  }
+  function end() {
+    if (!drag) return
+    if (drag.to !== drag.from) onDrop(drag.id, drag.to)
+    setDrag(null)
+  }
+  function style(id) {
+    const i = drag ? drag.ids.indexOf(id) : -1
+    if (i < 0) return undefined
+    if (id === drag.id) return { transform: `translateY(${drag.dy}px)`, position: 'relative', zIndex: 10 }
+    const gap = drag.rects[drag.from].height + 8
+    const shift = drag.from < drag.to && i > drag.from && i <= drag.to ? -gap
+      : drag.to < drag.from && i >= drag.to && i < drag.from ? gap : 0
+    return { transform: `translateY(${shift}px)`, transition: 'transform 150ms' }
+  }
+  return {
+    dragging: drag?.id,
+    style,
+    handlers: id => ({ onPointerDown: e => start(e, id), onPointerMove: move, onPointerUp: end, onPointerCancel: end }),
+  }
 }
 
 // A bank, one group at a time. Tabs pick the group (suggested first; groups
@@ -795,114 +955,117 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
   )
 }
 
-// A plan's exercises: ↑ / ↓ to reorder (steadier than dragging mid-set), ✕ to
-// remove, and + to add from the exercise bank — only exercises that fit the
-// plan. Below, the Core section's own list while Core is on.
-function ExerciseOrder({ workoutId, store }) {
-  const { main, core, coreOn } = store.getExerciseSections(workoutId)
-  const [adding, setAdding] = useState(null) // 'main' | 'core'
-  const [removing, setRemoving] = useState(null) // { ex, gaps } waiting on "remove anyway"
-
-  // Removing the only exercise for an area asks first.
-  function remove(ex) {
-    const list = isCore(ex) ? core : main
-    const gaps = gapsAfter(list, list.filter(x => x.id !== ex.id), isCore(ex) ? 'core' : workoutId)
-    if (gaps.length) setRemoving({ ex, gaps })
-    else store.removeExercise(workoutId, ex.id)
-  }
-  const icon = (d, disabled, onClick, label) => (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="w-9 h-9 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center active:bg-stone-200 disabled:opacity-30"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d={d} />
-      </svg>
-    </button>
-  )
-  const rows = (list, minOne) => (
-    <div className="space-y-1.5">
-      {list.map((ex, i) => (
-        <div key={ex.id} className="flex items-center gap-1.5 rounded-xl bg-stone-50 pl-3 pr-1.5 py-1.5">
-          <span className="text-xs font-semibold text-stone-400 w-4 shrink-0">{i + 1}</span>
-          <span className="flex-1 min-w-0 truncate text-sm text-stone-700">{ex.name}</span>
-          {icon('M18 15l-6-6-6 6', i === 0, () => store.moveExercise(workoutId, ex.id, -1), `Move ${ex.name} up`)}
-          {icon('M6 9l6 6 6-6', i === list.length - 1, () => store.moveExercise(workoutId, ex.id, 1), `Move ${ex.name} down`)}
-          {icon('M6 6l12 12M18 6L6 18', minOne && list.length <= 1, () => remove(ex), `Remove ${ex.name}`)}
-        </div>
-      ))}
-    </div>
-  )
-  const addBtn = (label, section) => (
-    <button
-      onClick={() => setAdding(section)}
-      className="w-full py-3 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 transition-colors"
-    >
-      {label}
-    </button>
-  )
+// A part's heading in a plan: its name, and on the right its progress (blue
+// once it's all done).
+function PartHead({ title, pill, right, done }) {
   return (
-    <>
-      <CoverageRow list={main} area={workoutId} />
-      {rows(main, true)}
-      {addBtn('+ Add exercise', 'main')}
-      {/* The Core section's own list, while Core is on (switch at the top). */}
-      {coreOn && (
-        <div className="pt-4 border-t border-stone-100 space-y-3">
-          <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Core</p>
-          <CoverageRow list={core} area="core" />
-          {core.length > 0 ? rows(core, false) : <p className="text-sm text-stone-400">No core exercises yet.</p>}
-          {addBtn('+ Add core exercise', 'core')}
-        </div>
-      )}
-      {removing && (
-        <ConfirmSheet
-          title={`Leave ${removing.gaps.join(' and ')} uncovered?`}
-          body={`${removing.ex.name} is the only exercise here for ${removing.gaps.join(' and ')}.`}
-          confirmLabel="Remove anyway"
-          onConfirm={() => { store.removeExercise(workoutId, removing.ex.id); setRemoving(null) }}
-          onClose={() => setRemoving(null)}
-        />
-      )}
-      {adding && (
-        <ExercisePicker
-          workoutId={workoutId}
-          store={store}
-          section={adding}
-          onPick={id => { store.addExercise(workoutId, id); setAdding(null) }}
-          onClose={() => setAdding(null)}
-        />
-      )}
-    </>
+    <div className="flex items-baseline justify-between gap-3 px-1 pt-3 first:pt-0">
+      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">{title}</p>
+      <span className="flex items-baseline gap-2">
+        {pill}
+        {right && <span className={`text-xs font-semibold ${done ? 'text-accent-500' : 'text-stone-400'}`}>{right}</span>}
+      </span>
+    </div>
   )
 }
 
-// Optional timed warm-up, tinted blue so it stands apart from the lifts.
-function WarmupCard({ minutes, done, onStart, onToggle }) {
-  return (
-    <div className="rounded-2xl p-4 bg-accent-50 border border-accent-200 flex items-center gap-3">
-      <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform" aria-label={done ? 'Untick warm-up' : 'Tick warm-up'}>
-        <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
-          done ? 'border-accent-500 bg-accent-500' : 'border-accent-200 bg-white'
-        }`}>
-          {done && (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-        </div>
+// The warm-up at the top of a plan. Until it's added, a dashed "Add a
+// warm-up" row. Added, a card of sets, each with its length and effort,
+// run back to back by Start. Once ticked it folds to one line; tap to reopen.
+const warmupSetLabel = x => `${x.minutes} min ${x.hard ? 'hard' : 'easy'}`
+function WarmupCard({ workoutId, store, onStart }) {
+  const [reopened, setReopened] = useState(false)
+  const { on, sets } = store.getWarmup(workoutId)
+  const done = store.getWarmupDone(workoutId)
+
+  if (!on) {
+    return (
+      <button
+        onClick={() => store.addWarmup(workoutId)}
+        className="w-full flex items-center gap-2 rounded-2xl border-[1.5px] border-dashed border-stone-300 px-4 py-3 text-left active:bg-stone-100"
+      >
+        <span className="text-accent-500 text-xl leading-none">+</span>
+        <span className="font-semibold text-stone-500">Add a warm-up</span>
+        <span className="ml-auto text-xs text-stone-400">counts as cardio</span>
       </button>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-accent-600">{done ? 'Warm-up done' : 'Warm-up'}</p>
-        <p className="text-sm text-stone-500">{minutes} min · treadmill, bike or rower</p>
-      </div>
-      {!done && (
-        <button onClick={onStart} className="px-4 h-9 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 shrink-0">
-          Start
+    )
+  }
+
+  const minutes = sets.reduce((n, x) => n + x.minutes, 0)
+  const cardio = sets.reduce((n, x) => n + x.minutes * (x.hard ? 2 : 1), 0)
+  const summary = sets.length === 1
+    ? warmupSetLabel(sets[0])
+    : `${minutes} min · ${sets.map(x => `${x.minutes} ${x.hard ? 'hard' : 'easy'}`).join(' + ')}`
+  const toggle = () => {
+    store.setWarmupDone(workoutId, !done)
+    setReopened(false)
+  }
+
+  if (done && !reopened) {
+    return (
+      <button
+        onClick={() => setReopened(true)}
+        className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-accent-50 border border-accent-200 text-left active:opacity-70"
+      >
+        <span className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+        </span>
+        <span className="font-semibold text-accent-600">Warm-up</span>
+        <span className="text-sm text-stone-500 ml-auto truncate">{summary}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+      </button>
+    )
+  }
+
+  const effort = (x, i, hard) => (
+    <button
+      onClick={() => store.setWarmupSet(workoutId, i, { hard })}
+      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${x.hard === hard ? 'bg-accent-500 text-white' : 'bg-white text-stone-500'}`}
+    >
+      {hard ? 'Hard' : 'Easy'}
+    </button>
+  )
+  const step = 'w-8 h-8 rounded-lg bg-white flex items-center justify-center text-stone-600 font-medium active:bg-stone-100 disabled:opacity-30'
+
+  return (
+    <div className="rounded-2xl p-4 bg-accent-50 border border-accent-200 space-y-3">
+      <div className="flex items-center gap-3">
+        <button onClick={toggle} className="shrink-0 active:scale-95 transition-transform" aria-label={done ? 'Untick warm-up' : 'Tick warm-up'}>
+          <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${done ? 'border-accent-500 bg-accent-500' : 'border-accent-200 bg-white'}`}>
+            {done && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+          </div>
         </button>
-      )}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-accent-600">{done ? 'Warm-up done' : 'Warm-up'}</p>
+          <p className="text-sm text-stone-500">{summary} · {cardio} cardio min</p>
+        </div>
+        {!done && (
+          <button onClick={onStart} className="px-4 h-9 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 shrink-0">
+            Start
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        {sets.map((x, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-xl bg-white/60 px-2 py-1.5">
+            <span className="w-4 text-xs font-semibold text-stone-400 text-center">{i + 1}</span>
+            <button onClick={() => store.setWarmupSet(workoutId, i, { minutes: x.minutes - 1 })} disabled={x.minutes <= 1} className={step} aria-label={`Set ${i + 1} shorter`}>−</button>
+            <span className="w-12 text-center text-sm font-bold text-stone-900">{x.minutes} min</span>
+            <button onClick={() => store.setWarmupSet(workoutId, i, { minutes: x.minutes + 1 })} disabled={x.minutes >= 60} className={step} aria-label={`Set ${i + 1} longer`}>+</button>
+            <span className="flex gap-1 ml-1">{effort(x, i, false)}{effort(x, i, true)}</span>
+            {sets.length > 1 && (
+              <button onClick={() => store.removeWarmupSet(workoutId, i)} className="ml-auto w-7 h-7 rounded-lg text-stone-400 flex items-center justify-center active:bg-white" aria-label={`Remove set ${i + 1}`}>✕</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={() => store.addWarmupSet(workoutId)} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>
+        {done && <button onClick={() => setReopened(false)} className="text-xs font-medium text-stone-400 active:text-stone-600">Collapse</button>}
+        <button onClick={() => store.removeWarmup(workoutId)} className="ml-auto text-xs font-medium text-stone-400 active:text-stone-600">Remove warm-up</button>
+      </div>
     </div>
   )
 }
@@ -968,12 +1131,35 @@ function ClockIcon({ size = 16, color = 'var(--color-accent-500)' }) {
 
 // Bottom sheet for an exercise's or stretch's settings — the list underneath
 // never moves, and the controls are big enough to hit mid-set.
+// A sheet that slides up over the page; pull it down to close it. Dragging
+// on the shade does nothing (touch-none), and scrolling the sheet stops at
+// its ends (overscroll-contain), so the page behind never moves. It's drawn
+// at the top of the page (a portal), so a row that slides or drags can't
+// trap it.
 export function SettingsSheet({ title, closeLabel = 'Done', onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+  const panel = useRef(null)
+  const { offset, dragging, fade } = useDragToClose(panel, onClose)
+  // React still passes events up to the component that opened the sheet (a
+  // swipeable row, say); stop them here so touching the sheet can't move it.
+  const stop = e => e.stopPropagation()
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center touch-none"
+      onClick={e => { stop(e); onClose() }}
+      onPointerDown={stop}
+      onPointerMove={stop}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+    >
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
-        className="bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto"
-        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        ref={panel}
+        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
+        style={{
+          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+          transform: `translateY(${offset}px)`,
+          transition: dragging ? 'none' : 'transform 180ms ease-out',
+        }}
         onClick={e => e.stopPropagation()}
       >
         <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
@@ -985,7 +1171,8 @@ export function SettingsSheet({ title, closeLabel = 'Done', onClose, children })
         </div>
         <div className="space-y-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1121,7 +1308,7 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
 // ── Exercise card ────────────────────────────────────────────────────────────
 // Open, it's the full card with its sets. Folded, it's one line: finished
 // exercises tinted with a tick, the rest with a dot per set. Tap to open.
-function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTimer, onSetDone }) {
+function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone }) {
   const [showSettings, setShowSettings] = useState(false)
 
   const log = store.getLog(workoutId, exercise)
@@ -1138,20 +1325,20 @@ function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTim
 
   if (!open && !allDone) {
     return (
-      <button
-        onClick={onOpen}
-        className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-white shadow-sm text-left active:opacity-70"
-      >
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
-          <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
-        </span>
-        <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.sets.filter(x => x.done).length} of ${log.sets.length} sets done`}>
-          {log.sets.map((x, i) => (
-            <span key={i} className={`w-2 h-2 rounded-full ${x.done ? 'bg-accent-500' : 'bg-stone-200'}`} />
-          ))}
-        </span>
-      </button>
+      <div className="flex items-center rounded-2xl bg-white shadow-sm">
+        <DragHandle name={exercise.name} {...grip} />
+        <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
+            <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
+          </span>
+          <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.sets.filter(x => x.done).length} of ${log.sets.length} sets done`}>
+            {log.sets.map((x, i) => (
+              <span key={i} className={`w-2 h-2 rounded-full ${x.done ? 'bg-accent-500' : 'bg-stone-200'}`} />
+            ))}
+          </span>
+        </button>
+      </div>
     )
   }
 
@@ -1160,19 +1347,19 @@ function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTim
       ? `${log.sets.length} × ${log.sets[0]?.reps ?? 0}s`
       : `${log.weight > 0 ? `${fmt(log.weight)} lbs · ` : ''}${log.sets.map(x => x.reps).join(', ')}`
     return (
-      <button
-        onClick={onOpen}
-        className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-accent-50 border border-accent-200 text-left active:opacity-70"
-      >
-        <span className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </span>
-        <span className="font-semibold text-accent-600 truncate">{exercise.name}</span>
-        <span className="text-sm text-stone-500 ml-auto shrink-0">{done}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
-      </button>
+      <div className="flex items-center rounded-2xl bg-accent-50 border border-accent-200">
+        <DragHandle name={exercise.name} {...grip} />
+        <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
+          <span className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span className="font-semibold text-accent-600 truncate">{exercise.name}</span>
+          <span className="text-sm text-stone-500 ml-auto shrink-0">{done}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+        </button>
+      </div>
     )
   }
 
@@ -1258,16 +1445,14 @@ function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTim
             − Remove set
           </button>
         )}
-        {allDone && (
-          <button onClick={onClose} className="text-xs font-medium text-stone-400 ml-auto active:text-stone-600">
-            Collapse
-          </button>
-        )}
         {someDone && !allDone && (
           <span className="text-xs text-stone-400 ml-auto">
             {log.sets.filter(x => x.done).length}/{log.sets.length} done
           </span>
         )}
+        <button onClick={onClose} className={`text-xs font-medium text-stone-400 active:text-stone-600 ${someDone && !allDone ? '' : 'ml-auto'}`}>
+          Collapse
+        </button>
       </div>
 
       {showSettings && (
@@ -1344,6 +1529,26 @@ function ExerciseCard({ exercise, workoutId, store, open, onOpen, onClose, onTim
         </SettingsSheet>
       )}
     </div>
+  )
+}
+
+// The grip at the left of a folded exercise: press and drag to reorder.
+// touch-none keeps the page from scrolling while you drag it.
+function DragHandle({ name, ...handlers }) {
+  return (
+    <span
+      data-grip
+      role="button"
+      aria-label={`Drag to reorder ${name}`}
+      className="self-stretch flex items-center pl-2.5 pr-1.5 text-stone-300 touch-none cursor-grab active:cursor-grabbing active:text-accent-500"
+      {...handlers}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" />
+        <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+        <circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+      </svg>
+    </span>
   )
 }
 
@@ -1466,15 +1671,6 @@ function LoadHero({ equipment, weight, bar, onChange }) {
 }
 
 // ── Building blocks for the settings sheet ──────────────────────────────────
-function SheetSection({ title, children }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">{title}</p>
-      {children}
-    </div>
-  )
-}
-
 export function Segmented({ label, value, options, onChange }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -1511,14 +1707,15 @@ export function ToggleRow({ label, detail, on, onChange }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
-function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
+function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
 
   return (
     <div className={`rounded-2xl p-4 transition-all ${
       checked ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        {grip && <span className="-ml-3.5 -mr-1 -my-4 self-stretch flex"><DragHandle name={stretch.name} {...grip} /></span>}
         <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform">
           <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             checked ? 'border-accent-500 bg-accent-500' : 'border-stone-200'
@@ -1539,13 +1736,14 @@ function StretchCard({ stretch, checked, onToggle, onTimer, customDuration, onDu
           <button
             onClick={() => setShowSettings(true)}
             aria-label={`${stretch.name} settings`}
-            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
+            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors"
           >
             <GearIcon size={20} />
           </button>
           <button
             onClick={onTimer}
-            className="w-11 h-11 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
+            aria-label={`Time ${stretch.name}`}
+            className="w-10 h-10 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
           >
             <ClockIcon size={20} />
           </button>

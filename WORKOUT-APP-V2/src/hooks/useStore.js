@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY } from '../data/workout'
+import { useCallback, useEffect, useState } from 'react'
+import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
@@ -11,7 +11,7 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //   Remembered — never cleared:
 //     exerciseSettings  { [exerciseId]: { bar, weight, reps: [n, …], holds: [seconds, …] } }
 //     setup             { [exerciseId]: { mode: 'reps' | 'hold', perSide, restOn, rest } }
-//     warmups           { [workoutId]: { on, minutes } }
+//     warmups           { [workoutId]: { on, sets: [{ minutes, hard }, …] } }  (a ticked warm-up counts as cardio)
 //     order             { [workoutId]: [exerciseId, …] }  (a plan's exercises, in order, from the bank)
 //     coreLists         { [workoutId]: [exerciseId, …] }  (its Core section)
 //     coreOn            { [workoutId]: bool }              (whether the Core section is on)
@@ -27,6 +27,8 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     lastBackupAt      ISO time of the last backup file you saved
 //     history           [weekSummary, …] newest first — saved by each reset, never cleared
 //     lastResetAt       ISO time of the last reset (the start of the current week)
+//     goals             { workouts | stretch | cardio: { min, max } }  (your weekly goals; defaults in GOAL_DEFAULTS)
+//     newWeek           { weekStart } while the "new week" note is showing
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool } }
@@ -157,15 +159,29 @@ function cardioSessionsOf(s) {
   const walks = logged.filter(x => x.kind === 'walk').slice(0, countOf(s, 'walk'))
   const missing = countOf(s, 'walk') - walks.length
   out.push(...walks, ...Array.from({ length: missing }, () => ({ kind: 'walk', ...cardioSettingOf(s, 'walk') })))
+  // A gym plan's warm-up, once it's on and ticked.
+  for (const id of GYM_ORDER) {
+    const w = warmupOf(s, id)
+    if (w.on && s.checks?.[id]?.warmup) out.push(...w.sets.map(x => ({ kind: 'warmup', ...x })))
+  }
   return out
+}
+
+// A plan's warm-up: whether it's added, and its sets back to back (5 min easy
+// then 5 hard, say). Older saves kept one length and effort.
+const WARMUP_SET = { minutes: 5, hard: false }
+function warmupOf(s, workoutId) {
+  const saved = s.warmups?.[workoutId]
+  const sets = saved?.sets?.length ? saved.sets : [{ minutes: saved?.minutes ?? WARMUP_SET.minutes, hard: !!saved?.hard }]
+  return { on: saved?.on ?? false, sets }
 }
 
 // Cardio minutes as the health guidelines count them: a hard minute counts
 // as two easy ones. Split by kind for history, plus the total.
 function cardioWeekOf(s) {
-  const by = { class: 0, walk: 0, other: 0 }
+  const by = { class: 0, walk: 0, other: 0, warmup: 0 }
   for (const x of cardioSessionsOf(s)) by[x.kind] += x.minutes * (x.hard ? 2 : 1)
-  return { ...by, total: by.class + by.walk + by.other }
+  return { ...by, total: by.class + by.walk + by.other + by.warmup }
 }
 
 // A kind's logged sessions, in log order: walks (counting any logged before
@@ -361,6 +377,46 @@ function summarize(s, endedAt) {
     lifts,
   }
   return { ...entry, weekStart: calendarWeekOf(entry) }
+}
+
+// Your weekly goals, falling back to the defaults.
+function goalsOf(s) {
+  return Object.fromEntries(Object.entries(GOAL_DEFAULTS).map(([k, d]) => [k, { ...d, ...s.goals?.[k] }]))
+}
+
+// Files the week so far under Past weeks and starts an empty one. Your
+// numbers and settings are left alone. A second save in the same calendar
+// week adds to that week's entry.
+function clearWeek(s, now, weekStart) {
+  const summary = summarize(s, now)
+  const entry = weekStart ? { ...summary, weekStart } : summary
+  const [latest, ...older] = s.history ?? []
+  const history = latest && calendarWeekOf(latest) === entry.weekStart
+    ? [mergeWeeks({ ...latest, weekStart: entry.weekStart }, entry), ...older]
+    : [entry, ...(s.history ?? [])]
+  return {
+    ...s,
+    history,
+    lastResetAt: now,
+    checks: {},
+    activities: {},
+    cardio: [],
+    classLog: [],
+    stretchExtra: 0,
+    stretchLog: [],
+  }
+}
+
+// The week resets itself: the first time the app runs in a new calendar week
+// (Monday–Sunday), the last week is filed under the week it started in and a
+// note says so. A first run just starts the clock.
+export function rollWeek(s, date = new Date()) {
+  if (!s.lastResetAt) return { ...s, lastResetAt: date.toISOString() }
+  const thisWeek = mondayOf(date)
+  if (mondayOf(s.lastResetAt) === thisWeek) return s
+  const weekStart = mondayOf(s.lastResetAt)
+  const monday = new Date(`${thisWeek}T00:00:00`).toISOString()
+  return { ...clearWeek(s, monday, weekStart), newWeek: { weekStart } }
 }
 
 // ── Calendar weeks for history ─────────────────────────────────────────────
@@ -568,7 +624,11 @@ export function useStore() {
       const section = sectionOf(EXERCISE_BY_ID[id])
       const ids = listIds(s, workoutId, section)
       if (section === 'main' && ids.length <= 1) return s
-      return writeList(s, workoutId, section, ids.filter(x => x !== id))
+      const next = writeList(s, workoutId, section, ids.filter(x => x !== id))
+      // Taking away the last core exercise turns the Core section off.
+      return section === 'core' && ids.length === 1 && ids[0] === id
+        ? { ...next, coreOn: { ...next.coreOn, [workoutId]: false } }
+        : next
     })
   }
 
@@ -585,6 +645,18 @@ export function useStore() {
     })
   }
 
+  // Moves an exercise to a place in its own list (main or Core), as when
+  // dragged by its handle.
+  function moveExerciseTo(workoutId, exerciseId, to) {
+    update(s => {
+      const section = sectionOf(EXERCISE_BY_ID[exerciseId])
+      const ids = listIds(s, workoutId, section).filter(id => id !== exerciseId)
+      if (ids.length === listIds(s, workoutId, section).length) return s
+      ids.splice(Math.max(0, Math.min(to, ids.length)), 0, exerciseId)
+      return writeList(s, workoutId, section, ids)
+    })
+  }
+
   // Back to the plan's starting exercises (main and Core), in their order.
   function resetOrder(workoutId) {
     update(s => {
@@ -597,14 +669,41 @@ export function useStore() {
   }
 
   // ── Warm-up per gym workout ──────────────────────────────────────────────
-  // Optional and off by default; when on, a timed warm-up heads the workout.
+  // Off until you add it; then a timed warm-up of one or more sets heads the
+  // workout.
   function getWarmup(workoutId) {
-    const saved = state.warmups?.[workoutId]
-    return { on: saved?.on ?? false, minutes: saved?.minutes ?? 5 }
+    return warmupOf(state, workoutId)
   }
 
-  function setWarmup(workoutId, patch) {
-    update(s => ({ ...s, warmups: { ...s.warmups, [workoutId]: { ...s.warmups?.[workoutId], ...patch } } }))
+  function writeWarmup(workoutId, change) {
+    update(s => {
+      const next = change(warmupOf(s, workoutId))
+      return { ...s, warmups: { ...s.warmups, [workoutId]: { on: next.on, sets: next.sets } } }
+    })
+  }
+
+  function addWarmup(workoutId) {
+    writeWarmup(workoutId, w => ({ ...w, on: true }))
+  }
+
+  // Removing it also clears its tick, so its minutes leave the cardio bar.
+  function removeWarmup(workoutId) {
+    writeWarmup(workoutId, w => ({ ...w, on: false }))
+    setWarmupDone(workoutId, false)
+  }
+
+  function setWarmupSet(workoutId, index, patch) {
+    writeWarmup(workoutId, w => ({ ...w, sets: w.sets.map((x, i) => (i === index ? { ...x, ...patch } : x)) }))
+  }
+
+  // A new set starts like the last one.
+  function addWarmupSet(workoutId) {
+    writeWarmup(workoutId, w => ({ ...w, sets: [...w.sets, { ...w.sets.at(-1) }] }))
+  }
+
+  // There's always at least one set; to drop the last, remove the warm-up.
+  function removeWarmupSet(workoutId, index) {
+    writeWarmup(workoutId, w => (w.sets.length > 1 ? { ...w, sets: w.sets.filter((_, i) => i !== index) } : w))
   }
 
   function getWarmupDone(workoutId) {
@@ -660,6 +759,15 @@ export function useStore() {
       const j = i + delta
       if (i < 0 || j < 0 || j >= ids.length) return s
       ;[ids[i], ids[j]] = [ids[j], ids[i]]
+      return writeStretchList(s, listId, ids)
+    })
+  }
+
+  // Moves a stretch to a place in its list, as when dragged by its handle.
+  function moveStretchTo(listId, id, to) {
+    update(s => {
+      const ids = stretchesOf(s, listId).map(x => x.id).filter(x => x !== id)
+      ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id)
       return writeStretchList(s, listId, ids)
     })
   }
@@ -857,24 +965,37 @@ export function useStore() {
   // second reset in the same calendar week adds to that week's entry.
   function resetChecks() {
     setUndoSnapshot(state)
+    update(s => clearWeek(s, new Date().toISOString()))
+  }
+
+  // Checks for a new week when the app opens and whenever it comes back to
+  // the front (a home-screen app can stay open for days).
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== 'hidden') update(s => rollWeek(s))
+    }
+    check()
+    document.addEventListener('visibilitychange', check)
+    return () => document.removeEventListener('visibilitychange', check)
+  }, [])
+
+  // Stable, so the new-week note's timeout isn't restarted on every render.
+  const dismissNewWeek = useCallback(() => {
+    setState(s => {
+      const next = { ...s }
+      delete next.newWeek
+      saveState(next)
+      return next
+    })
+  }, [])
+
+  // ── Weekly goals ─────────────────────────────────────────────────────────
+  // A max below the min drags the min down with it (and the other way).
+  function setGoal(key, patch) {
     update(s => {
-      const now = new Date().toISOString()
-      const entry = summarize(s, now)
-      const [latest, ...older] = s.history ?? []
-      const history = latest && calendarWeekOf(latest) === entry.weekStart
-        ? [mergeWeeks({ ...latest, weekStart: entry.weekStart }, entry), ...older]
-        : [entry, ...(s.history ?? [])]
-      return {
-        ...s,
-        history,
-        lastResetAt: now,
-        checks: {},
-        activities: {},
-        cardio: [],
-        classLog: [],
-        stretchExtra: 0,
-        stretchLog: [],
-      }
+      const g = { ...goalsOf(s)[key], ...patch }
+      const fixed = 'min' in patch ? { min: g.min, max: Math.max(g.min, g.max) } : { min: Math.min(g.min, g.max), max: g.max }
+      return { ...s, goals: { ...s.goals, [key]: fixed } }
     })
   }
 
@@ -982,9 +1103,14 @@ export function useStore() {
     addExercise,
     removeExercise,
     moveExercise,
+    moveExerciseTo,
     resetOrder,
     getWarmup,
-    setWarmup,
+    addWarmup,
+    removeWarmup,
+    setWarmupSet,
+    addWarmupSet,
+    removeWarmupSet,
     getWarmupDone,
     setWarmupDone,
     getStretchDone,
@@ -994,6 +1120,7 @@ export function useStore() {
     addStretch,
     removeStretch,
     moveStretch,
+    moveStretchTo,
     resetStretches,
     toggleStretch,
     getActivityCount,
@@ -1002,6 +1129,10 @@ export function useStore() {
     hasChecks,
     lastBackupAt: state.lastBackupAt ?? null,
     history: state.history ?? [],
+    goals: goalsOf(state),
+    setGoal,
+    newWeek: state.newWeek ?? null,
+    dismissNewWeek,
     canUndoReset: undoSnapshot !== null,
     undoReset,
     dismissUndo,

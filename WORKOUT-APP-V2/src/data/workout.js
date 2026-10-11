@@ -107,6 +107,15 @@ export const WEEKLY_GOAL = { min: 3, max: 4 }
 // for most of the benefit, 300 the ideal. A hard minute counts as two.
 export const CARDIO_GOAL = { min: 150, max: 300 }
 
+// The weekly goals until you set your own in Settings, with what the health
+// guidelines say for each (shown under its setting).
+export const GOAL_DEFAULTS = { workouts: WEEKLY_GOAL, stretch: WEEKLY_GOAL, cardio: CARDIO_GOAL }
+export const GOAL_SETTINGS = [
+  { id: 'workouts', label: 'Workouts', step: 1, least: 1, advice: 'The American Heart Association recommends moderate- to high-intensity strength training (weights or resistance) at least 2 days a week, working all the major muscle groups, on top of cardio.' },
+  { id: 'stretch', label: 'Stretching', step: 1, least: 1, advice: 'The American College of Sports Medicine recommends stretching at least 2–3 days a week, holding each stretch 10–30 seconds and repeating it 2–4 times, about 60 seconds per stretch in all.' },
+  { id: 'cardio', label: 'Cardio', step: 10, least: 10, advice: 'The American Heart Association recommends 150–300 minutes a week of moderate activity, like brisk walking, or 75–150 minutes of vigorous activity, like running, spread through the week. Hard minutes count double here.' },
+]
+
 // One walk (or other cardio), until you change it. Gym workouts are
 // strength training and don't add cardio minutes.
 // A run, ride or other cardio session counts as a workout once it's long
