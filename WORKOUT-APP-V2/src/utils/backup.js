@@ -3,9 +3,8 @@
 
 const APP = 'workout-tracker-v2'
 
-function stamp(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+// Always the same name, so saving to the same folder replaces the last one.
+const FILE_NAME = 'workout-backup.json'
 
 // Phones and tablets get the share sheet (Save to Files → iCloud Drive);
 // computers just download the file — the Mac share menu has no Files option.
@@ -15,7 +14,7 @@ export const usesShareSheet = typeof navigator !== 'undefined' && navigator.maxT
 // Returns true once the file was handed off, false if the person cancelled.
 export async function shareBackup(data) {
   const payload = { app: APP, version: 1, exportedAt: new Date().toISOString(), data }
-  const name = `workout-backup-${stamp()}.json`
+  const name = FILE_NAME
   const file = new File([JSON.stringify(payload, null, 2)], name, { type: 'application/json' })
 
   if (usesShareSheet && navigator.canShare?.({ files: [file] })) {

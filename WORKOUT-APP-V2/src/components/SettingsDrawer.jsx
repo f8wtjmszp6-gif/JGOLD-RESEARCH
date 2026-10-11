@@ -4,7 +4,7 @@ import { GOAL_SETTINGS } from '../data/workout'
 import { Segmented } from './WorkoutDetail'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
 
-// App settings, in a panel that slides in from the right (and swipes back out
+// App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend), light
 // or dark, and backups.
 export default function SettingsDrawer({ store, theme, onClose }) {
@@ -20,7 +20,7 @@ export default function SettingsDrawer({ store, theme, onClose }) {
         role="dialog"
         aria-label="Settings"
         onClick={e => e.stopPropagation()}
-        className="absolute top-0 right-0 bottom-0 w-[88%] max-w-sm bg-white shadow-xl overflow-y-auto overscroll-contain touch-pan-y animate-[drawer-in_240ms_ease-out]"
+        className="absolute inset-0 bg-white overflow-y-auto overscroll-contain touch-pan-y animate-[drawer-in_240ms_ease-out]"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
@@ -185,7 +185,7 @@ function Backup({ store }) {
         <span className="text-stone-600">Last backup</span>
         <span className="text-sm text-stone-400">{age ? age : 'Never'}</span>
       </div>
-      <p className="text-xs text-stone-400 -mt-2">{usesShareSheet ? 'Save it to Files › iCloud Drive.' : 'Downloads to this computer.'}</p>
+      <p className="text-xs text-stone-400 -mt-2">{usesShareSheet ? 'Save to the same Files folder each time and tap Replace.' : 'Downloads to this computer.'}</p>
       <button onClick={backUp} className={`${btn} bg-accent-500 text-white active:bg-accent-600`}>Back up now</button>
       <button onClick={() => fileInput.current?.click()} className={`${btn} bg-stone-100 text-stone-600 active:bg-stone-200`}>
         Restore from a backup…
