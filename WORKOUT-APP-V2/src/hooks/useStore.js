@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
+import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
+import { weekDays, sameDay } from '../utils/days'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
 
 const STORAGE_KEY = 'workout-tracker-v2'
@@ -31,12 +32,14 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     newWeek           { weekStart } while the "new week" note is showing
 //
 //   Checkmarks — cleared by the header reset:
-//     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool } }
+//     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool,
+//                         at, stretchedAt } }  (when its first set was ticked / its last stretch)
 //     activities        { class | walk | rest: count }
 //     stretchExtra      count of stretch sessions done on your own
 //     stretchLog        [{ at, minutes }, …] — how long each of those was
 //     cardio            [{ kind: 'walk' | 'other', minutes, hard }, …] — one per session
 //     classLog          [{ at, cardio, minutes, hard, strength, areas, stretch, stretchMinutes }, …] — one per class
+//     restLog           [at, …] — when each rest day was added
 
 function lowReps(repsStr) {
   const n = parseInt(String(repsStr).split('–')[0])
@@ -106,8 +109,48 @@ function writeSettings(s, exercise, fn) {
   }
 }
 
+// Also stamps the day, for the week strip: `at` once a set is ticked (gone
+// again if every set is unticked), `stretchedAt` once every stretch is.
 function writeChecks(s, workoutId, fn) {
-  return { ...s, checks: { ...s.checks, [workoutId]: fn(s.checks?.[workoutId] ?? {}) } }
+  const next = fn(s.checks?.[workoutId] ?? {})
+  const now = new Date().toISOString()
+  const lifted = Object.values(next.exercises ?? {}).some(t => t.some(Boolean))
+  const list = stretchesOf(s, workoutId)
+  const stretched = list.length > 0 && list.every(x => next.stretches?.[x.id])
+  const { at, stretchedAt, ...rest } = next
+  const stamped = { ...rest, ...(lifted && { at: at ?? now }), ...(stretched && { stretchedAt: stretchedAt ?? now }) }
+  return { ...s, checks: { ...s.checks, [workoutId]: stamped } }
+}
+
+// What was done on each day of this week, Monday to Sunday, for the week
+// strip: [{ kind, icon, label, tags? }, …] per day. A class's tags say what
+// it was: cardio length and effort, the areas worked, stretching. Things logged before days were
+// saved have no day, so they don't show.
+function dayLogOf(s, now = new Date()) {
+  const items = []
+  const add = (at, kind, icon, label, tags) => at && items.push({ at: new Date(at), kind, icon, label, tags })
+  for (const id of GYM_ORDER) {
+    add(s.checks?.[id]?.at, 'plan', id, workouts[id].short)
+    add(s.checks?.[id]?.stretchedAt, 'stretch', 'stretch', `Stretched · ${workouts[id].short}`)
+  }
+  add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, 'stretch', 'stretch', STRETCH_ROUTINE.name)
+  for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, 'stretch', 'stretch', `Cool-down · ${COOL_DOWN_BY_ID[c.id].label}`)
+  for (const c of classesOf(s)) {
+    const areas = c.strength ? c.areas ?? [] : []
+    add(c.at, 'class', 'class', 'Class', [
+      c.cardio && { kind: 'cardio', text: `${c.minutes} min ${c.hard ? 'hard' : 'easy'} cardio` },
+      areas.length > 0 && { kind: 'strength', text: areas.length === CLASS_AREAS.length ? 'Full body' : CLASS_AREAS.filter(a => areas.includes(a.id)).map(a => a.label).join(' · ') },
+      c.stretch && { kind: 'stretch', text: `Stretch${c.stretchMinutes ? ` ${c.stretchMinutes} min` : ''}` },
+    ].filter(Boolean))
+  }
+  for (const x of s.cardio ?? []) {
+    if (x.kind === 'walk') add(x.at, 'walk', 'walk', `Walk · ${x.minutes} min`)
+    else add(x.at, 'cardio', 'cardio', `Cardio · ${x.minutes} min${x.hard ? ' hard' : ''}`)
+  }
+  for (const x of ownStretchesOf(s)) add(x.at, 'stretch', 'stretch', x.minutes ? `Stretched · ${x.minutes} min` : 'Stretched')
+  for (const at of s.restLog ?? []) add(at, 'rest', 'rest', 'Rest day')
+  items.sort((a, b) => a.at - b.at)
+  return weekDays(now).map(day => items.filter(x => sameDay(x.at, day)).map(({ kind, icon, label, tags }) => ({ kind, icon, label, tags })))
 }
 
 function writeTicks(s, workoutId, exercise, fn) {
@@ -406,6 +449,7 @@ function clearWeek(s, now, weekStart) {
     classLog: [],
     stretchExtra: 0,
     stretchLog: [],
+    restLog: [],
   }
 }
 
@@ -804,6 +848,7 @@ export function useStore() {
     if (id === 'class') return logClass(lastClassOf(state))
     update(s => {
       const next = { ...s, activities: { ...s.activities, [id]: countOf(s, id) + 1 } }
+      if (id === 'rest') return { ...next, restLog: [...(s.restLog ?? []), new Date().toISOString()] }
       if (!CARDIO_DEFAULTS[id]) return next
       const kept = cardioSessionsOf(s).filter(x => x.kind === id)
       const others = (s.cardio ?? []).filter(x => x.kind !== id)
@@ -817,7 +862,9 @@ export function useStore() {
       activities: { ...s.activities, [id]: Math.max(0, countOf(s, id) - 1) },
       ...(id === 'class'
         ? { classLog: classesOf(s).slice(0, -1) }
-        : { cardio: dropLastCardio(s.cardio ?? [], id) }),
+        : id === 'rest'
+          ? { restLog: (s.restLog ?? []).slice(0, -1) }
+          : { cardio: dropLastCardio(s.cardio ?? [], id) }),
     }))
   }
 
@@ -1132,6 +1179,7 @@ export function useStore() {
     addActivity,
     removeActivity,
     hasChecks,
+    dayLog: dayLogOf(state),
     lastBackupAt: state.lastBackupAt ?? null,
     history: state.history ?? [],
     goals: goalsOf(state),

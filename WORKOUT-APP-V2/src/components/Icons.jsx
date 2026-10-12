@@ -95,9 +95,9 @@ const COLORS = {
   rest: 'text-indigo-600',
 }
 
-// `size` in px. Small icons (the This week chips) get heavier lines so they
-// don't vanish.
-export function TileIcon({ id, size = 36 }) {
+// `size` in px. Small icons (the This week chips, the week strip) get heavier
+// lines so they don't vanish. `color` overrides the tile's text color.
+export function TileIcon({ id, size = 36, color }) {
   return (
     <svg
       viewBox="0 0 48 48"
@@ -105,10 +105,10 @@ export function TileIcon({ id, size = 36 }) {
       height={size}
       fill="none"
       stroke="currentColor"
-      strokeWidth={size < 24 ? 3.2 : 1.9}
+      strokeWidth={size < 16 ? 3.2 : size < 24 ? 2.6 : 1.9}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`${COLORS[id]} shrink-0`}
+      className={`${color ?? COLORS[id]} shrink-0`}
       aria-hidden="true"
     >
       {PATHS[id]}

@@ -1442,8 +1442,11 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </span>
-          <span className="font-semibold text-accent-600 truncate">{exercise.name}</span>
-          <span className="text-sm text-stone-500 ml-auto shrink-0">{done}</span>
+          {/* Name above what was done, like an unfinished row, so long names fit. */}
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold text-accent-600 leading-snug">{exercise.name}</span>
+            <span className="block text-sm text-stone-500">{done}</span>
+          </span>
           <Chevron />
         </button>
       </div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, COOL_DOWNS, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
 import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
 import { TileIcon } from './Icons'
+import WeekStrip from './WeekStrip'
 import { weekDays, sameDay, dayLabel, inDayOrder } from '../utils/days'
 
 // The homepage shows one group at a time, picked by these tabs. The last tab
@@ -60,6 +61,9 @@ export default function Home({ store, onOpenWorkout }) {
   return (
     <div className="h-full flex flex-col">
       {/* The tabs stay put; only what's under them scrolls. */}
+      <div className="shrink-0 px-5 pb-3">
+        <WeekStrip dayLog={store.dayLog} />
+      </div>
       <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
         <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
           {TABS.map(([id, label]) => (
@@ -246,7 +250,7 @@ function ClassLine({ entry, onEdit }) {
   return (
     <LineButton label={`${day} class`} onEdit={onEdit}>
       <span className="w-12 font-semibold text-stone-600">{day}</span>
-      {entry.cardio && <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{entry.minutes} min {entry.hard ? 'hard' : 'easy'}</span>}
+      {entry.cardio && <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{entry.minutes} min {entry.hard ? 'hard' : 'easy'} cardio</span>}
       {strength && <span className={`${TAG} bg-orange-50 text-orange-700`}>{areasLabel(entry.areas)}</span>}
       {entry.stretch && <span className={`${TAG} bg-teal-50 text-teal-700`}>Stretch{entry.stretchMinutes ? ` ${entry.stretchMinutes} min` : ''}</span>}
       {!classIsWorkout(entry) && <span className="text-xs text-stone-400">Not a workout</span>}

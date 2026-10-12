@@ -47,7 +47,11 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
       {/* The live week's title is the day and how many are left; a saved
           week's is its dates. */}
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
-        {live ? <DaysLeft /> : <p className="text-sm font-medium text-stone-500">{title}</p>}
+        {live ? (
+          <DaysLeft>
+            <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} />
+          </DaysLeft>
+        ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
         {figure}
       </div>
       <div className="space-y-2">
@@ -56,7 +60,9 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
         {cardio && <CardioRow minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 mt-2.5">
+      {/* A count per activity on saved weeks; the live week has the day strip
+          under it instead. */}
+      {!live && <div className="flex flex-wrap items-center gap-1 mt-2.5">
         {CHIPS.map(k => {
           const n = chipCounts[k.id]
           return (
@@ -71,25 +77,27 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
             </span>
           )
         })}
-        {live && <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} />}
-      </div>
+      </div>}
       {children}
     </div>
   )
 }
 
-// The live week's title: "Sat · 2 days left" (or "last day").
-function DaysLeft() {
+// The live week's title: "Sat · 2 days left" (or "last day"), then what's
+// still to go.
+function DaysLeft({ children }) {
   const { day, daysLeft } = weekDay()
   return (
-    <p className="text-sm text-stone-500">
-      <span className="font-semibold text-stone-800">{day}</span> · {daysLeft === 1 ? 'last day' : `${daysLeft} days left`}
+    // What's left moves to its own line as a whole when it won't fit.
+    <p className="text-sm text-stone-500 flex flex-wrap gap-x-3">
+      <span><span className="font-semibold text-stone-800">{day}</span> · {daysLeft === 1 ? 'last day' : `${daysLeft} days left`}</span>
+      <span className="whitespace-nowrap">{children}</span>
     </p>
   )
 }
 
-// What's still needed to reach each minimum, short enough to sit beside the
-// icons: "1 workout, 3 stretches to go", or "All goals met ✓".
+// What's still needed to reach each minimum: "1 workout, 3 stretches to go",
+// or "All goals met ✓".
 function ToGo({ goals, workouts, stretches, cardio }) {
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
   const needs = []
@@ -97,6 +105,6 @@ function ToGo({ goals, workouts, stretches, cardio }) {
   if (stretches < goals.stretch.min) needs.push(plural(goals.stretch.min - stretches, 'stretch', 'stretches'))
   if (cardio !== null && cardio < goals.cardio.min) needs.push(`${goals.cardio.min - cardio} cardio min`)
   return needs.length
-    ? <span className="ml-auto text-xs text-stone-500">{needs.join(', ')} to go</span>
-    : <span className="ml-auto text-xs font-semibold text-emerald-700">All goals met ✓</span>
+    ? `${needs.join(', ')} to go`
+    : <span className="font-semibold text-emerald-700">All goals met ✓</span>
 }
