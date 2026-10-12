@@ -1117,31 +1117,9 @@ function InfoIcon({ size = 18 }) {
   )
 }
 
-// ⓘ next to an exercise's or stretch's gear: how to do it, in a sheet.
-function HowToButton({ item, kind, className }) {
-  const [open, setOpen] = useState(false)
-  if (!HOWTO[item.id]) return null
-  return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label={`How to do ${item.name}`}
-        className={`${className} rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors`}
-      >
-        <InfoIcon size={20} />
-      </button>
-      {open && (
-        <SettingsSheet title={item.name} tall onClose={() => setOpen(false)}>
-          <HowToBody item={item} kind={kind} />
-        </SettingsSheet>
-      )}
-    </>
-  )
-}
-
 // ••• and its little menu. It's drawn over the page (rows clip anything that
 // sticks out) under the button, or above it near the bottom of the screen.
-function MoreMenu({ label, items }) {
+function MoreMenu({ label, items, size = 'w-8 h-8 rounded-lg' }) {
   const button = useRef(null)
   const [at, setAt] = useState(null) // where the open menu sits
   function open() {
@@ -1158,13 +1136,13 @@ function MoreMenu({ label, items }) {
         aria-label={`More for ${label}`}
         aria-haspopup="menu"
         aria-expanded={!!at}
-        className="w-8 h-8 shrink-0 rounded-lg bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors"
+        className={`${size} shrink-0 bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors`}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
       </button>
       {at && createPortal(
         <div className="fixed inset-0 z-50" onClick={e => { stop(e); setAt(null) }} onPointerDown={stop} onPointerMove={stop} onPointerUp={stop}>
-          <div role="menu" className="absolute w-48 rounded-xl bg-white shadow-xl border border-stone-200 p-1 animate-[fade-in_120ms_ease-out]" style={at}>
+          <div role="menu" className="absolute min-w-48 whitespace-nowrap rounded-xl bg-white shadow-xl border border-stone-200 p-1 animate-[fade-in_120ms_ease-out]" style={at}>
             {items.map(x => (
               <button
                 key={x.label}
@@ -1181,6 +1159,15 @@ function MoreMenu({ label, items }) {
         document.body,
       )}
     </>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M8 12.5l2.8 2.8L16 10" />
+    </svg>
   )
 }
 
@@ -1396,6 +1383,7 @@ function CloseButton({ label, onClick }) {
 // with a dot per set. Tap to open.
 function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone }) {
   const [showSettings, setShowSettings] = useState(false)
+  const [showHow, setShowHow] = useState(false)
 
   const log = store.getLog(workoutId, exercise)
   const equipment = store.getEquipment(exercise)
@@ -1469,14 +1457,6 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           </p>
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          <HowToButton item={exercise} kind="exercise" className="w-10 h-10" />
-          <button
-            onClick={() => setShowSettings(true)}
-            aria-label={`${exercise.name} settings`}
-            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors mr-1.5"
-          >
-            <GearIcon size={20} />
-          </button>
           {onTimer && (
             <button
               onClick={onTimer}
@@ -1485,15 +1465,18 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
               <ClockIcon size={19} />
             </button>
           )}
-          <button
-            onClick={() => { store.toggleExercise(workoutId, exercise); if (!allDone) onClose() }}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors text-xs font-bold ${
-              allDone ? 'bg-accent-500 text-white' : 'bg-stone-100 text-stone-400 active:bg-stone-200'
-            }`}
-            aria-label={allDone ? 'Untick all sets' : 'Tick all sets'}
-          >
-            {allDone ? '✓' : 'All'}
-          </button>
+          {/* How-to, settings and ticking every set live in •••. */}
+          <MoreMenu
+            label={exercise.name}
+            size="w-10 h-10 rounded-xl"
+            items={[
+              HOWTO[exercise.id] && { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => setShowHow(true) },
+              { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
+              allDone
+                ? { label: 'Untick all sets', icon: <CheckIcon />, onClick: () => store.toggleExercise(workoutId, exercise) }
+                : { label: 'Mark all sets done', icon: <CheckIcon />, onClick: () => { store.toggleExercise(workoutId, exercise); onClose() } },
+            ].filter(Boolean)}
+          />
           <CloseButton label={exercise.name} onClick={onClose} />
         </div>
       </div>
@@ -1542,6 +1525,12 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           </span>
         )}
       </div>
+
+      {showHow && (
+        <SettingsSheet title={exercise.name} tall onClose={() => setShowHow(false)}>
+          <HowToBody item={exercise} kind="exercise" />
+        </SettingsSheet>
+      )}
 
       {showSettings && (
         <SettingsSheet title={exercise.name} tall onClose={() => setShowSettings(false)}>
