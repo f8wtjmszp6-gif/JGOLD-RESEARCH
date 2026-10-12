@@ -1813,10 +1813,10 @@ function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration
         <button
           onClick={onTimer}
           aria-label={`Time ${stretch.name}, ${customDuration} seconds${runs > 1 ? `, ${runs} times` : ''}`}
-          className="w-[74px] h-8 shrink-0 rounded-lg bg-accent-100 flex items-center pl-2 pr-0.5 active:bg-accent-200 transition-colors"
+          className="w-[88px] h-8 shrink-0 rounded-lg bg-accent-100 flex items-center pl-2 pr-1 active:bg-accent-200 transition-colors"
         >
           <ClockIcon size={14} />
-          <span className="flex-1 text-center text-[13px] font-semibold text-accent-600 tabular-nums">
+          <span className="flex-1 text-center text-[13px] font-semibold text-accent-600 tabular-nums whitespace-nowrap">
             {customDuration}s{runs > 1 ? ` ×${runs}` : ''}
           </span>
         </button>
