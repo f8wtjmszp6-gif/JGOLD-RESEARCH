@@ -43,16 +43,6 @@ export default function Home({ store, onOpenWorkout }) {
   const open = (type, edit) => setSheet({ type, edit })
   const close = () => setSheet(null)
   const byId = id => activities.find(a => a.id === id)
-  const activityCard = a => (
-    <ActivityCard
-      key={a.id}
-      activity={a}
-      icon={a.id}
-      count={store.getActivityCount(a.id)}
-      onAdd={() => store.addActivity(a.id)}
-      onRemove={() => store.removeActivity(a.id)}
-    />
-  )
   const walk = byId('walk')
   const walks = store.walks
   const other = store.otherCardio
@@ -164,7 +154,25 @@ export default function Home({ store, onOpenWorkout }) {
 
         {tab === 'rest' && (
           <Section title="Rest">
-            {activityCard(byId('rest'))}
+            {/* + asks which day; each rest day is listed, tap one to move it. */}
+            <ActivityCard
+              activity={byId('rest')}
+              icon="rest"
+              count={store.restDays.length}
+              onAdd={() => open('rest')}
+              onRemove={() => store.removeActivity('rest')}
+            >
+              {store.restDays.length > 0 && (
+                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+                  {inDayOrder(store.restDays.map(at => ({ at }))).map(e => (
+                    <LineButton key={e.index} label={`${dayLabel(e.entry.at)} rest day`} onEdit={() => open('rest', e)}>
+                      <span className="w-12 font-semibold text-stone-600">{dayLabel(e.entry.at)}</span>
+                      <span className="text-stone-500">Rest day</span>
+                    </LineButton>
+                  ))}
+                </div>
+              )}
+            </ActivityCard>
           </Section>
         )}
 
@@ -175,6 +183,7 @@ export default function Home({ store, onOpenWorkout }) {
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
+      {sheet?.type === 'rest' && <RestSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
     </div>
   )
@@ -448,6 +457,27 @@ function DayPicker({ at, onChange }) {
 }
 
 // Deleting asks once more, in place.
+// Adds a rest day, or moves or deletes one: which day was it?
+function RestSheet({ store, edit, onClose }) {
+  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
+  return (
+    <SettingsSheet title={edit ? 'Edit rest day' : 'Add a rest day'} closeLabel="Cancel" onClose={onClose}>
+      <DayPicker at={at} onChange={setAt} />
+      <button
+        onClick={() => {
+          if (edit) store.editRest(edit.index, at)
+          else store.addRest(at)
+          onClose()
+        }}
+        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
+      >
+        {edit ? 'Save' : 'Add rest day'}
+      </button>
+      {edit && <DeleteButton what="rest day" onDelete={() => { store.deleteRest(edit.index); onClose() }} />}
+    </SettingsSheet>
+  )
+}
+
 function DeleteButton({ what, onDelete }) {
   const [sure, setSure] = useState(false)
   return (

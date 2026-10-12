@@ -39,7 +39,7 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     stretchLog        [{ at, minutes }, …] — how long each of those was
 //     cardio            [{ kind: 'walk' | 'other', minutes, hard }, …] — one per session
 //     classLog          [{ at, cardio, minutes, hard, strength, areas, stretch, stretchMinutes }, …] — one per class
-//     restLog           [at, …] — when each rest day was added
+//     restLog           [at | null, …] — the day of each rest day (null: added before days were saved)
 
 function lowReps(repsStr) {
   const n = parseInt(String(repsStr).split('–')[0])
@@ -148,7 +148,7 @@ function dayLogOf(s, now = new Date()) {
     else add(x.at, 'cardio', 'cardio', `Cardio · ${x.minutes} min${x.hard ? ' hard' : ''}`)
   }
   for (const x of ownStretchesOf(s)) add(x.at, 'stretch', 'stretch', x.minutes ? `Stretched · ${x.minutes} min` : 'Stretched')
-  for (const at of s.restLog ?? []) add(at, 'rest', 'rest', 'Rest day')
+  for (const at of restDaysOf(s)) add(at, 'rest', 'rest', 'Rest day')
   items.sort((a, b) => a.at - b.at)
   return weekDays(now).map(day => items.filter(x => sameDay(x.at, day)).map(({ kind, icon, label, tags }) => ({ kind, icon, label, tags })))
 }
@@ -326,6 +326,14 @@ function weekOf(s) {
 
 // Your stretch sessions on your own this week. The count is the source of
 // truth; sessions logged before lengths were asked have no minutes.
+// This week's rest days, oldest first: each one's day, or null for ones
+// added before rest days had days.
+function restDaysOf(s) {
+  const n = countOf(s, 'rest')
+  const log = (s.restLog ?? []).slice(-n)
+  return [...Array(Math.max(0, n - log.length)).fill(null), ...log]
+}
+
 function ownStretchesOf(s) {
   const n = Number(s.stretchExtra) || 0
   const log = (s.stretchLog ?? []).slice(0, n)
@@ -848,7 +856,7 @@ export function useStore() {
     if (id === 'class') return logClass(lastClassOf(state))
     update(s => {
       const next = { ...s, activities: { ...s.activities, [id]: countOf(s, id) + 1 } }
-      if (id === 'rest') return { ...next, restLog: [...(s.restLog ?? []), new Date().toISOString()] }
+      if (id === 'rest') return { ...next, restLog: [...restDaysOf(s), new Date().toISOString()] }
       if (!CARDIO_DEFAULTS[id]) return next
       const kept = cardioSessionsOf(s).filter(x => x.kind === id)
       const others = (s.cardio ?? []).filter(x => x.kind !== id)
@@ -863,7 +871,7 @@ export function useStore() {
       ...(id === 'class'
         ? { classLog: classesOf(s).slice(0, -1) }
         : id === 'rest'
-          ? { restLog: (s.restLog ?? []).slice(0, -1) }
+          ? { restLog: restDaysOf(s).slice(0, -1) }
           : { cardio: dropLastCardio(s.cardio ?? [], id) }),
     }))
   }
@@ -913,6 +921,26 @@ export function useStore() {
     update(s => {
       const list = ownStretchesOf(s).filter((_, i) => i !== index)
       return { ...s, stretchLog: list, stretchExtra: list.length }
+    })
+  }
+
+  // ── Rest days ─────────────────────────────────────────────────────────────
+  function addRest(at = new Date().toISOString()) {
+    update(s => {
+      const list = [...restDaysOf(s), at]
+      return { ...s, restLog: list, activities: { ...s.activities, rest: list.length } }
+    })
+  }
+
+  // Moves a rest day to another day.
+  function editRest(index, at) {
+    update(s => ({ ...s, restLog: restDaysOf(s).map((x, i) => (i === index ? at : x)) }))
+  }
+
+  function deleteRest(index) {
+    update(s => {
+      const list = restDaysOf(s).filter((_, i) => i !== index)
+      return { ...s, restLog: list, activities: { ...s.activities, rest: list.length } }
     })
   }
 
@@ -1179,6 +1207,10 @@ export function useStore() {
     addActivity,
     removeActivity,
     hasChecks,
+    restDays: restDaysOf(state),
+    addRest,
+    editRest,
+    deleteRest,
     dayLog: dayLogOf(state),
     lastBackupAt: state.lastBackupAt ?? null,
     history: state.history ?? [],

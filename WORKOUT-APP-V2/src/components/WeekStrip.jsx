@@ -76,13 +76,18 @@ export default function WeekStrip({ dayLog }) {
             <p className="text-sm text-stone-400">{picked > today ? 'Nothing yet' : 'Nothing logged'}</p>
           ) : (
             dayLog[picked].map((x, j) => (
-              <div key={j} className="flex items-center gap-2.5 text-sm text-stone-900">
+              <div key={j} className={`flex gap-2.5 text-sm text-stone-900 ${x.tags?.length ? 'items-start' : 'items-center'}`}>
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TILE[x.kind]}`}>
                   <TileIcon id={x.icon} size={18} color={x.kind === 'stretch' ? 'text-pink-600' : x.kind === 'rest' ? 'text-stone-500' : undefined} />
                 </span>
-                <span className="min-w-0 flex flex-wrap items-center gap-1.5">
-                  {x.label}
-                  {x.tags?.map(t => <span key={t.kind} className={`text-xs font-semibold px-2 py-0.5 rounded-md ${TAG[t.kind]}`}>{t.text}</span>)}
+                {/* A class's tags go on their own line under its name. */}
+                <span className="min-w-0">
+                  <span className="block">{x.label}</span>
+                  {x.tags?.length > 0 && (
+                    <span className="flex flex-wrap gap-1.5 mt-1">
+                      {x.tags.map(t => <span key={t.kind} className={`text-xs font-semibold px-2 py-0.5 rounded-md ${TAG[t.kind]}`}>{t.text}</span>)}
+                    </span>
+                  )}
                 </span>
               </div>
             ))
