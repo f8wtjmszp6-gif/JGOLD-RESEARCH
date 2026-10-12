@@ -457,7 +457,8 @@ function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, o
       <div className={`max-w-md mx-auto rounded-2xl border shadow-lg px-4 py-3 transition-colors duration-300 ${theme.bar}`}>
         <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <p className={`text-xs truncate ${theme.label}`}>{label}</p>
+            {/* Wraps instead of cutting off, so the side and set always show. */}
+            <p className={`text-xs leading-snug ${theme.label}`}>{label}</p>
             <p className={`text-2xl font-bold ${theme.big}`}>{big}</p>
           </div>
           {!over && !switching && (resting ? (
