@@ -8,6 +8,7 @@ import History from './components/History'
 import TrendsScreen from './components/Trends'
 import WorkoutDetail from './components/WorkoutDetail'
 import { useStore } from './hooks/useStore'
+import { weekDay } from './utils/goal'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
@@ -70,6 +71,8 @@ function Header({ onSettings, onHistory, onTrends, week, stretch, cardio, store 
           <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight">Today</h1>
           <p className="text-sm text-stone-500 mt-0.5 whitespace-nowrap">
             {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            {' · '}
+            {weekDay().daysLeft === 1 ? 'last day' : `${weekDay().daysLeft} days left`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

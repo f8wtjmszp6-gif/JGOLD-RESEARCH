@@ -1,7 +1,7 @@
 import { activities } from '../data/workout'
 import { GoalRow, CardioRow } from './Goal'
 import { TileIcon } from './Icons'
-import { goalFill, goalLevel, weekDay } from '../utils/goal'
+import { goalFill, goalLevel } from '../utils/goal'
 
 // What counts toward the weekly workout goal: gym workouts, classes, and
 // cardio or stretching long enough to count. The bar is one color, like the
@@ -44,13 +44,13 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
 
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3">
-      {/* The live week's title is the day and how many are left; a saved
-          week's is its dates. */}
+      {/* The live week's title is what's still to go; a saved week's is its
+          dates. */}
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
         {live ? (
-          <DaysLeft>
+          <p className="text-sm text-stone-500">
             <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} />
-          </DaysLeft>
+          </p>
         ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
         {figure}
       </div>
@@ -80,19 +80,6 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
       </div>}
       {children}
     </div>
-  )
-}
-
-// The live week's title: "Sat · 2 days left" (or "last day"), then what's
-// still to go.
-function DaysLeft({ children }) {
-  const { day, daysLeft } = weekDay()
-  return (
-    // What's left moves to its own line as a whole when it won't fit.
-    <p className="text-sm text-stone-500 flex flex-wrap gap-x-3">
-      <span><span className="font-semibold text-stone-800">{day}</span> · {daysLeft === 1 ? 'last day' : `${daysLeft} days left`}</span>
-      <span className="whitespace-nowrap">{children}</span>
-    </p>
   )
 }
 
