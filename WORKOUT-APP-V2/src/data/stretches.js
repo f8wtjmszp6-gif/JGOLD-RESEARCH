@@ -1,4 +1,4 @@
-import { workouts, STRETCH_ROUTINE } from './workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID } from './workout'
 
 const S = (id, name, duration, perSide, area) => ({ id, name, duration, perSide, area })
 
@@ -97,9 +97,10 @@ const MORE = [
 export const STRETCH_BANK = [...ORIGINAL, ...MORE]
 export const STRETCH_BY_ID = Object.fromEntries(STRETCH_BANK.map(x => [x.id, x]))
 
-// A list's starting stretches: each gym workout's own, or the Full-Body Stretch.
+// A list's starting stretches: each gym workout's own, a cool-down's, or the
+// Full-Body Stretch.
 export function defaultStretchIds(listId) {
-  return workouts[listId]?.stretches ?? (listId === STRETCH_ROUTINE.id ? STRETCH_ROUTINE.stretches : [])
+  return workouts[listId]?.stretches ?? COOL_DOWN_BY_ID[listId]?.stretches ?? (listId === STRETCH_ROUTINE.id ? STRETCH_ROUTINE.stretches : [])
 }
 
 // Body areas to suggest first when adding to a list.
@@ -109,10 +110,15 @@ export const SUGGESTED_AREAS = {
   pull: ['back', 'shoulders', 'arms', 'neck'],
   legsPost: ['legs', 'hips', 'calves', 'back'],
   routine: ['full', 'hips', 'back'],
+  coolWalk: ['calves', 'legs', 'hips'],
+  coolRun: ['calves', 'legs', 'hips'],
+  coolBike: ['hips', 'legs', 'shoulders', 'back'],
+  coolSwim: ['shoulders', 'back', 'arms', 'neck'],
+  coolRow: ['back', 'legs', 'hips'],
 }
 
 // Which stretches fit each plan — the muscles it trains, nothing else. The
-// Full-Body Stretch takes any stretch.
+// Full-Body Stretch and the cool-downs take any stretch.
 const STRETCH_FITS = {
   // Chest, front and side shoulders, triceps, upper traps and neck
   push: ['doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'puppy-pose', 'sleeper-stretch',
@@ -133,7 +139,7 @@ const STRETCH_FITS = {
 }
 
 export function stretchFits(stretch, listId) {
-  return listId === STRETCH_ROUTINE.id || !!STRETCH_FITS[listId]?.includes(stretch.id)
+  return listId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
 }
 
 // How well a stretch suits a list: 3 best, 2 good (anything not listed), 1
@@ -147,6 +153,8 @@ const STRETCH_BEST = {
     'wall-calf-stretch', 'bent-knee-calf', 'step-calf-drop'],
   routine: ['worlds-greatest', 'downward-dog', 'sun-salutation', 'inchworm', 'cat-cow', 'hip-flexor', 'pigeon-pose',
     'hamstring-stretch', 'childs-pose', 'spinal-twist', 'doorway-pec', 'deep-squat-hold'],
+  // A cool-down's best are its starting stretches.
+  ...Object.fromEntries(COOL_DOWNS.map(c => [c.id, c.stretches])),
 }
 const STRETCH_OKAY = {
   push: ['sleeper-stretch', 'neck-rotations', 'chin-tucks', 'lateral-neck-tilts', 'puppy-pose'],

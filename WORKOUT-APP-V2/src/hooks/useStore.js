@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
+import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
@@ -306,10 +306,10 @@ function writeStretchList(s, listId, ids) {
   return writeChecks({ ...s, stretchLists: { ...s.stretchLists, [listId]: ids } }, listId, cur => ({ ...cur, stretches: kept }))
 }
 
-// How long the Full-Body Stretch takes with your settings: every hold (both
-// sides where it's per side), every set, and the rests between sets.
-function routineSecondsOf(s) {
-  return stretchesOf(s, STRETCH_ROUTINE.id).reduce((sum, x) => {
+// How long a stretch list takes with your settings: every hold (both sides
+// where it's per side), every set, and the rests between sets.
+function routineSecondsOf(s, listId = STRETCH_ROUTINE.id) {
+  return stretchesOf(s, listId).reduce((sum, x) => {
     const sets = s.stretchSets?.[x.id] ?? 1
     const hold = (s.customDurations?.[x.id] ?? x.duration) * ((s.perSide?.[x.id] ?? x.perSide) ? 2 : 1)
     return sum + hold * sets + (s.stretchRest?.[x.id] ?? 20) * (sets - 1)
@@ -327,16 +327,18 @@ function stretchWorkoutsOf(s) {
 }
 
 // Stretch days: each gym workout whose stretches are all ticked, the
-// full-body routine once it's all ticked, and stretches done on your own.
+// full-body routine and each cool-down once all ticked, and stretches done
+// on your own.
 function stretchWeekOf(s) {
   const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
   const st = {
     gym: GYM_ORDER.filter(id => all(id, stretchesOf(s, id))).length,
     routine: all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0,
+    cool: COOL_DOWNS.filter(c => all(c.id, stretchesOf(s, c.id))).length,
     class: classesOf(s).filter(c => c.stretch).length,
     extra: Number(s.stretchExtra) || 0,
   }
-  return { ...st, total: st.gym + st.routine + st.class + st.extra }
+  return { ...st, total: st.gym + st.routine + st.cool + st.class + st.extra }
 }
 
 // A week as saved in history: the same numbers as the live cards, plus how
@@ -566,15 +568,17 @@ export function useStore() {
     }))
   }
 
+  // Sets ticked out of all of a plan's sets, and how many exercises it has.
   function workoutProgress(workoutId) {
     let done = 0
     let total = 0
-    for (const ex of exercisesOf(state, workoutId)) {
+    const list = exercisesOf(state, workoutId)
+    for (const ex of list) {
       const t = ticksOf(state, workoutId, ex)
       total += t.length
       done += t.filter(Boolean).length
     }
-    return { done, total }
+    return { done, total, exercises: list.length }
   }
 
   // ── Exercise order per workout (remembered) ──────────────────────────────
@@ -958,6 +962,7 @@ export function useStore() {
 
   const ownStretches = ownStretchesOf(state)
   const routineMinutes = Math.round(routineSecondsOf(state) / 60)
+  const getListMinutes = listId => Math.round(routineSecondsOf(state, listId) / 60)
 
   // Unticks every set and stretch and zeroes the activity counts. Your
   // numbers and settings are left alone.
@@ -1166,6 +1171,7 @@ export function useStore() {
     ownStretches,
     lastOwnStretch: state.lastOwnStretch ?? 15,
     routineMinutes,
+    getListMinutes,
     resetChecks,
     getSetup,
     setSetup,

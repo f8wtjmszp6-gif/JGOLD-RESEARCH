@@ -1,34 +1,8 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, GYM_MARK, CARDIO_MARK, STRETCH_MARK } from '../data/workout'
+import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, COOL_DOWNS, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
 import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
+import { TileIcon } from './Icons'
 import { weekDays, sameDay, dayLabel, inDayOrder } from '../utils/days'
-import pushImg from '../assets/workouts/push.svg'
-import legsQuadImg from '../assets/workouts/legsQuad.svg'
-import pullImg from '../assets/workouts/pull.svg'
-import legsPostImg from '../assets/workouts/legsPost.svg'
-import classImg from '../assets/workouts/class.svg'
-import walkImg from '../assets/workouts/walk.svg'
-import restImg from '../assets/workouts/rest.svg'
-import stretchImg from '../assets/workouts/stretch.svg'
-import runImg from '../assets/workouts/run.svg'
-
-// A body map per workout: the muscles it trains, lit in orange. Back & Biceps and
-// Hamstrings & Calves are drawn from behind (spine and shoulder blades) so they
-// read differently from Chest & Shoulders and Quads & Glutes.
-const workoutImages = {
-  push: pushImg,
-  legsQuad: legsQuadImg,
-  pull: pullImg,
-  legsPost: legsPostImg,
-}
-
-// Same figure, posed: arms up for a class, mid-stride for a walk, lying down
-// for rest — each in its week-bar color.
-const activityImages = {
-  class: classImg,
-  walk: walkImg,
-  rest: restImg,
-}
 
 // The homepage shows one group at a time, picked by these tabs. The last tab
 // you used is remembered on this device.
@@ -43,24 +17,13 @@ function savedTab() {
   }
 }
 
-// What in each tab counts toward the This week goals, shown from ⓘ:
-// [goal, its color, what counts, footnote].
-const WHAT_COUNTS = {
-  gym: [
-    ['Workouts', GYM_MARK, ['Finishing every set of a plan', 'A class where you did cardio or strength', `A stretch-only class of ${CLASS_STRETCH_WORKOUT_MINUTES} min or more`]],
-    ['Stretching', STRETCH_MARK, ['Ticking all of a plan’s stretches', 'A class where you stretched']],
-    ['Cardio minutes', CARDIO_MARK, ['A class’s cardio time', 'A plan’s warm-up, once ticked'], 'Hard minutes count double.'],
-  ],
-  cardio: [
-    ['Cardio minutes', CARDIO_MARK, ['Every walk and cardio session'], 'Hard minutes count double.'],
-    ['Workouts', GYM_MARK, [`Other cardio of ${CARDIO_WORKOUT_MINUTES.hard} min hard or ${CARDIO_WORKOUT_MINUTES.easy} min easy`]],
-  ],
-  stretch: [
-    ['Stretching', STRETCH_MARK, ['Finishing the full-body routine', 'A session on your own']],
-    ['Workouts', GYM_MARK, [`Either one at ${STRETCH_WORKOUT_MINUTES} min or more`]],
-  ],
-  rest: [],
-}
+// What in each tab counts toward the This week goals, shown from ⓘ as one
+// table: a row per tab, a column per goal (null: doesn't count).
+const WHAT_COUNTS = [
+  ['gym', ['Finish a plan or log a class', 'Finish a plan’s stretches or log a class', 'Finish a plan’s warm-up or log class cardio']],
+  ['cardio', [`Log ${CARDIO_WORKOUT_MINUTES.hard} min hard or ${CARDIO_WORKOUT_MINUTES.easy} easy`, null, 'Log any walk or session']],
+  ['stretch', [`Stretch ${STRETCH_WORKOUT_MINUTES}+ min`, 'Finish the routine or a cool-down, or log a session', null]],
+]
 
 export default function Home({ store, onOpenWorkout }) {
   const [tab, setTabState] = useState(savedTab)
@@ -83,7 +46,7 @@ export default function Home({ store, onOpenWorkout }) {
     <ActivityCard
       key={a.id}
       activity={a}
-      image={activityImages[a.id]}
+      icon={a.id}
       count={store.getActivityCount(a.id)}
       onAdd={() => store.addActivity(a.id)}
       onRemove={() => store.removeActivity(a.id)}
@@ -128,6 +91,8 @@ export default function Home({ store, onOpenWorkout }) {
                 key={id}
                 workout={workouts[id]}
                 progress={store.workoutProgress(id)}
+                stretches={store.getStretches(id)}
+                stretchesDone={store.getStretches(id).filter(x => store.getStretchDone(id, x.id)).length}
                 onOpen={() => onOpenWorkout(id)}
               />
             ))}
@@ -143,7 +108,7 @@ export default function Home({ store, onOpenWorkout }) {
             {/* Each walk is logged with its own length: + asks how long. */}
             <ActivityCard
               activity={walk}
-              image={activityImages.walk}
+              icon="walk"
               count={walks.length}
               detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
               onAdd={() => open('walk')}
@@ -157,7 +122,7 @@ export default function Home({ store, onOpenWorkout }) {
             </ActivityCard>
             <ActivityCard
               activity={OTHER_CARDIO}
-              image={runImg}
+              icon="cardio"
               count={other.length}
               detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${otherMinutes} min` : undefined}
               onAdd={() => open('other')}
@@ -175,9 +140,10 @@ export default function Home({ store, onOpenWorkout }) {
         {tab === 'stretch' && (
           <Section title="Stretching">
             <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
+            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} />
             <ActivityCard
               activity={OWN_STRETCH}
-              image={stretchImg}
+              icon="stretch"
               count={store.ownStretches.length}
               detail={store.ownStretches.length ? ownDetail(store.ownStretches) : undefined}
               onAdd={() => open('stretch')}
@@ -204,6 +170,7 @@ export default function Home({ store, onOpenWorkout }) {
       {sheet?.type === 'other' && <AddCardioSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
     </div>
   )
@@ -238,7 +205,7 @@ function ClassCard({ store, activity, onAdd, onEdit }) {
   return (
     <ActivityCard
       activity={activity}
-      image={activityImages.class}
+      icon="class"
       count={n}
       detail={n ? `${n} ${n === 1 ? activity.one : activity.many} · ${store.getCardioMinutes('class')} min` : undefined}
       onAdd={onAdd}
@@ -335,7 +302,7 @@ function LogClassSheet({ store, edit, onClose }) {
   }`
 
   return (
-    <SettingsSheet title={edit ? 'Edit class' : 'Log a class'} closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={edit ? 'Edit class' : 'Log a class'} closeLabel="Cancel" tall onClose={onClose}>
       <div className="space-y-4">
         <ToggleRow label="Cardio" on={c.cardio} onChange={v => set({ cardio: v })} />
         {c.cardio && (
@@ -489,27 +456,46 @@ function DeleteButton({ what, onDelete }) {
   )
 }
 
-// ⓘ: what in a tab counts toward the This week goals, grouped by goal.
+// ⓘ: what counts toward each This week goal, for every tab at once. The tab
+// you opened it from is highlighted; tab names run up the side so the goal
+// columns get the room.
 function WhatCountsSheet({ tab, onClose }) {
-  const label = TABS.find(([id]) => id === tab)[1]
-  const goals = WHAT_COUNTS[tab]
+  const name = id => TABS.find(([t]) => t === id)[1]
+  const side = id => (
+    <td className={`w-7 py-2 text-center align-middle border-t border-stone-100 ${id === tab ? 'rounded-l-xl' : ''}`}>
+      <span className={`inline-block [writing-mode:vertical-rl] rotate-180 text-xs font-semibold tracking-wide whitespace-nowrap ${id === tab ? 'text-accent-500' : 'text-stone-900'}`}>{name(id)}</span>
+    </td>
+  )
+  const row = id => (id === tab ? 'bg-accent-50' : '')
   return (
-    <SettingsSheet title={`What counts on ${label}`} onClose={onClose}>
-      {goals.length === 0 && (
-        <p className="text-sm text-stone-600 leading-relaxed">Rest days don’t count toward a goal. They show on This week so you can see your recovery.</p>
-      )}
-      {goals.map(([goal, mark, items, note]) => (
-        <div key={goal} className="space-y-1">
-          <p className="flex items-center gap-2 font-semibold text-stone-900">
-            <span className={`w-2.5 h-2.5 rounded-full ${mark}`} />
-            {goal}
-          </p>
-          <ul className="list-disc pl-[18px] text-sm text-stone-600 leading-relaxed">
-            {items.map(x => <li key={x}>{x}</li>)}
-          </ul>
-          {note && <p className="pl-[18px] text-xs text-stone-400">{note}</p>}
-        </div>
-      ))}
+    <SettingsSheet title="What counts" onClose={onClose}>
+      <table className="w-full table-fixed border-separate border-spacing-0 text-[13px] leading-snug">
+        <thead>
+          <tr className="text-xs text-stone-500">
+            <th className="w-7" />
+            {['Workout', 'Stretch', 'Cardio'].map(h => <th key={h} className="px-1.5 pb-1.5 text-left font-semibold">{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {WHAT_COUNTS.map(([id, cells]) => (
+            <tr key={id} className={row(id)}>
+              {side(id)}
+              {cells.map((c, i) => (
+                <td key={i} className={`px-1.5 py-2.5 align-top border-t border-stone-100 ${c ? (id === tab ? 'text-stone-900' : 'text-stone-500') : 'text-stone-300'} ${id === tab && i === 2 ? 'rounded-r-xl' : ''}`}>
+                  {c ?? '—'}
+                </td>
+              ))}
+            </tr>
+          ))}
+          <tr className={row('rest')}>
+            {side('rest')}
+            <td colSpan={3} className={`px-1.5 py-2.5 align-middle border-t border-stone-100 ${tab === 'rest' ? 'text-stone-900 rounded-r-xl' : 'text-stone-400'}`}>
+              Rest days don’t count toward any goal
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="text-xs text-stone-400">Hard cardio minutes count double.</p>
     </SettingsSheet>
   )
 }
@@ -594,7 +580,7 @@ function RoutineCard({ store, onOpen }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shrink-0">
-            <img src={stretchImg} alt="" className="w-10 h-[50px]" draggable={false} />
+            <TileIcon id="stretch" />
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-stone-900">
@@ -620,11 +606,98 @@ function RoutineCard({ store, onOpen }) {
   )
 }
 
+// A cool-down's progress this week: how many of its stretches are ticked.
+function coolProgress(store, id) {
+  const list = store.getStretches(id)
+  const done = list.filter(x => store.getStretchDone(id, x.id)).length
+  return { list, done, complete: list.length > 0 && done === list.length }
+}
+
+// Stretches for after cardio. Until you start one it lists the choices and
+// tapping asks what you did; once one is under way it shows that one and
+// opens straight to it.
+function CoolDownCard({ store, onOpen }) {
+  const all = COOL_DOWNS.map(c => ({ ...c, ...coolProgress(store, c.id) }))
+  const current = all.find(c => c.done > 0 && !c.complete) ?? all.find(c => c.complete)
+  const inProgress = current && !current.complete
+  return (
+    <button onClick={() => onOpen(inProgress ? current.id : null)} className="w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shrink-0">
+            <TileIcon id="stretch" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-stone-900">
+              Cool-down
+              {current?.complete && <span className="text-emerald-600 ml-1.5">✓</span>}
+            </p>
+            <p className="text-sm text-stone-400 truncate">
+              {current
+                ? `${current.label} · ${current.list.length} stretches · ${store.getListMinutes(current.id)} min`
+                : 'After a walk, run, bike, swim or row'}
+            </p>
+          </div>
+        </div>
+        {current ? (
+          <div className="text-right shrink-0">
+            <span className="text-sm font-medium text-stone-500">{current.done}/{current.list.length}</span>
+            <div className="w-16 h-1 bg-stone-100 rounded-full mt-1.5">
+              <div
+                className={`h-full rounded-full transition-all ${current.complete ? 'bg-emerald-400' : 'bg-teal-400'}`}
+                style={{ width: `${(current.done / current.list.length) * 100}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+        )}
+      </div>
+    </button>
+  )
+}
+
+// Picks which cool-down to do: you say what you just did.
+function CoolDownSheet({ store, onPick, onClose }) {
+  return (
+    <SettingsSheet title="Cool-down" closeLabel="Cancel" onClose={onClose}>
+      <p className="text-sm text-stone-500 -mt-1">What did you just do?</p>
+      <div className="space-y-2">
+        {COOL_DOWNS.map(c => {
+          const { list, done, complete } = coolProgress(store, c.id)
+          return (
+            <button key={c.id} onClick={() => onPick(c.id)} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-3 text-left active:bg-stone-100">
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold text-stone-900">
+                  {c.label}
+                  {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
+                </span>
+                <span className="block text-sm text-stone-400">
+                  {list.length} stretches · {store.getListMinutes(c.id)} min{done > 0 && !complete ? ` · ${done} done` : ''}
+                </span>
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          )
+        })}
+      </div>
+    </SettingsSheet>
+  )
+}
+
 // Days stretched this week: finishing a gym workout's stretches, the
 // full-body routine, or stretching on your own (+) each count once.
-function WorkoutCard({ workout, progress, onOpen }) {
-  const { done, total } = progress
+// Under the name: what's in the plan until you start it, then how far along
+// you are. Both counts follow the plan as you add or remove exercises and
+// stretches.
+function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpen }) {
+  const { done, total, exercises } = progress
   const complete = total > 0 && done === total
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+  const started = done > 0 || stretchesDone > 0
+  const detail = started
+    ? `${done}/${total} sets · ${stretchesDone}/${stretches.length} ${stretches.length === 1 ? 'stretch' : 'stretches'}`
+    : `${plural(exercises, 'exercise', 'exercises')} · ${plural(stretches.length, 'stretch', 'stretches')}`
 
   return (
     <button
@@ -634,14 +707,14 @@ function WorkoutCard({ workout, progress, onOpen }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0">
-            <img src={workoutImages[workout.id]} alt="" className="w-10 h-[50px]" draggable={false} />
+            <TileIcon id={workout.id} />
           </div>
           <div className="min-w-0">
           <p className="font-semibold text-stone-900">
             {workout.short}
             {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
           </p>
-          <p className="text-sm text-stone-400 truncate">{workout.name}</p>
+          <p className="text-sm text-stone-400 truncate">{detail}</p>
           </div>
         </div>
         {/* Progress only: a bar that fills as you tick sets, no number. */}
@@ -658,7 +731,7 @@ function WorkoutCard({ workout, progress, onOpen }) {
   )
 }
 
-function ActivityCard({ activity, image, count, detail, onAdd, onRemove, children }) {
+function ActivityCard({ activity, icon, count, detail, onAdd, onRemove, children }) {
   const active = count > 0
 
   return (
@@ -666,7 +739,7 @@ function ActivityCard({ activity, image, count, detail, onAdd, onRemove, childre
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className={`w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br ${activity.tile} flex items-center justify-center shrink-0`}>
-            <img src={image} alt="" className="w-10 h-[50px]" draggable={false} />
+            <TileIcon id={icon} />
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-stone-900 truncate">{activity.name}</p>

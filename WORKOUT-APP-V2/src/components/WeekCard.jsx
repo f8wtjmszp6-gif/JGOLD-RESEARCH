@@ -1,12 +1,7 @@
 import { activities } from '../data/workout'
 import { GoalRow, CardioRow } from './Goal'
-import { goalTint, goalFill, goalLevel, weekDay } from '../utils/goal'
-import gymImg from '../assets/workouts/push.svg'
-import classImg from '../assets/workouts/class.svg'
-import runImg from '../assets/workouts/run.svg'
-import walkImg from '../assets/workouts/walk.svg'
-import stretchImg from '../assets/workouts/stretch.svg'
-import restImg from '../assets/workouts/rest.svg'
+import { TileIcon } from './Icons'
+import { goalFill, goalLevel, weekDay } from '../utils/goal'
 
 // What counts toward the weekly workout goal: gym workouts, classes, and
 // cardio or stretching long enough to count. The bar is one color, like the
@@ -18,16 +13,17 @@ const WORKOUT_KINDS = ['gym', 'class', 'cardio', 'stretchWork']
 // even when it was too short to be a workout.
 const tileOf = id => activities.find(a => a.id === id).tile
 const CHIPS = [
-  { id: 'gym', img: gymImg, tile: 'from-orange-50 to-orange-100', one: 'gym workout', many: 'gym workouts' },
-  { id: 'class', img: classImg, tile: tileOf('class'), one: 'class', many: 'classes' },
-  { id: 'cardio', img: runImg, tile: 'from-cyan-50 to-cyan-100', one: 'cardio session', many: 'cardio sessions' },
-  { id: 'walk', img: walkImg, tile: tileOf('walk'), one: 'walk', many: 'walks' },
-  { id: 'stretch', img: stretchImg, tile: 'from-teal-50 to-teal-100', one: 'stretch session', many: 'stretch sessions' },
-  { id: 'rest', img: restImg, tile: tileOf('rest'), one: 'rest day', many: 'rest days' },
+  { id: 'gym', icon: 'gym', tile: 'from-orange-50 to-orange-100', one: 'gym workout', many: 'gym workouts' },
+  { id: 'class', icon: 'class', tile: tileOf('class'), one: 'class', many: 'classes' },
+  { id: 'cardio', icon: 'cardio', tile: 'from-cyan-50 to-cyan-100', one: 'cardio session', many: 'cardio sessions' },
+  { id: 'walk', icon: 'walk', tile: tileOf('walk'), one: 'walk', many: 'walks' },
+  { id: 'stretch', icon: 'stretch', tile: 'from-teal-50 to-teal-100', one: 'stretch session', many: 'stretch sessions' },
+  { id: 'rest', icon: 'rest', tile: tileOf('rest'), one: 'rest day', many: 'rest days' },
 ]
 
 // The weekly goals in one card — the live week in the header, and each saved
-// week on the Past weeks screen. It greens as they average toward the goal.
+// week on the Past weeks screen. The card stays white; each bar deepens as
+// it nears its goal.
 // Weeks saved before cardio minutes were tracked have no cardio row.
 // `figure` (the live week's body map) goes at the right of the title line;
 // `live` adds what's left to do this week under the bars. `logged` gives
@@ -37,9 +33,6 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
   // Weeks saved before cardio counted have no cardio key.
   const count = id => week[id] ?? 0
   const workouts = WORKOUT_KINDS.reduce((n, id) => n + count(id), 0)
-  const levels = [goalLevel(workouts, goals.workouts), goalLevel(stretch.total, goals.stretch)]
-  if (cardio) levels.push(goalLevel(cardio.total, goals.cardio))
-  const level = Math.floor(levels.reduce((a, b) => a + b, 0) / levels.length)
   const chipCounts = {
     gym: count('gym'),
     class: logged?.class ?? count('class'),
@@ -50,7 +43,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
   }
 
   return (
-    <div className={`shadow-sm rounded-2xl px-4 py-3 border transition-colors duration-500 ${goalTint(level)}`}>
+    <div className="bg-white shadow-sm rounded-2xl px-4 py-3">
       {/* The live week's title is the day and how many are left; a saved
           week's is its dates. */}
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
@@ -73,7 +66,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
               aria-label={`${n} ${n === 1 ? k.one : k.many}`}
               className={`flex items-center gap-0.5 rounded-md pl-0.5 pr-1.5 bg-gradient-to-br ${k.tile} ${n ? '' : 'opacity-40'}`}
             >
-              <img src={k.img} alt="" className="w-4 h-5" draggable={false} />
+              <span className="w-5 h-5 flex items-center justify-center"><TileIcon id={k.icon} size={14} /></span>
               <span className="text-xs font-semibold text-stone-700">{n}</span>
             </span>
           )

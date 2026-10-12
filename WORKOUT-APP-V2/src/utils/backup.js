@@ -19,7 +19,8 @@ export async function shareBackup(data) {
 
   if (usesShareSheet && navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'Workout backup' })
+      // Only the file: a title gets saved alongside it as a stray text.txt.
+      await navigator.share({ files: [file] })
       return true
     } catch (err) {
       if (err?.name === 'AbortError') return false

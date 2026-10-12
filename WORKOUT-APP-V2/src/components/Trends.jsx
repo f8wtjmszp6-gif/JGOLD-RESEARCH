@@ -253,7 +253,7 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
+        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,

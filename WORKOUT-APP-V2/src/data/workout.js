@@ -99,6 +99,19 @@ export const STRETCH_ROUTINE = {
   ],
 }
 
+// Short stretch lists for after cardio, one per activity; you pick which you
+// just did. Each aims at what that activity works: calves and hips for walks
+// and runs, bent-over hips and chest for a ride, shoulders for a swim, back
+// and hamstrings for rowing.
+export const COOL_DOWNS = [
+  { id: 'coolWalk', label: 'Walk', stretches: ['wall-calf-stretch', 'quad-stretch', 'standing-hamstring', 'hip-flexor', 'figure-4'] },
+  { id: 'coolRun', label: 'Run', stretches: ['wall-calf-stretch', 'bent-knee-calf', 'quad-stretch', 'hip-flexor', 'figure-4', 'standing-hamstring'] },
+  { id: 'coolBike', label: 'Bike', stretches: ['couch-stretch', 'kneeling-quad', 'pigeon-pose', 'doorway-pec', 'cat-cow', 'knees-to-chest'] },
+  { id: 'coolSwim', label: 'Swim', stretches: ['lat-stretch', 'doorway-pec', 'sleeper-stretch', 'overhead-tricep-stretch', 'thread-the-needle', 'lateral-neck-tilts'] },
+  { id: 'coolRow', label: 'Row / Elliptical', chip: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'] },
+].map(c => ({ ...c, chip: c.chip ?? c.label, name: `Cool-down · ${c.label}`, short: 'Cool-down', exercises: [] }))
+export const COOL_DOWN_BY_ID = Object.fromEntries(COOL_DOWNS.map(c => [c.id, c]))
+
 // Weekly goal for both home cards — workouts and stretching: 3 a week
 // meets it, 4 is the stretch target.
 export const WEEKLY_GOAL = { min: 3, max: 4 }

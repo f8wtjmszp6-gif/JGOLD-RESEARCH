@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { playBeep, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
 import { useDragToClose } from '../hooks/useDragToClose'
-import { workouts, STRETCH_ROUTINE, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
 import { EXERCISE_BANK, EQUIPMENT, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf, gapsAfter } from '../data/exercises'
 import { HOWTO } from '../data/howto'
 import { HowToBody } from './HowTo'
@@ -22,9 +22,11 @@ function fmtDuration(totalSeconds) {
 
 let timerSeq = 0
 
-export default function WorkoutDetail({ workoutId, store, onBack }) {
-  // The full-body stretch routine reuses this screen with just its stretches.
-  const workout = workouts[workoutId] ?? STRETCH_ROUTINE
+export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
+  // The full-body stretch routine and the cool-downs reuse this screen with
+  // just their stretches.
+  const cool = COOL_DOWN_BY_ID[workoutId]
+  const workout = workouts[workoutId] ?? cool ?? STRETCH_ROUTINE
   const isRoutine = workout.exercises.length === 0
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
@@ -253,7 +255,24 @@ export default function WorkoutDetail({ workoutId, store, onBack }) {
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{workout.short}</h1>
         </div>
-        <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : workout.name}</p>
+        {cool ? (
+          // Switch activity if you picked the wrong one; each keeps its own list.
+          <div className="flex flex-wrap gap-1.5 mt-3" role="tablist" aria-label="What you did">
+            {COOL_DOWNS.map(c => (
+              <button
+                key={c.id}
+                role="tab"
+                aria-selected={c.id === workoutId}
+                onClick={() => onSwitch(c.id)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${c.id === workoutId ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-500 active:bg-stone-200'}`}
+              >
+                {c.chip}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : workout.name}</p>
+        )}
       </div>
 
       {/* Tabs */}
@@ -919,7 +938,7 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
   }
 
   return (
-    <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={title} closeLabel="Cancel" tall onClose={onClose}>
       <input
         id="bank-search"
         type="search"
@@ -1012,7 +1031,7 @@ function WarmupCard({ workoutId, store, onStart }) {
         </span>
         <span className="font-semibold text-accent-600">Warm-up</span>
         <span className="text-sm text-stone-500 ml-auto truncate">{summary}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+        <Chevron />
       </button>
     )
   }
@@ -1044,6 +1063,7 @@ function WarmupCard({ workoutId, store, onStart }) {
             Start
           </button>
         )}
+        {done && <CloseButton label="warm-up" onClick={() => setReopened(false)} />}
       </div>
 
       <div className="space-y-1.5">
@@ -1063,7 +1083,6 @@ function WarmupCard({ workoutId, store, onStart }) {
 
       <div className="flex items-center gap-3">
         <button onClick={() => store.addWarmupSet(workoutId)} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>
-        {done && <button onClick={() => setReopened(false)} className="text-xs font-medium text-stone-400 active:text-stone-600">Collapse</button>}
         <button onClick={() => store.removeWarmup(workoutId)} className="ml-auto text-xs font-medium text-stone-400 active:text-stone-600">Remove warm-up</button>
       </div>
     </div>
@@ -1112,9 +1131,54 @@ function HowToButton({ item, kind, className }) {
         <InfoIcon size={20} />
       </button>
       {open && (
-        <SettingsSheet title={item.name} onClose={() => setOpen(false)}>
+        <SettingsSheet title={item.name} tall onClose={() => setOpen(false)}>
           <HowToBody item={item} kind={kind} />
         </SettingsSheet>
+      )}
+    </>
+  )
+}
+
+// ••• and its little menu. It's drawn over the page (rows clip anything that
+// sticks out) under the button, or above it near the bottom of the screen.
+function MoreMenu({ label, items }) {
+  const button = useRef(null)
+  const [at, setAt] = useState(null) // where the open menu sits
+  function open() {
+    const r = button.current.getBoundingClientRect()
+    const below = r.bottom + 8 + items.length * 44 < window.innerHeight - 16
+    setAt({ right: window.innerWidth - r.right, ...(below ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }) })
+  }
+  const stop = e => e.stopPropagation()
+  return (
+    <>
+      <button
+        ref={button}
+        onClick={open}
+        aria-label={`More for ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={!!at}
+        className="w-8 h-8 shrink-0 rounded-lg bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+      </button>
+      {at && createPortal(
+        <div className="fixed inset-0 z-50" onClick={e => { stop(e); setAt(null) }} onPointerDown={stop} onPointerMove={stop} onPointerUp={stop}>
+          <div role="menu" className="absolute w-48 rounded-xl bg-white shadow-xl border border-stone-200 p-1 animate-[fade-in_120ms_ease-out]" style={at}>
+            {items.map(x => (
+              <button
+                key={x.label}
+                role="menuitem"
+                onClick={e => { stop(e); setAt(null); x.onClick() }}
+                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-stone-900 active:bg-stone-100"
+              >
+                <span className="text-stone-500">{x.icon}</span>
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
       )}
     </>
   )
@@ -1136,7 +1200,11 @@ function ClockIcon({ size = 16, color = 'var(--color-accent-500)' }) {
 // its ends (overscroll-contain), so the page behind never moves. It's drawn
 // at the top of the page (a portal), so a row that slides or drags can't
 // trap it.
-export function SettingsSheet({ title, closeLabel = 'Done', onClose, children }) {
+// Sheets come in two sizes. `tall` ones (pickers, how-tos, settings with
+// rows that come and go) always open to the same height and scroll inside,
+// so nothing jumps while you use them. The rest (short questions and quick
+// logs that never change while open) fit what's in them.
+export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClose, children }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose)
   // React still passes events up to the component that opened the sheet (a
@@ -1154,7 +1222,7 @@ export function SettingsSheet({ title, closeLabel = 'Done', onClose, children })
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 max-h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
+        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 ${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,
@@ -1305,9 +1373,27 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
   )
 }
 
+// ⌄ on a closed card (tap to open), ⌃ on an open one (tap to close).
+function Chevron({ up = false }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-stone-400 shrink-0" aria-hidden="true">
+      <path d={up ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
+    </svg>
+  )
+}
+
+function CloseButton({ label, onClick }) {
+  return (
+    <button onClick={onClick} aria-label={`Close ${label}`} className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center active:bg-stone-200 transition-colors">
+      <Chevron up />
+    </button>
+  )
+}
+
 // ── Exercise card ────────────────────────────────────────────────────────────
-// Open, it's the full card with its sets. Folded, it's one line: finished
-// exercises tinted with a tick, the rest with a dot per set. Tap to open.
+// Open, it's the full card with its sets; ⌃ or its name closes it. Folded,
+// it's one line ending in ⌄: finished exercises tinted with a tick, the rest
+// with a dot per set. Tap to open.
 function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone }) {
   const [showSettings, setShowSettings] = useState(false)
 
@@ -1337,6 +1423,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
               <span key={i} className={`w-2 h-2 rounded-full ${x.done ? 'bg-accent-500' : 'bg-stone-200'}`} />
             ))}
           </span>
+          <Chevron />
         </button>
       </div>
     )
@@ -1357,7 +1444,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           </span>
           <span className="font-semibold text-accent-600 truncate">{exercise.name}</span>
           <span className="text-sm text-stone-500 ml-auto shrink-0">{done}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+          <Chevron />
         </button>
       </div>
     )
@@ -1369,7 +1456,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
     }`}>
       {/* Name + actions */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <button onClick={onClose} className="min-w-0 text-left active:opacity-70">
           <p className={`font-semibold leading-tight ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
             {setup.perSide && <span className="text-stone-400 font-normal text-sm ml-1">(per side)</span>}
@@ -1377,7 +1464,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           <p className={`mt-1 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
             {summary}
           </p>
-        </div>
+        </button>
         <div className="flex items-center gap-1.5 shrink-0">
           <HowToButton item={exercise} kind="exercise" className="w-10 h-10" />
           <button
@@ -1404,6 +1491,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           >
             {allDone ? '✓' : 'All'}
           </button>
+          <CloseButton label={exercise.name} onClick={onClose} />
         </div>
       </div>
 
@@ -1450,13 +1538,10 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
             {log.sets.filter(x => x.done).length}/{log.sets.length} done
           </span>
         )}
-        <button onClick={onClose} className={`text-xs font-medium text-stone-400 active:text-stone-600 ${someDone && !allDone ? '' : 'ml-auto'}`}>
-          Collapse
-        </button>
       </div>
 
       {showSettings && (
-        <SettingsSheet title={exercise.name} onClose={() => setShowSettings(false)}>
+        <SettingsSheet title={exercise.name} tall onClose={() => setShowSettings(false)}>
           <EquipmentPicker value={equipment} onChange={v => store.setEquipment(exercise, v)} />
           <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} />
           {/* Set-once settings, one row each. */}
@@ -1707,16 +1792,21 @@ export function ToggleRow({ label, detail, on, onChange }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
+// One line per stretch: tick, name, a timer that shows the hold (×2 when it
+// runs per side, more with extra sets) and ••• for how-to and settings.
+// Removing is a swipe.
 function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
+  const [showHow, setShowHow] = useState(false)
+  const runs = (perSide ? 2 : 1) * sets
 
   return (
-    <div className={`rounded-2xl p-4 transition-all ${
+    <div className={`rounded-2xl pl-4 pr-2.5 py-2 transition-all ${
       checked ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
-      <div className="flex items-center gap-2.5">
-        {grip && <span className="-ml-3.5 -mr-1 -my-4 self-stretch flex"><DragHandle name={stretch.name} {...grip} /></span>}
-        <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform">
+      <div className="flex items-center gap-2">
+        {grip && <span className="-ml-3.5 -mr-1 -my-2 self-stretch flex"><DragHandle name={stretch.name} {...grip} /></span>}
+        <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform" aria-label={checked ? `Untick ${stretch.name}` : `Tick ${stretch.name}`}>
           <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             checked ? 'border-accent-500 bg-accent-500' : 'border-stone-200'
           }`}>
@@ -1727,31 +1817,33 @@ function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration
             )}
           </div>
         </button>
-        <div className="flex-1 min-w-0">
-          <p className={`font-semibold ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}</p>
-          <p className="mt-0.5 text-stone-400 text-sm whitespace-nowrap">{customDuration}s{perSide ? ' per side' : ''}{sets > 1 ? ` × ${sets}` : ''}</p>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <HowToButton item={stretch} kind="stretch" className="w-10 h-10" />
-          <button
-            onClick={() => setShowSettings(true)}
-            aria-label={`${stretch.name} settings`}
-            className="w-10 h-10 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200 transition-colors"
-          >
-            <GearIcon size={20} />
-          </button>
-          <button
-            onClick={onTimer}
-            aria-label={`Time ${stretch.name}`}
-            className="w-10 h-10 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
-          >
-            <ClockIcon size={20} />
-          </button>
-        </div>
+        <p className={`flex-1 min-w-0 text-[15px] font-semibold leading-snug ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}</p>
+        <button
+          onClick={onTimer}
+          aria-label={`Time ${stretch.name}, ${customDuration} seconds${runs > 1 ? `, ${runs} times` : ''}`}
+          className="w-[74px] h-8 shrink-0 rounded-lg bg-accent-100 flex items-center pl-2 pr-0.5 active:bg-accent-200 transition-colors"
+        >
+          <ClockIcon size={14} />
+          <span className="flex-1 text-center text-[13px] font-semibold text-accent-600 tabular-nums">
+            {customDuration}s{runs > 1 ? ` ×${runs}` : ''}
+          </span>
+        </button>
+        <MoreMenu
+          label={stretch.name}
+          items={[
+            HOWTO[stretch.id] && { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => setShowHow(true) },
+            { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
+          ].filter(Boolean)}
+        />
       </div>
 
+      {showHow && (
+        <SettingsSheet title={stretch.name} tall onClose={() => setShowHow(false)}>
+          <HowToBody item={stretch} kind="stretch" />
+        </SettingsSheet>
+      )}
       {showSettings && (
-        <SettingsSheet title={stretch.name} onClose={() => setShowSettings(false)}>
+        <SettingsSheet title={stretch.name} tall onClose={() => setShowSettings(false)}>
           <StepperRow
             label="Duration"
             value={customDuration}

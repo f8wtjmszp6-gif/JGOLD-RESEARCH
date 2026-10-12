@@ -34,7 +34,7 @@ export default function App() {
       ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
-          <WorkoutDetail workoutId={workoutId} store={store} onBack={() => setWorkoutId(null)} />
+          <WorkoutDetail key={workoutId} workoutId={workoutId} store={store} onBack={() => setWorkoutId(null)} onSwitch={setWorkoutId} />
         </div>
       ) : (
         <>
