@@ -15,14 +15,6 @@
     <link rel="manifest" href="./manifest.json" />
 
     <title>Workout V2</title>
-    <!-- Dark or light, following the phone, before the first paint so the app never flashes. -->
-    <script>
-      (function () {
-        var dark = matchMedia('(prefers-color-scheme: dark)').matches
-        if (dark) document.documentElement.classList.add('dark')
-        document.querySelector('meta[name=theme-color]').content = dark ? '#0c0a09' : '#fafaf9'
-      })()
-    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import Home from './components/Home'
 import MuscleMap from './components/MuscleMap'
 import WeekCard from './components/WeekCard'
-import { useTheme } from './hooks/useTheme'
 import SettingsDrawer from './components/SettingsDrawer'
 import TrendsScreen from './components/Trends'
 import WorkoutDetail from './components/WorkoutDetail'
@@ -16,8 +15,6 @@ export default function App() {
   const [view, setView] = useState(null) // 'trends' | null
   const [settings, setSettings] = useState(false)
   const store = useStore()
-  // Light or dark, following the phone.
-  useTheme()
 
   // The week showing, by its Monday; null is this week. A saved week shows
   // in the same screens as this one and can be changed there, unless it was
