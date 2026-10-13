@@ -26,10 +26,10 @@ const CHIPS = [
 // it nears its goal.
 // Weeks saved before cardio minutes were tracked have no cardio row.
 // `figure` (the live week's body map) goes at the right of the title line;
-// `live` adds what's left to do this week under the bars. `logged` gives
+// `live` titles it with what's left to do (`ended`: what it fell short by). `logged` gives
 // classes and cardio sessions logged (the live week knows; saved weeks fall
 // back to the ones that counted as workouts).
-export default function WeekCard({ week, stretch, cardio, goals, figure, live, logged, title = 'This week', children }) {
+export default function WeekCard({ week, stretch, cardio, goals, figure, live, ended, logged, title = 'This week', children }) {
   // Weeks saved before cardio counted have no cardio key.
   const count = id => week[id] ?? 0
   const workouts = WORKOUT_KINDS.reduce((n, id) => n + count(id), 0)
@@ -49,7 +49,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
         {live ? (
           <p className="text-sm text-stone-500">
-            <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} />
+            <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} ended={ended} />
           </p>
         ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
         {figure}
@@ -84,14 +84,14 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, l
 }
 
 // What's still needed to reach each minimum: "1 workout, 3 stretches to go",
-// or "All goals met ✓".
-function ToGo({ goals, workouts, stretches, cardio }) {
+// or "All goals met ✓". A week that's over fell short instead.
+function ToGo({ goals, workouts, stretches, cardio, ended }) {
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
   const needs = []
   if (workouts < goals.workouts.min) needs.push(plural(goals.workouts.min - workouts, 'workout', 'workouts'))
   if (stretches < goals.stretch.min) needs.push(plural(goals.stretch.min - stretches, 'stretch', 'stretches'))
   if (cardio !== null && cardio < goals.cardio.min) needs.push(`${goals.cardio.min - cardio} cardio min`)
   return needs.length
-    ? `${needs.join(', ')} to go`
+    ? `${needs.join(', ')} ${ended ? 'short' : 'to go'}`
     : <span className="font-semibold text-emerald-700">All goals met ✓</span>
 }

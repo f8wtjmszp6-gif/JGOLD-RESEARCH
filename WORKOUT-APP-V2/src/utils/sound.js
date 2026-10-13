@@ -3,11 +3,18 @@
 // play even though no tap triggers them.
 let ctx
 
+// 'music': beeps mix in over music or a podcast, but the ringer switch mutes
+// them on the speaker. 'silent': they play like a media app, so the ringer
+// switch doesn't mute them, but the iPhone won't let them interrupt music.
+let mode = 'music'
+export function setSoundMode(m) {
+  mode = m
+}
+
 export function unlockAudio() {
   try {
-    // Play like a media app, so the iPhone's silent switch doesn't mute the
-    // timer (Safari 17+; ignored elsewhere).
-    if (navigator.audioSession) navigator.audioSession.type = 'playback'
+    // Safari 17+; ignored elsewhere.
+    if (navigator.audioSession) navigator.audioSession.type = mode === 'silent' ? 'playback' : 'ambient'
     ctx ??= new (window.AudioContext || window.webkitAudioContext)()
     if (ctx.state === 'suspended') ctx.resume()
   } catch {
@@ -34,6 +41,16 @@ export function playTick() {
   try {
     unlockAudio()
     tone(660, ctx.currentTime, 0.12, 0.35)
+  } catch {
+    // audio not supported
+  }
+}
+
+// One longer, higher note when a count-in ends and the timer starts.
+export function playGo() {
+  try {
+    unlockAudio()
+    tone(988, ctx.currentTime, 0.35, 0.6)
   } catch {
     // audio not supported
   }

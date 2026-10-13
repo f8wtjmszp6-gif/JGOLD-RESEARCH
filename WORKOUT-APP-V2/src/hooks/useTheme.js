@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react'
 
-// Light, dark, or auto (the phone's setting), saved on this device.
-// index.html applies it before the first paint.
-const KEY = 'workout-v2-theme'
+// Light or dark, following the phone's setting. index.html applies it before
+// the first paint.
 const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null
-
-function saved() {
-  try {
-    return localStorage.getItem(KEY)
-  } catch {
-    return null
-  }
-}
 
 function apply(dark) {
   document.documentElement.classList.toggle('dark', dark)
@@ -19,30 +10,20 @@ function apply(dark) {
 }
 
 export function useTheme() {
-  const [choice, setChoice] = useState(saved)
-  const [system, setSystem] = useState(() => !!media?.matches)
-  const dark = choice ? choice === 'dark' : system
+  const [dark, setDark] = useState(() => !!media?.matches)
 
-  // Follow the phone while you haven't picked.
   useEffect(() => {
+    // A choice saved when the app had its own Light / Dark setting.
+    try {
+      localStorage.removeItem('workout-v2-theme')
+    } catch {
+      // Storage blocked: nothing saved to clear.
+    }
     if (!media) return
-    const on = e => setSystem(e.matches)
+    const on = e => setDark(e.matches)
     media.addEventListener('change', on)
     return () => media.removeEventListener('change', on)
   }, [])
 
   useEffect(() => apply(dark), [dark])
-
-  // 'light' or 'dark' sticks on this device; 'auto' follows the phone.
-  function setMode(mode) {
-    try {
-      if (mode === 'auto') localStorage.removeItem(KEY)
-      else localStorage.setItem(KEY, mode)
-    } catch {
-      // Storage blocked — it still switches for this visit.
-    }
-    setChoice(mode === 'auto' ? null : mode)
-  }
-
-  return { dark, mode: choice ?? 'auto', setMode }
 }

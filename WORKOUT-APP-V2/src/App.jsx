@@ -4,65 +4,95 @@ import MuscleMap from './components/MuscleMap'
 import WeekCard from './components/WeekCard'
 import { useTheme } from './hooks/useTheme'
 import SettingsDrawer from './components/SettingsDrawer'
-import History from './components/History'
 import TrendsScreen from './components/Trends'
 import WorkoutDetail from './components/WorkoutDetail'
-import { useStore } from './hooks/useStore'
+import { useStore, calendarWeekOf } from './hooks/useStore'
 import { weekDay } from './utils/goal'
+import { weekRange, weeksAgo } from './utils/days'
+import { setSoundMode } from './utils/sound'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
-  const [view, setView] = useState(null) // 'history' | 'trends' | null
+  const [view, setView] = useState(null) // 'trends' | null
   const [settings, setSettings] = useState(false)
   const store = useStore()
-  // Applies the theme and follows the phone in Auto, whether or not
-  // Settings is open.
-  const theme = useTheme()
+  // Light or dark, following the phone.
+  useTheme()
+
+  // The week showing, by its Monday; null is this week. A saved week shows
+  // in the same screens as this one and can be changed there, unless it was
+  // saved before weeks kept their details (`week` is null then).
+  const [weekStart, setWeekStart] = useState(null)
+  const weeks = store.weeks
+  const found = weekStart ? weeks.findIndex(w => w.weekStart === weekStart && !w.live) : -1
+  const at = found < 0 ? weeks.length - 1 : found
+  const past = found >= 0
+  const entry = past ? store.history.find(e => calendarWeekOf(e) === weekStart) : null
+  const week = past ? store.weekStore(weekStart) : store
+
+  // Timer beeps follow the Sound setting.
+  useEffect(() => setSoundMode(store.timer.sound), [store.timer.sound])
+
+  // Coming back to the app goes back to this week, unless a workout is open.
+  useEffect(() => {
+    if (workoutId) return
+    const back = () => {
+      if (document.visibilityState === 'hidden') setWeekStart(null)
+    }
+    document.addEventListener('visibilitychange', back)
+    return () => document.removeEventListener('visibilitychange', back)
+  }, [workoutId])
 
   return (
     <div
       className="flex flex-col flex-1 min-h-0 bg-stone-50"
       style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      {view === 'history' ? (
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <History store={store} onBack={() => setView(null)} />
-        </div>
-      ) : view === 'trends' ? (
+      {view === 'trends' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
           <TrendsScreen store={store} onBack={() => setView(null)} />
         </div>
       ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
-          <WorkoutDetail key={workoutId} workoutId={workoutId} store={store} onBack={() => setWorkoutId(null)} onSwitch={setWorkoutId} />
+          <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} store={week} onBack={() => setWorkoutId(null)} onSwitch={setWorkoutId} />
         </div>
       ) : (
         <>
-          <Header
-            onSettings={() => setSettings(true)}
-            onHistory={() => setView('history')}
-            onTrends={() => setView('trends')}
-            week={store.week}
-            stretch={store.stretchWeek}
-            cardio={store.cardioWeek}
-            store={store}
-          />
+          {past ? (
+            <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onThisWeek={() => setWeekStart(null)} />
+          ) : (
+            <Header
+              onSettings={() => setSettings(true)}
+              onTrends={() => setView('trends')}
+              week={store.week}
+              stretch={store.stretchWeek}
+              cardio={store.cardioWeek}
+              store={store}
+            />
+          )}
           <div className="flex-1 min-h-0 overflow-hidden">
-            <Home store={store} onOpenWorkout={setWorkoutId} />
+            <Home
+              store={week}
+              entry={entry}
+              weeks={weeks}
+              at={at}
+              onAt={i => setWeekStart(weeks[i].live ? null : weeks[i].weekStart)}
+              onOpenWorkout={setWorkoutId}
+            />
           </div>
         </>
       )}
 
-      {settings && <SettingsDrawer store={store} theme={theme} onClose={() => setSettings(false)} />}
+      {settings && <SettingsDrawer store={store} onClose={() => setSettings(false)} />}
       {store.newWeek && !view && !workoutId && (
-        <NewWeekBar store={store} onView={() => { store.dismissNewWeek(); setView('history') }} />
+        <NewWeekBar store={store} onView={() => { setWeekStart(store.newWeek.weekStart); store.dismissNewWeek() }} />
       )}
     </div>
   )
 }
 
-function Header({ onSettings, onHistory, onTrends, week, stretch, cardio, store }) {
+function Header({ onSettings, onTrends, week, stretch, cardio, store }) {
   const logged = { class: store.classes.length, cardio: store.otherCardio.length }
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
@@ -83,12 +113,6 @@ function Header({ onSettings, onHistory, onTrends, week, stretch, cardio, store 
               <polyline points="15 7 19 7 19 11" />
             </svg>
           </HeaderBtn>
-          <HeaderBtn onClick={onHistory} label="Past weeks">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="5" width="18" height="16" rx="2.5" />
-              <path d="M3 10h18M8 3v4M16 3v4" />
-            </svg>
-          </HeaderBtn>
           <HeaderBtn onClick={onSettings} label={backupDue(store.lastBackupAt) ? 'Settings (time to back up)' : 'Settings'} dot={backupDue(store.lastBackupAt)}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
@@ -105,12 +129,38 @@ function Header({ onSettings, onHistory, onTrends, week, stretch, cardio, store 
   )
 }
 
+// A saved week: its dates, how long ago, and a way back to this week. Its card
+// shows the week as it ended, with what was left to go. Weeks saved before
+// their details were kept show their totals only.
+function PastHeader({ weekStart, entry, week, goals, onThisWeek }) {
+  return (
+    <div className="shrink-0 px-5 pt-6 pb-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[30px] leading-[1.1] font-bold text-stone-900 tracking-tight whitespace-nowrap">{weekRange(weekStart)}</h1>
+          <p className="text-sm text-stone-500 mt-0.5">{weeksAgo(weekStart)}</p>
+        </div>
+        <button onClick={onThisWeek} className="shrink-0 h-9 px-3.5 rounded-full bg-accent-50 text-accent-500 text-sm font-semibold active:bg-accent-100">
+          This week ›
+        </button>
+      </div>
+      <div className="mt-4">
+        {week ? (
+          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} figure={<MuscleMap store={week} />} live ended logged={{ class: week.classes.length, cardio: week.otherCardio.length }} />
+        ) : (
+          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} logged={entry.classes ? { class: entry.classes.length } : undefined} title="Totals" />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // A backup is due when there's never been one, or the last is a week old.
 function backupDue(lastBackupAt) {
   return !lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > 7 * 86400000
 }
 
-// Shown once when a new week starts: last week went to Past weeks.
+// Shown once when a new week starts: last week is a swipe back.
 function NewWeekBar({ store, onView }) {
   useEffect(() => {
     const t = setTimeout(store.dismissNewWeek, 10000)
@@ -119,7 +169,7 @@ function NewWeekBar({ store, onView }) {
   return (
     <div className="fixed left-0 right-0 bottom-0 z-40 px-4" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
       <div className="max-w-md mx-auto rounded-2xl bg-stone-900 shadow-lg pl-4 pr-2 py-2 flex items-center gap-3">
-        <p className="flex-1 text-sm text-white">New week. Last week is saved in Past weeks.</p>
+        <p className="flex-1 text-sm text-white">New week. Swipe back on the days to see last week.</p>
         <button onClick={onView} className="px-3.5 h-9 rounded-xl bg-white text-stone-900 text-sm font-semibold active:bg-stone-200">
           View
         </button>

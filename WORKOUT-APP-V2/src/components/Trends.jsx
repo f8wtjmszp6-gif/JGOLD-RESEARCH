@@ -14,12 +14,11 @@ const toDate = key => { const [y, m, d] = key.split('-').map(Number); return new
 const toKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-// The last 12 calendar weeks up to the newest saved one, oldest first. A week
-// you never reset in is a gap (null), so the grid keeps real time.
-function lastWeeks(history) {
-  if (!history.length) return []
-  const byWeek = Object.fromEntries(history.map(w => [calendarWeekOf(w), w]))
-  const newest = toDate(calendarWeekOf(history[0]))
+// The last 12 calendar weeks up to this one (so far), oldest first. A week
+// with nothing saved is a gap (null), so the grid keeps real time.
+function lastWeeks(history, current) {
+  const byWeek = Object.fromEntries([...history, current].map(w => [calendarWeekOf(w), w]))
+  const newest = toDate(current.weekStart)
   return Array.from({ length: WEEKS }, (_, i) => {
     const d = new Date(newest.getTime() - (WEEKS - 1 - i) * 7 * DAY)
     d.setHours(12)
@@ -49,7 +48,7 @@ export default function TrendsScreen({ store, onBack }) {
           <span className="text-sm font-medium">Today</span>
         </button>
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Trends</h1>
-        <p className="text-stone-400 text-sm mt-1">From your saved weeks</p>
+        <p className="text-stone-400 text-sm mt-1">Updates as you go, this week included</p>
       </div>
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         <Trends store={store} />
@@ -59,25 +58,14 @@ export default function TrendsScreen({ store, onBack }) {
 }
 
 function Trends({ store }) {
-  const weeks = lastWeeks(store.history)
+  const weeks = lastWeeks(store.history, store.current)
   const [group, setGroup] = useState(MUSCLE_GROUPS[0])
   const [open, setOpen] = useState(null) // exercise shown in the detail sheet
   // A group's charts: exercises from the bank that are in one of your
-  // workouts now, or that you've done in a saved week.
+  // workouts now, or that you've done in any week.
   const inWorkouts = new Set(GYM_ORDER.flatMap(id => store.getExercises(id).map(x => x.id)))
-  const done = new Set(store.history.flatMap(w => Object.keys(w.lifts ?? {})))
+  const done = new Set([store.current, ...store.history].flatMap(w => Object.keys(w.lifts ?? {})))
   const shown = EXERCISE_BANK.filter(x => x.group === group.id && (inWorkouts.has(x.id) || done.has(x.id)))
-
-  if (!weeks.length) {
-    return (
-      <div className="bg-white shadow-sm rounded-2xl p-5 text-center">
-        <p className="font-semibold text-stone-900">No trends yet</p>
-        <p className="text-sm text-stone-500 mt-1 leading-relaxed">
-          Trends build from your saved weeks. Start a new week with the reset button and they&rsquo;ll begin to fill in.
-        </p>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -155,11 +143,13 @@ function WeekGrid({ weeks, goals }) {
           <div className="flex-1 grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`, maxWidth: `${weeks.length * 26}px` }}>
             {weeks.map(({ monday, entry }) => {
               const v = entry ? value(entry) : 0
+              // This week is still filling in: outlined until its goal is met.
+              const live = entry?.live && v < 3
               return (
                 <div
                   key={monday.getTime()}
-                  title={`Week of ${short(monday)}: ${entry ? text(entry) : 'not saved'}`}
-                  className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]}`}
+                  title={`${entry?.live ? 'This week so far' : `Week of ${short(monday)}`}: ${entry ? text(entry) : 'not saved'}`}
+                  className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]} ${live ? 'ring-1 ring-inset ring-stone-300' : ''}`}
                 >
                   {v >= 3 ? '✓' : ''}
                 </div>
@@ -170,7 +160,7 @@ function WeekGrid({ weeks, goals }) {
       ))}
       <div className="flex justify-between text-[10px] text-stone-400 pl-[76px] mt-1">
         <span>{short(weeks[0].monday)}</span>
-        <span>{short(weeks.at(-1).monday)}</span>
+        <span>This week</span>
       </div>
     </div>
   )
@@ -183,7 +173,7 @@ const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 // in the better direction (lower when the move is assisted).
 function seriesFor(exercise, weeks) {
   const all = weeks
-    .map(w => ({ monday: w.monday, lift: w.entry?.lifts?.[exercise.id] }))
+    .map(w => ({ monday: w.monday, live: !!w.entry?.live, lift: w.entry?.lifts?.[exercise.id] }))
     .map(p => ({ ...p, m: metric(p.lift) }))
     .filter(p => p.m)
   const unit = all.at(-1)?.m.unit
@@ -227,11 +217,13 @@ function ExerciseTrend({ exercise, weeks, wide, onOpen }) {
   )
 }
 
-// What a week's sets looked like: "107.5 lb × 8, 8, 7", "60s, 60s", "15, 12, 12 reps".
+// What a week's sets looked like: "107.5 lb × 8, 8, 7", "60s, 60s", "15, 12, 12 reps",
+// then any split: "· 95 lb × 8, 8".
 function setsText({ lift, m }) {
-  if (m.unit === 's') return lift.sets.map(s => `${s}s`).join(', ')
-  if (m.unit === 'reps') return `${lift.sets.join(', ')} reps`
-  return `${fmt(lift.weight)} lb${m.assist ? ' assist' : ''} × ${lift.sets.join(', ')}`
+  const splits = (lift.splits ?? []).map(x => ` · ${fmt(x.weight)} lb${m.assist ? ' assist' : ''} × ${x.sets.join(', ')}`).join('')
+  if (m.unit === 's') return lift.sets.map(s => `${s}s`).join(', ') + splits
+  if (m.unit === 'reps') return `${lift.sets.join(', ')} reps${splits}`
+  return `${fmt(lift.weight)} lb${m.assist ? ' assist' : ''} × ${lift.sets.join(', ')}${splits}`
 }
 
 const UNIT_LABEL = { lb: 'working weight', s: 'longest hold', reps: 'best set' }
@@ -289,7 +281,7 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
           {points.slice(-5).reverse().map(p => (
             <div key={p.monday.getTime()} className="flex items-center justify-between py-2 text-sm">
               <span className="text-stone-700">
-                {short(p.monday)}
+                {p.live ? 'This week' : short(p.monday)}
                 {p.pr && <span className="ml-1.5 text-[10px] font-extrabold text-white bg-orange-600 rounded px-1 py-px align-[1px]">PR</span>}
               </span>
               <span className="text-stone-500">{setsText(p)}</span>
@@ -347,7 +339,7 @@ function BigChart({ points }) {
       ))}
       {dates.map(i => (
         <text key={i} x={x(i)} y={H - 4} textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--color-stone-400)">
-          {short(points[i].monday)}
+          {points[i].live ? 'This week' : short(points[i].monday)}
         </text>
       ))}
     </svg>

@@ -25,3 +25,24 @@ export function dayLabel(at) {
 export function inDayOrder(list) {
   return list.map((entry, index) => ({ entry, index })).sort((a, b) => (a.entry.at ?? '').localeCompare(b.entry.at ?? ''))
 }
+
+const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+const mondayDate = weekStart => {
+  const [y, m, d] = weekStart.split('-').map(Number)
+  return new Date(y, m - 1, d, 12)
+}
+
+// A calendar week by its Monday ("YYYY-MM-DD"): "Sep 29 – Oct 5", or
+// "Oct 6 – 12" within one month.
+export function weekRange(weekStart) {
+  const mon = mondayDate(weekStart)
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  return mon.getMonth() === sun.getMonth() ? `${short(mon)} – ${sun.getDate()}` : `${short(mon)} – ${short(sun)}`
+}
+
+// "Last week", "3 weeks ago".
+export function weeksAgo(weekStart, now = new Date()) {
+  const n = Math.round((weekDays(now)[0] - mondayDate(weekStart)) / (7 * 86400000))
+  return n === 1 ? 'Last week' : `${n} weeks ago`
+}

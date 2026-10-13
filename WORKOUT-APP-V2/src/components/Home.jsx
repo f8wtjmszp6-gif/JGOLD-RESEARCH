@@ -26,7 +26,9 @@ const WHAT_COUNTS = [
   ['stretch', [`Stretch ${STRETCH_WORKOUT_MINUTES}+ min`, 'Finish the routine or a cool-down, or log a session', null]],
 ]
 
-export default function Home({ store, onOpenWorkout }) {
+// `store` is the week showing (this one or a saved one), or null for a week
+// saved before weeks kept their details: then `entry` has its totals only.
+export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
   function setTab(t) {
@@ -39,10 +41,25 @@ export default function Home({ store, onOpenWorkout }) {
   }
   // The open sheet: { type: 'class' | 'walk' | 'other' | 'stretch', edit? },
   // where `edit` is { index, entry } when changing something already logged.
-  const [sheet, setSheet] = useState(null)
-  const open = (type, edit) => setSheet({ type, edit })
+  // It belongs to the week it was opened in, so changing weeks closes it.
+  const [opened, setSheet] = useState(null)
+  const sheet = opened?.at === at ? opened : null
+  const open = (type, edit) => setSheet({ type, edit, at })
   const close = () => setSheet(null)
   const byId = id => activities.find(a => a.id === id)
+  const strip = (
+    <div className="shrink-0 px-5 pb-3">
+      <WeekStrip weeks={weeks} at={at} onAt={onAt} />
+    </div>
+  )
+  if (!store) return (
+    <div className="h-full flex flex-col">
+      {strip}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6">
+        <OldWeek entry={entry} />
+      </div>
+    </div>
+  )
   const walk = byId('walk')
   const walks = store.walks
   const other = store.otherCardio
@@ -51,9 +68,7 @@ export default function Home({ store, onOpenWorkout }) {
   return (
     <div className="h-full flex flex-col">
       {/* The tabs stay put; only what's under them scrolls. */}
-      <div className="shrink-0 px-5 pb-3">
-        <WeekStrip dayLog={store.dayLog} />
-      </div>
+      {strip}
       <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
         <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
           {TABS.map(([id, label]) => (
@@ -189,6 +204,38 @@ export default function Home({ store, onOpenWorkout }) {
   )
 }
 
+// A week saved before weeks kept their details: how far each plan got.
+function OldWeek({ entry }) {
+  return (
+    <Section title="Workout plans">
+      <div className="bg-white rounded-2xl shadow-sm px-4 py-3.5 space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {entry.plans.map(p => <PlanBadge key={p.id} plan={p} />)}
+        </div>
+        <p className="text-sm text-stone-400 leading-relaxed">
+          This week was saved before each week kept everything you did, so only its totals are here and it can’t be changed.
+        </p>
+      </div>
+    </Section>
+  )
+}
+
+// How far a plan got that week: ✓ finished, 12/21 partway, — not started.
+function PlanBadge({ plan }) {
+  const name = workouts[plan.id]?.short ?? plan.id
+  const complete = plan.total > 0 && plan.done === plan.total
+  const style = complete
+    ? 'bg-orange-50 text-orange-700 border-orange-200'
+    : plan.done > 0
+      ? 'bg-white text-stone-700 border-stone-200'
+      : 'bg-stone-50 text-stone-400 border-transparent'
+  return (
+    <span className={`text-xs font-medium px-2 py-1 rounded-lg border ${style}`}>
+      {name} {complete ? '✓' : plan.done > 0 ? `${plan.done}/${plan.total}` : '—'}
+    </span>
+  )
+}
+
 // Cardio that isn't a class or a walk: a run, a ride, a swim.
 const OTHER_CARDIO = {
   id: 'otherCardio',
@@ -286,7 +333,7 @@ function CardioLine({ session, showWorkout = true, onEdit }) {
 // length and effort.
 // With `edit`, it opens filled in with that class to change or delete.
 function LogClassSheet({ store, edit, onClose }) {
-  const [c, setC] = useState(() => (edit ? { ...CLASS_DEFAULT, ...edit.entry } : { ...store.getNewClass(), at: new Date().toISOString() }))
+  const [c, setC] = useState(() => (edit ? { ...CLASS_DEFAULT, ...edit.entry } : { ...store.getNewClass(), at: store.today.toISOString() }))
   const set = patch => setC(cur => ({ ...cur, ...patch }))
   const all = CLASS_AREAS.map(a => a.id)
   const full = all.every(id => c.areas.includes(id))
@@ -360,7 +407,7 @@ function LogClassSheet({ store, edit, onClose }) {
           <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
         ))}
       </div>
-      <DayPicker at={c.at} onChange={at => set({ at })} />
+      <DayPicker now={store.today} at={c.at} onChange={at => set({ at })} />
       <button
         onClick={log}
         disabled={nothing}
@@ -381,7 +428,7 @@ function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   const start = edit?.entry ?? store.getCardioSetting(kind)
   const [minutes, setMinutes] = useState(start.minutes)
   const [hard, setHard] = useState(start.hard)
-  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
+  const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
 
   const workout = !isWalk && cardioIsWorkout({ minutes, hard })
   const need = CARDIO_WORKOUT_MINUTES[hard ? 'hard' : 'easy'] - minutes
@@ -410,7 +457,7 @@ function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
         </p>
       )}
       <EffortNote />
-      <DayPicker at={at} onChange={setAt} />
+      <DayPicker now={store.today} at={at} onChange={setAt} />
       <button
         onClick={add}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
@@ -422,10 +469,10 @@ function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   )
 }
 
-// Which day of this week something happened: Mon–Sun, days still to come
-// greyed out. Today keeps the time you logged it.
-function DayPicker({ at, onChange }) {
-  const now = new Date()
+// Which day of the week something happened: Mon–Sun, days still to come
+// greyed out. Today keeps the time you logged it. `now` is today, or a past
+// week's last day.
+function DayPicker({ now, at, onChange }) {
   const picked = at ? new Date(at) : null
   return (
     <div className="space-y-2">
@@ -459,10 +506,10 @@ function DayPicker({ at, onChange }) {
 // Deleting asks once more, in place.
 // Adds a rest day, or moves or deletes one: which day was it?
 function RestSheet({ store, edit, onClose }) {
-  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
+  const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
   return (
     <SettingsSheet title={edit ? 'Edit rest day' : 'Add a rest day'} closeLabel="Cancel" onClose={onClose}>
-      <DayPicker at={at} onChange={setAt} />
+      <DayPicker now={store.today} at={at} onChange={setAt} />
       <button
         onClick={() => {
           if (edit) store.editRest(edit.index, at)
@@ -574,7 +621,7 @@ function StretchLine({ session, onEdit }) {
 // Logs a stretch session on your own; 30+ minutes also counts as a workout.
 function AddStretchSheet({ store, edit, onClose }) {
   const [minutes, setMinutes] = useState(edit?.entry.minutes ?? store.lastOwnStretch)
-  const [at, setAt] = useState(edit?.entry.at ?? new Date().toISOString())
+  const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
   const need = STRETCH_WORKOUT_MINUTES - minutes
   return (
     <SettingsSheet title={edit ? 'Edit stretching' : 'Add stretching'} closeLabel="Cancel" onClose={onClose}>
@@ -587,7 +634,7 @@ function AddStretchSheet({ store, edit, onClose }) {
       ) : (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
       )}
-      <DayPicker at={at} onChange={setAt} />
+      <DayPicker now={store.today} at={at} onChange={setAt} />
       <button
         onClick={() => {
           if (edit) store.editOwnStretch(edit.index, { minutes, at })

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { playBeep, playTick, unlockAudio } from '../utils/sound'
+import { playBeep, playGo, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
 import { useDragToClose } from '../hooks/useDragToClose'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
@@ -8,6 +8,7 @@ import { EXERCISE_BANK, EQUIPMENT, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor
 import { HOWTO } from '../data/howto'
 import { HowToBody } from './HowTo'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchFits, stretchRating } from '../data/stretches'
+import { weekRange } from '../utils/days'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
 
@@ -62,12 +63,22 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // The one timer on screen, shown in the bar at the bottom.
   //   kind  – 'rest' | 'hold' | 'stretch'
   //   side / sides – per-side holds and stretches run twice
-  //   phase – 'running' | 'switch' (between sides) | 'over'
+  //   phase – 'ready' (3 s to get into position) | 'running' | 'switch'
+  //           (between sides) | 'rest' (between stretch sets) | 'over'
   const [active, setActive] = useState(null)
+  // The timer opened full screen (it goes back to the bar when it ends).
+  const [fullTimer, setFullTimer] = useState(false)
   const clock = useCountdown(({ start }) => {
-    playBeep()
     const a = active
     if (!a) return
+    // Get-ready over: the timer itself starts now.
+    if (a.phase === 'ready') {
+      playGo()
+      setActive({ ...a, phase: 'running' })
+      start(a.total)
+      return
+    }
+    playBeep()
 
     // A warm-up goes straight into its next set; the beep says change pace.
     if (a.kind === 'warmup' && a.set < a.sets) {
@@ -98,9 +109,13 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
     }
 
     if (a.kind === 'hold') {
-      const sets = store.getLog(workoutId, a.exercise).sets
-      if (!sets[a.index]?.done) store.toggleSet(workoutId, a.exercise, a.index)
-      const left = sets.filter((x, i) => !x.done && i !== a.index).length
+      const all = store.getLog(workoutId, a.exercise).all
+      const set = all.find(x => x.part === a.part && x.index === a.index)
+      if (set && !set.done) {
+        if (a.part < 0) store.toggleSet(workoutId, a.exercise, a.index)
+        else store.togglePartSet(workoutId, a.exercise, a.part, a.index)
+      }
+      const left = all.filter(x => !x.done && x !== set).length
       if (startRest(a.exercise, left)) return // rolls straight into rest
     }
     if (a.kind === 'warmup') store.setWarmupDone(workoutId, true)
@@ -110,7 +125,12 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
     setActive({ ...a, phase: 'over' })
     // Rest waits for you to dismiss it; a finished hold or stretch clears itself.
-    if (a.kind !== 'rest') setTimeout(() => setActive(x => (x?.id === a.id ? null : x)), 1600)
+    if (a.kind !== 'rest') {
+      setTimeout(() => {
+        setActive(x => (x?.id === a.id ? null : x))
+        setFullTimer(false)
+      }, 1600)
+    }
   })
   useWakeLock(clock.running)
 
@@ -124,10 +144,21 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   }, [clock.running, secondsLeft])
   useEffect(() => { if (secondsLeft > 3) lastTick.current = null }, [secondsLeft])
 
+  // Holds, stretches and warm-ups count you in first (Settings › Get-ready
+  // time); a rest starts right away.
+  const prepMs = store.timer.prep * 1000
   function run(timer) {
     unlockAudio()
-    setActive({ id: ++timerSeq, side: 1, sides: 1, set: 1, sets: 1, phase: 'running', ...timer })
-    clock.start(timer.total)
+    const ready = timer.kind !== 'rest' && prepMs > 0
+    setActive({ id: ++timerSeq, side: 1, sides: 1, set: 1, sets: 1, phase: ready ? 'ready' : 'running', ...timer })
+    clock.start(ready ? prepMs : timer.total)
+  }
+
+  // Skips the rest of the count-in.
+  function goNow() {
+    playGo()
+    setActive(a => ({ ...a, phase: 'running' }))
+    clock.start(active.total)
   }
 
   // Starts the exercise's rest, if it has one turned on and a set is still
@@ -144,17 +175,19 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
     return true
   }
 
-  // Times the next hold you haven't ticked off yet, from that set's seconds.
+  // Times the next hold you haven't ticked off yet (split cards included),
+  // from that set's seconds.
   function startHold(exercise) {
-    const sets = store.getLog(workoutId, exercise).sets
-    const index = Math.max(0, sets.findIndex(x => !x.done))
+    const all = store.getLog(workoutId, exercise).all
+    const set = all.find(x => !x.done) ?? all[0]
     run({
       kind: 'hold',
       title: exercise.name,
-      total: sets[index].reps * 1000,
+      total: set.reps * 1000,
       sides: store.getSetup(exercise).perSide ? 2 : 1,
       exercise,
-      index,
+      part: set.part,
+      index: set.index,
     })
   }
 
@@ -179,15 +212,18 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   function stopTimer() {
     clock.stop()
     setActive(null)
+    setFullTimer(false)
   }
 
-  // "Start" between rounds: the next side, or side 1 of the next set.
+  // "Start" between rounds: the next side, or side 1 of the next set, after
+  // the same count-in.
   function startNextSide() {
     unlockAudio()
+    const phase = prepMs > 0 ? 'ready' : 'running'
     setActive(a => (a.side < a.sides
-      ? { ...a, side: a.side + 1, phase: 'running' }
-      : { ...a, set: a.set + 1, side: 1, phase: 'running' }))
-    clock.start(active.total)
+      ? { ...a, side: a.side + 1, phase }
+      : { ...a, set: a.set + 1, side: 1, phase }))
+    clock.start(prepMs > 0 ? prepMs : active.total)
   }
 
   // "Start" after a rest: a hold begins its next countdown; for reps it just
@@ -200,7 +236,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
   // One exercise in the list: dragged by its handle, swiped to remove.
   const sections = store.getExerciseSections(workoutId)
-  const finished = x => store.getLog(workoutId, x).sets.every(set => set.done)
+  const finished = x => store.getLog(workoutId, x).all.every(set => set.done)
   const partDone = list => list.length > 0 && list.every(finished)
   const partProgress = list => `${list.filter(finished).length} of ${list.length}`
   const exerciseCard = exercise => {
@@ -232,13 +268,13 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // What comes after a rest, read live so ticking during the rest updates it.
   let next = null
   if (active?.kind === 'rest' && active.exercise) {
-    const sets = store.getLog(workoutId, active.exercise).sets
+    const sets = store.getLog(workoutId, active.exercise).all
     const index = sets.findIndex(x => !x.done)
     next = { complete: index === -1, set: index + 1, of: sets.length }
   }
 
   const exerciseList = store.getExercises(workoutId)
-  const exerciseDone = exerciseList.filter(e => store.getLog(workoutId, e).sets.every(x => x.done)).length
+  const exerciseDone = exerciseList.filter(e => store.getLog(workoutId, e).all.every(x => x.done)).length
   const stretchList = store.getStretches(workout.id)
   const stretchDone = stretchList.filter(s => store.getStretchDone(workoutId, s.id)).length
 
@@ -250,7 +286,8 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6" />
           </svg>
-          <span className="text-sm font-medium">Workouts</span>
+          {/* In a saved week, back goes to that week. */}
+          <span className="text-sm font-medium">{store.past ? weekRange(store.weekStart) : 'Workouts'}</span>
         </button>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{workout.short}</h1>
@@ -287,8 +324,30 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
         </div>
       </div>}
 
+      {/* The running timer, pinned above the list so it never covers it. */}
+      {active && (
+        <TimerBar
+          full={fullTimer}
+          onFull={setFullTimer}
+          timer={active}
+          next={next}
+          remaining={clock.remaining}
+          running={clock.running}
+          onPause={clock.pause}
+          onResume={() => { unlockAudio(); clock.resume() }}
+          onAdd={() => {
+            clock.add(30000)
+            setActive(a => (a.phase === 'rest' ? { ...a, restTotal: a.restTotal + 30000 } : { ...a, total: a.total + 30000 }))
+          }}
+          onSkipRest={() => { clock.stop(); setActive(a => ({ ...a, phase: 'switch' })) }}
+          onGo={goNow}
+          onClose={stopTimer}
+          onStart={active.phase === 'switch' ? startNextSide : startNextSet}
+        />
+      )}
+
       {/* Content */}
-      <div ref={listRef} className={`flex-1 overflow-y-auto px-5 space-y-2 ${active ? 'pb-28' : 'pb-6'}`}>
+      <div ref={listRef} className="flex-1 overflow-y-auto px-5 space-y-2 pb-6">
         {/* The plan in three parts: an optional warm-up, the main workout,
             and an optional Core section. */}
         {tab === 'exercises' && (
@@ -363,29 +422,12 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
         />
       )}
 
-      {active && (
-        <TimerBar
-          timer={active}
-          next={next}
-          remaining={clock.remaining}
-          running={clock.running}
-          onPause={clock.pause}
-          onResume={() => { unlockAudio(); clock.resume() }}
-          onAdd={() => {
-            clock.add(30000)
-            setActive(a => (a.phase === 'rest' ? { ...a, restTotal: a.restTotal + 30000 } : { ...a, total: a.total + 30000 }))
-          }}
-          onSkipRest={() => { clock.stop(); setActive(a => ({ ...a, phase: 'switch' })) }}
-          onClose={stopTimer}
-          onStart={active.phase === 'switch' ? startNextSide : startNextSet}
-        />
-      )}
     </div>
   )
 }
 
-// Every timer — rest, hold, stretch — lives in this bar pinned to the bottom,
-// so the list stays in view while it runs.
+// Every timer — rest, hold, stretch — lives in this bar pinned above the
+// list, so the list stays in view while it runs. It can open full screen.
 const TIMER_LABELS = { rest: 'Rest', hold: 'Hold', stretch: 'Stretch', warmup: 'Warm-up' }
 
 // The bar's color says what's happening: blue while you work, amber while
@@ -393,32 +435,33 @@ const TIMER_LABELS = { rest: 'Rest', hold: 'Hold', stretch: 'Stretch', warmup: '
 const BAR_THEMES = {
   work: {
     bar: 'bg-blue-50 border-blue-200', label: 'text-blue-900/70', big: 'text-blue-900',
-    track: 'bg-blue-100', fill: 'bg-blue-600',
+    track: 'bg-blue-100', fill: 'bg-blue-600', ring: 'text-blue-600', ringTrack: 'text-blue-100', screen: 'bg-blue-50',
     primary: 'bg-blue-600 text-white active:bg-blue-700', secondary: 'bg-blue-100 text-blue-900 active:bg-blue-200',
   },
   rest: {
     bar: 'bg-amber-50 border-amber-300', label: 'text-amber-900/70', big: 'text-amber-900',
-    track: 'bg-amber-100', fill: 'bg-amber-600',
+    track: 'bg-amber-100', fill: 'bg-amber-600', ring: 'text-amber-600', ringTrack: 'text-amber-100', screen: 'bg-amber-50',
     primary: 'bg-amber-600 text-white active:bg-amber-700', secondary: 'bg-amber-100 text-amber-900 active:bg-amber-200',
   },
   waiting: {
     bar: 'bg-white border-stone-200', label: 'text-stone-500', big: 'text-stone-900',
-    track: 'bg-stone-100', fill: 'bg-stone-900',
+    track: 'bg-stone-100', fill: 'bg-stone-900', ring: 'text-stone-900', ringTrack: 'text-stone-200', screen: 'bg-white',
     primary: 'bg-stone-900 text-white active:bg-stone-700', secondary: 'bg-stone-100 text-stone-700 active:bg-stone-200',
   },
   done: {
     bar: 'bg-emerald-50 border-emerald-200', label: 'text-emerald-900/70', big: 'text-emerald-900',
-    track: 'bg-emerald-100', fill: 'bg-emerald-600',
+    track: 'bg-emerald-100', fill: 'bg-emerald-600', ring: 'text-emerald-600', ringTrack: 'text-emerald-100', screen: 'bg-emerald-50',
     primary: 'bg-emerald-600 text-white active:bg-emerald-700', secondary: 'bg-emerald-100 text-emerald-900 active:bg-emerald-200',
   },
 }
 
-function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, onClose, onStart, onSkipRest }) {
+function TimerBar({ full, onFull, timer, next, remaining, running, onPause, onResume, onAdd, onClose, onStart, onSkipRest, onGo }) {
   const over = timer.phase === 'over'
   const switching = timer.phase === 'switch'
+  const ready = timer.phase === 'ready'
   const setRest = timer.phase === 'rest' // resting between stretch sets
   const resting = timer.kind === 'rest' || setRest
-  const progress = over || switching ? 1 : 1 - remaining / (setRest ? timer.restTotal : timer.total)
+  const progress = ready ? 0 : over || switching ? 1 : 1 - remaining / (setRest ? timer.restTotal : timer.total)
   const sides = (timer.sets > 1 ? ` · Set ${timer.set} of ${timer.sets}` : '') +
     (timer.sides > 1 ? ` · Side ${timer.side} of ${timer.sides}` : '')
 
@@ -432,6 +475,10 @@ function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, o
   } else if (switching) {
     big = 'Next set'
     label = `${timer.title} · Set ${timer.set + 1} of ${timer.sets} next`
+  }
+  if (ready) {
+    big = `Get ready · ${Math.max(1, Math.ceil(remaining / 1000))}`
+    label = `${TIMER_LABELS[timer.kind]} · ${timer.title}${sides}`
   }
   if (over) {
     if (timer.kind !== 'rest') {
@@ -447,35 +494,92 @@ function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, o
   }
 
   const waiting = switching || (over && timer.kind === 'rest' && next && !next.complete)
-  const theme = BAR_THEMES[waiting ? 'waiting' : over ? 'done' : resting ? 'rest' : 'work']
+  const theme = BAR_THEMES[waiting || ready ? 'waiting' : over ? 'done' : resting ? 'rest' : 'work']
+
+  // The buttons, the same in the bar and full screen.
+  const controls = size => (
+    <>
+      {ready ? (
+        <>
+          <BarBtn size={size} className={theme.secondary} onClick={onClose}>Stop</BarBtn>
+          <BarBtn size={size} className={theme.primary} onClick={onGo}>Go now</BarBtn>
+        </>
+      ) : <>
+        {!over && !switching && (resting ? (
+          <BarBtn size={size} className={theme.secondary} onClick={onAdd}>+30s</BarBtn>
+        ) : (
+          <BarBtn size={size} className={theme.secondary} onClick={running ? onPause : onResume}>{running ? 'Pause' : 'Resume'}</BarBtn>
+        ))}
+        {waiting ? (
+          <>
+            {switching && <BarBtn size={size} className={theme.secondary} onClick={onClose}>Stop</BarBtn>}
+            <BarBtn size={size} className={theme.primary} onClick={onStart}>Start</BarBtn>
+          </>
+        ) : (
+          <BarBtn size={size} className={theme.primary} onClick={setRest ? onSkipRest : onClose}>
+            {over ? 'Done' : resting ? 'Skip' : 'Stop'}
+          </BarBtn>
+        )}
+      </>}
+    </>
+  )
+
+  // Full screen: the countdown big inside a ring, for reading from the floor
+  // mid-stretch. ‹ Back to the list shrinks it to the bar again.
+  if (full) {
+    const R = 120
+    const C = 2 * Math.PI * R
+    return createPortal(
+      <div
+        className={`fixed inset-0 z-50 flex flex-col transition-colors duration-300 ${theme.screen}`}
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="px-5 pt-6">
+          <button onClick={() => onFull(false)} className="flex items-center gap-1.5 text-accent-500 active:opacity-70">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>
+            <span className="text-sm font-medium">Back to the list</span>
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
+          <p className={`text-base leading-snug ${theme.label}`}>{label}</p>
+          <div className="relative w-[min(72vw,300px)] aspect-square">
+            <svg viewBox="0 0 280 280" className="absolute inset-0 w-full h-full -rotate-90" aria-hidden="true">
+              <circle cx="140" cy="140" r={R} fill="none" stroke="currentColor" strokeWidth="14" className={theme.ringTrack} />
+              <circle
+                cx="140" cy="140" r={R} fill="none" stroke="currentColor" strokeWidth="14" strokeLinecap="round"
+                strokeDasharray={C} strokeDashoffset={C * (1 - progress)}
+                className={`${theme.ring} transition-[stroke-dashoffset] duration-300`}
+              />
+            </svg>
+            <p className={`absolute inset-0 flex items-center justify-center px-8 font-bold tabular-nums leading-tight ${theme.big} ${big.length > 6 ? 'text-3xl' : 'text-6xl'}`}>{big}</p>
+          </div>
+          <div className="flex items-center gap-3">{controls('lg')}</div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
 
   return (
-    <div
-      className="fixed left-0 right-0 bottom-0 z-40 px-4"
-      style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-    >
-      <div className={`max-w-md mx-auto rounded-2xl border shadow-lg px-4 py-3 transition-colors duration-300 ${theme.bar}`}>
+    <div className="shrink-0 px-5 pb-3">
+      <div className={`rounded-2xl border shadow-sm px-4 py-3 transition-colors duration-300 ${theme.bar}`}>
+        {/* What's timing on its own line (wrapping, so the side and set always
+            show), with full screen at its end; the time and buttons below. */}
+        <div className="flex items-start gap-2">
+          <p className={`flex-1 min-w-0 text-xs leading-snug pt-0.5 ${theme.label}`}>{label}</p>
+          <button
+            onClick={() => onFull(true)}
+            aria-label="Full screen"
+            className={`w-7 h-7 -mr-1.5 -mt-1 shrink-0 rounded-lg flex items-center justify-center ${theme.label} active:opacity-60`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+            </svg>
+          </button>
+        </div>
         <div className="flex items-center gap-2.5">
-          <div className="flex-1 min-w-0">
-            {/* Wraps instead of cutting off, so the side and set always show. */}
-            <p className={`text-xs leading-snug ${theme.label}`}>{label}</p>
-            <p className={`text-2xl font-bold ${theme.big}`}>{big}</p>
-          </div>
-          {!over && !switching && (resting ? (
-            <BarBtn className={theme.secondary} onClick={onAdd}>+30s</BarBtn>
-          ) : (
-            <BarBtn className={theme.secondary} onClick={running ? onPause : onResume}>{running ? 'Pause' : 'Resume'}</BarBtn>
-          ))}
-          {waiting ? (
-            <>
-              {switching && <BarBtn className={theme.secondary} onClick={onClose}>Stop</BarBtn>}
-              <BarBtn className={theme.primary} onClick={onStart}>Start</BarBtn>
-            </>
-          ) : (
-            <BarBtn className={theme.primary} onClick={setRest ? onSkipRest : onClose}>
-              {over ? 'Done' : resting ? 'Skip' : 'Stop'}
-            </BarBtn>
-          )}
+          <p className={`flex-1 min-w-0 text-2xl font-bold ${theme.big}`}>{big}</p>
+          {controls()}
         </div>
         <div className={`h-1 rounded-full mt-2.5 overflow-hidden ${theme.track}`}>
           <div className={`h-full rounded-full ${theme.fill}`} style={{ width: `${progress * 100}%` }} />
@@ -485,9 +589,9 @@ function TimerBar({ timer, next, remaining, running, onPause, onResume, onAdd, o
   )
 }
 
-function BarBtn({ className, onClick, children }) {
+function BarBtn({ size, className, onClick, children }) {
   return (
-    <button onClick={onClick} className={`px-3 h-10 rounded-xl text-sm font-semibold transition-colors ${className}`}>
+    <button onClick={onClick} className={`rounded-xl font-semibold transition-colors ${size === 'lg' ? 'px-6 h-14 text-base' : 'px-3 h-10 text-sm'} ${className}`}>
       {children}
     </button>
   )
@@ -1392,8 +1496,16 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
   const setup = store.getSetup(exercise)
   const hold = setup.mode === 'hold'
 
-  const allDone = log.sets.every(x => x.done)
+  // Done means every set, split cards included.
+  const allDone = log.all.every(x => x.done)
+  const mainDone = log.sets.every(x => x.done)
   const someDone = log.sets.some(x => x.done)
+  // A split starts one step lighter (more help, when assisted).
+  const lighter = w => stepTo(w, equipment === 'barbell' ? 5 : 2.5, assist ? 1 : -1)
+  const tickSet = (set, toggle) => {
+    toggle()
+    if (!set.done) onSetDone(log.all.filter(x => !x.done && x !== set).length)
+  }
 
   const holdTime = log.sets[0]?.reps ?? 0
   const summary = loadSummary(equipment, log)
@@ -1407,8 +1519,8 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
             <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
             <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
           </span>
-          <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.sets.filter(x => x.done).length} of ${log.sets.length} sets done`}>
-            {log.sets.map((x, i) => (
+          <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.all.filter(x => x.done).length} of ${log.all.length} sets done`}>
+            {log.all.map((x, i) => (
               <span key={i} className={`w-2 h-2 rounded-full ${x.done ? 'bg-accent-500' : 'bg-stone-200'}`} />
             ))}
           </span>
@@ -1419,9 +1531,13 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
   }
 
   if (!open) {
-    const done = hold
+    // With a split, each weight is followed by its sets: "105 lbs · 6, 6 · 95 lbs · 8".
+    const done = hold && !log.parts.length
       ? `${log.sets.length} × ${log.sets[0]?.reps ?? 0}s`
-      : `${log.weight > 0 ? `${fmt(log.weight)} lbs · ` : ''}${log.sets.map(x => x.reps).join(', ')}`
+      : [{ weight: log.weight, sets: log.sets }, ...log.parts]
+        .filter(p => p.sets.length)
+        .map(p => `${p.weight > 0 || log.parts.length ? `${fmt(p.weight)} lbs · ` : ''}${p.sets.map(x => `${x.reps}${hold ? 's' : ''}`).join(', ')}`)
+        .join(' · ')
     return (
       <div className="flex items-center rounded-2xl bg-accent-50 border border-accent-200">
         <DragHandle name={exercise.name} {...grip} />
@@ -1443,6 +1559,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
   }
 
   return (
+    <div className="space-y-2">
     <div className={`rounded-2xl p-4 transition-all ${
       allDone ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
@@ -1490,17 +1607,14 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
       <div className="mt-2.5 space-y-1.5">
         {log.sets.map((set, i) => (
           <SetRow
-            key={i}
+            key={set.index}
             index={i}
             value={set.reps}
             done={set.done}
             hold={hold}
             readOnly={hold}
-            onChange={reps => store.setSetReps(exercise, i, reps)}
-            onToggle={() => {
-              store.toggleSet(workoutId, exercise, i)
-              if (!set.done) onSetDone(log.sets.filter((x, j) => !x.done && j !== i).length)
-            }}
+            onChange={reps => store.setSetReps(exercise, set.index, reps)}
+            onToggle={() => tickSet(set, () => store.toggleSet(workoutId, exercise, set.index))}
           />
         ))}
       </div>
@@ -1520,7 +1634,11 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
             − Remove set
           </button>
         )}
-        {someDone && !allDone && (
+        {/* Once some sets are ticked, the rest can move to a lighter card. */}
+        {someDone && !mainDone && (
+          <SplitButton onClick={() => store.splitSets(workoutId, exercise, -1, lighter(log.weight))} />
+        )}
+        {someDone && !mainDone && (
           <span className="text-xs text-stone-400 ml-auto">
             {log.sets.filter(x => x.done).length}/{log.sets.length} done
           </span>
@@ -1547,6 +1665,7 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
                   step={BAR_STEP}
                   min={BAR_MIN}
                   max={BAR_MAX}
+                  editable
                   suffix=" lbs"
                   onChange={v => store.setBar(exercise, v)}
                 />
@@ -1606,6 +1725,122 @@ function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose,
           </div>
         </SettingsSheet>
       )}
+    </div>
+
+      {log.parts.map((p, j) => (
+        <SplitCard
+          key={j}
+          name={exercise.name}
+          first={log.sets.length + log.parts.slice(0, j).reduce((n, q) => n + q.sets.length, 0)}
+          part={p}
+          equipment={equipment}
+          bar={log.bar}
+          hold={hold}
+          onWeight={w => store.setPartWeight(workoutId, exercise, j, w)}
+          onReps={(i, reps) => store.setPartReps(workoutId, exercise, j, i, reps)}
+          onToggle={set => tickSet(set, () => store.togglePartSet(workoutId, exercise, j, set.index))}
+          onAdd={() => store.addPartSet(workoutId, exercise, j)}
+          onRemove={() => store.removePartSet(workoutId, exercise, j)}
+          onSplit={() => store.splitSets(workoutId, exercise, j, lighter(p.weight))}
+          onClose={() => store.unsplit(workoutId, exercise, j)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SplitButton({ label = 'Split', onClick }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-1 text-xs font-semibold text-orange-600 active:opacity-60">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M6 21V3" />
+      </svg>
+      {label}
+    </button>
+  )
+}
+
+// A split card: this week's lighter sets of an exercise, under its main card.
+// Its weight is its own; everything else follows the exercise's settings.
+// `first` is how many sets come before it, so its sets carry on the count.
+function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const step = equipment === 'barbell' ? 5 : 2.5
+  const unit = { dumbbell: 'lbs each', assisted: 'lbs help' }[equipment] ?? 'lbs'
+  const done = part.sets.filter(x => x.done).length
+  const all = done === part.sets.length
+
+  function save() {
+    setEditing(false)
+    const n = parseFloat(draft)
+    if (!isNaN(n) && n >= 0) onWeight(Math.round(n * 100) / 100)
+  }
+
+  const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100'
+  return (
+    <div className="relative ml-3">
+      {/* The elbow joining it to the card above. */}
+      <span className="absolute -left-3 -top-2 w-2.5 h-8 border-l-2 border-b-2 border-orange-200 rounded-bl-lg" aria-hidden="true" />
+      <div className={`rounded-2xl p-4 border-[1.5px] ${all ? 'bg-accent-50 border-accent-200' : 'bg-white border-orange-200'}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold leading-tight text-stone-900">
+              {name}
+              <span className="ml-1.5 align-[2px] text-[10.5px] font-bold text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded-md">Split</span>
+            </p>
+            <p className="mt-1 text-sm text-stone-500">
+              This week only{equipment === 'barbell' && bar > 0 && part.weight > bar ? ` · ${fmt((part.weight - bar) / 2)} lb/side` : ''}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label={`Remove this split of ${name}`} className="w-10 h-10 shrink-0 rounded-xl bg-stone-100 text-stone-500 flex items-center justify-center active:bg-stone-200">✕</button>
+        </div>
+
+        <div className="mt-2.5 flex items-center justify-between rounded-xl bg-orange-50 px-2 py-1.5">
+          <button onClick={() => onWeight(stepTo(part.weight, step, -1))} className={btn} aria-label="Less weight">−</button>
+          {editing ? (
+            <input
+              type="number"
+              inputMode="decimal"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={save}
+              onKeyDown={e => e.key === 'Enter' && save()}
+              autoFocus
+              className="w-24 text-center text-xl font-bold bg-white rounded-lg py-0.5 text-stone-900 outline-none"
+            />
+          ) : (
+            <button onClick={() => { setDraft(String(part.weight)); setEditing(true) }} className="text-center active:opacity-60">
+              <span className="text-xl font-bold text-orange-700">{equipment === 'bodyweight' ? '+' : ''}{fmt(part.weight)}</span>
+              <span className="ml-1 text-xs font-medium text-stone-400">{unit}</span>
+            </button>
+          )}
+          <button onClick={() => onWeight(stepTo(part.weight, step, 1))} className={btn} aria-label="More weight">+</button>
+        </div>
+
+        <div className="mt-2 space-y-1.5">
+          {part.sets.map(set => (
+            <SetRow
+              key={set.index}
+              index={first + set.index}
+              value={set.reps}
+              done={set.done}
+              hold={hold}
+              onChange={reps => onReps(set.index, reps)}
+              onToggle={() => onToggle(set)}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3 mt-2">
+          <button onClick={onAdd} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>
+          {part.sets.length > 1 && (
+            <button onClick={onRemove} className="text-xs font-medium text-stone-400 active:text-stone-600">− Remove set</button>
+          )}
+          {done > 0 && !all && <SplitButton label="Split again" onClick={onSplit} />}
+          {done > 0 && !all && <span className="text-xs text-stone-400 ml-auto">{done}/{part.sets.length} done</span>}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1852,7 +2087,8 @@ function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration
             step={1}
             min={1}
             max={4}
-            onChange={onSetsChange}
+            editable
+            onChange={n => onSetsChange(Math.round(n))}
           />
           {sets > 1 && (
             <StepperRow

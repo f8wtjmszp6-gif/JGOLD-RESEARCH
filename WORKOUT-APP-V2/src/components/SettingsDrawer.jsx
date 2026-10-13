@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { useDragToClose } from '../hooks/useDragToClose'
 import { GOAL_SETTINGS } from '../data/workout'
-import { Segmented } from './WorkoutDetail'
+import { Segmented, StepperRow } from './WorkoutDetail'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
 
 // App settings, full screen, sliding in from the right (and swiping back out
-// to close): your weekly goals (with what the guidelines recommend), light
-// or dark, and backups.
-export default function SettingsDrawer({ store, theme, onClose }) {
+// to close): your weekly goals (with what the guidelines recommend), timers,
+// backups and reset. Light or dark follows the phone.
+export default function SettingsDrawer({ store, onClose }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose, 'x')
   return (
@@ -40,22 +40,78 @@ export default function SettingsDrawer({ store, theme, onClose }) {
             ))}
           </Section>
 
-          <Section title="Appearance">
-            <div className="rounded-2xl bg-stone-50 px-4 py-3">
-              <Segmented
-                label="Theme"
-                value={theme.mode}
-                options={[['light', 'Light'], ['dark', 'Dark'], ['auto', 'Auto']]}
-                onChange={theme.setMode}
-              />
-            </div>
+          <Section title="Timers">
+            <TimerSettings timer={store.timer} onChange={store.setTimer} />
           </Section>
 
           <Section title="Backup">
             <Backup store={store} />
           </Section>
+
+          <Section title="Reset">
+            <FactoryReset store={store} />
+          </Section>
         </div>
       </aside>
+    </div>
+  )
+}
+
+// How timer beeps play, and the count-in before a hold or stretch.
+const SOUND_NOTES = {
+  music: 'Beeps play over your music or podcast. With the ringer switch on silent they only play through headphones.',
+  silent: 'Beeps play even with the ringer switch on silent, but not while music is playing.',
+}
+function TimerSettings({ timer, onChange }) {
+  return (
+    <div className="rounded-2xl bg-stone-50 px-4 py-3 space-y-3">
+      <Segmented
+        label="Sound"
+        value={timer.sound}
+        options={[['music', 'Over music'], ['silent', 'On silent']]}
+        onChange={sound => onChange({ sound })}
+      />
+      <p className="text-xs text-stone-500 leading-relaxed">{SOUND_NOTES[timer.sound]}</p>
+      <div className="pt-3 border-t border-stone-200/70 space-y-2">
+        <StepperRow
+          label="Get-ready time"
+          value={timer.prep}
+          step={1}
+          min={0}
+          max={15}
+          editable
+          format={v => (v === 0 ? 'Off' : `${v}s`)}
+          onChange={v => onChange({ prep: Math.round(v) })}
+        />
+        <p className="text-xs text-stone-500 leading-relaxed">A countdown before a hold or stretch starts, and before each side and set, so you can get into position.</p>
+      </div>
+    </div>
+  )
+}
+
+// Starts the app fresh: plans back to how they came, everything logged
+// cleared. Asks first, since only a backup file can bring it back.
+function FactoryReset({ store }) {
+  const [asking, setAsking] = useState(false)
+  const btn = 'w-full py-3 rounded-xl text-sm font-semibold transition-colors'
+  if (!asking) {
+    return (
+      <div className="rounded-2xl bg-stone-50 px-4 py-3 space-y-3">
+        <p className="text-xs text-stone-400">Puts every plan back to how the app came and clears everything you’ve logged.</p>
+        <button onClick={() => setAsking(true)} className={`${btn} bg-red-50 text-red-600 active:bg-red-100`}>Reset app…</button>
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-2xl bg-red-50 px-4 py-4 space-y-3">
+      <p className="font-semibold text-stone-900">Reset the app?</p>
+      <p className="text-sm text-stone-600 leading-relaxed">
+        Your plans go back to their original exercises, sets, reps and weights, and goals and timers to their defaults.
+        Every week you’ve logged, with all its ticks, classes, walks and stretches, is deleted.
+        {store.lastBackupAt ? ' Only a backup file can bring them back.' : ' You’ve never backed up, so this can’t be undone.'}
+      </p>
+      <button onClick={store.factoryReset} className={`${btn} bg-red-600 text-white active:bg-red-700`}>Reset app</button>
+      <button onClick={() => setAsking(false)} className={`${btn} bg-white text-stone-600 active:bg-stone-100`}>Cancel</button>
     </div>
   )
 }
