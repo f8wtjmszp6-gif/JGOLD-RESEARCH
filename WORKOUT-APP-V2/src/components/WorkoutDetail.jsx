@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { playBeep, playGo, playTick, unlockAudio } from '../utils/sound'
 import { useCountdown, useWakeLock, fmtClock } from '../hooks/timing'
 import { useDragToClose } from '../hooks/useDragToClose'
-import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID, BAR_MIN, BAR_MAX, BAR_STEP, MUSCLE_GROUPS } from '../data/workout'
 import { EXERCISE_BANK, EQUIPMENT, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf, gapsAfter } from '../data/exercises'
 import { HOWTO } from '../data/howto'
 import { HowToBody } from './HowTo'
@@ -292,10 +292,11 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{workout.short}</h1>
         </div>
-        {cool ? (
-          // Switch activity if you picked the wrong one; each keeps its own list.
-          <div className="flex flex-wrap gap-1.5 mt-3" role="tablist" aria-label="What you did">
-            {COOL_DOWNS.map(c => (
+        {cool || FULL_BODY_BY_ID[workoutId] ? (
+          // Switch if you picked the wrong one (activity, or gym / home); each
+          // keeps its own list.
+          <div className="flex flex-wrap gap-1.5 mt-3" role="tablist" aria-label={cool ? 'What you did' : 'Where you are'}>
+            {(cool ? COOL_DOWNS : FULL_BODY).map(c => (
               <button
                 key={c.id}
                 role="tab"
@@ -1314,7 +1315,7 @@ export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClos
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 ${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}
+        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,
@@ -1322,12 +1323,15 @@ export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClos
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
-          <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
-            {closeLabel}
-          </button>
+        {/* The handle and title stay put while what's under them scrolls. */}
+        <div className="sticky top-0 z-10 bg-white rounded-t-3xl -mx-5 px-5 pt-3 pb-5">
+          <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
+          <div className="flex items-center justify-between">
+            <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
+            <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
+              {closeLabel}
+            </button>
+          </div>
         </div>
         <div className="space-y-6">{children}</div>
       </div>

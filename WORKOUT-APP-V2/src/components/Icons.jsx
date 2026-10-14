@@ -63,6 +63,59 @@ const PATHS = {
       <path d="M12 24h7l3-5 4 9 3-4h7" />
     </>
   ),
+  // A bodybuilder standing front-on, for the Full Body Workout card
+  fullBody: (
+    <>
+      <circle cx="24" cy="6.8" r="3.3" />
+      <path d="M20.5 11.5c-2.6.6-5.6 1.4-7.4 3.4M27.5 11.5c2.6.6 5.6 1.4 7.4 3.4" />
+      <path d="M13.1 14.9c-1.8 2.6-2.6 6.3-2.5 10.2l1 3.4M17 18.5c.3 3.3-.3 6-2 8.4l-.6 1.6" />
+      <path d="M34.9 14.9c1.8 2.6 2.6 6.3 2.5 10.2l-1 3.4M31 18.5c-.3 3.3.3 6 2 8.4l.6 1.6" />
+      <circle cx="12.9" cy="30.2" r="1.7" />
+      <circle cx="35.1" cy="30.2" r="1.7" />
+      <path d="M17 18.5c2 1.9 4.5 2.2 7 .9 2.5 1.3 5 1 7-.9" />
+      <path d="M17 18.5c.4 4 1 7.2 2.6 10.3h8.8c1.6-3.1 2.2-6.3 2.6-10.3" />
+      <path d="M24 19.4v9.4M21.2 22.6h5.6M21.4 25.6h5.2" />
+      <path d="M19.6 28.8l-.9 3.2h10.6l-.9-3.2" />
+      <path d="M18.7 32l-.9 11h3.6l2.6-9.5 2.6 9.5h3.6l-.9-11" />
+    </>
+  ),
+  // A gym: a building with a dumbbell sign on the roof
+  fullGym: (
+    <>
+      <path d="M17 10.5h14" />
+      <rect x="13" y="7" width="4" height="7" rx="1.5" />
+      <rect x="31" y="7" width="4" height="7" rx="1.5" />
+      <path d="M7 18h34v21H7zM5 18h38" />
+      <path d="M20 39V30h8v9" />
+      <path d="M11 23h6v4h-6zM31 23h6v4h-6z" />
+    </>
+  ),
+  // House, for a full-body day at home
+  fullHome: (
+    <>
+      <path d="M7 23L24 9l17 14" />
+      <path d="M12 19v20h24V19" />
+      <path d="M21 39v-9h6v9" />
+    </>
+  ),
+  // House with a dumbbell, for a full-body day at home with dumbbells
+  fullHomeDb: (
+    <>
+      <path d="M7 23L24 9l17 14" />
+      <path d="M12 19v20h24V19" />
+      <path d="M19 31h10" />
+      <rect x="15" y="27" width="4" height="8" rx="1.5" />
+      <rect x="29" y="27" width="4" height="8" rx="1.5" />
+    </>
+  ),
+  // Mountain and sun, for sports and hikes
+  sport: (
+    <>
+      <path d="M4 39l13-19 7 9 6-7 14 17z" />
+      <path d="M17 20l3 5 3-2" />
+      <circle cx="36" cy="11" r="4" />
+    </>
+  ),
   // Mat rolling out
   stretch: (
     <>
@@ -83,14 +136,19 @@ const PATHS = {
 PATHS.gym = PATHS.push
 
 const COLORS = {
-  push: 'text-orange-600',
-  legsQuad: 'text-orange-600',
-  pull: 'text-orange-600',
-  legsPost: 'text-orange-600',
-  gym: 'text-orange-600',
+  push: 'text-red-600',
+  legsQuad: 'text-red-600',
+  pull: 'text-red-600',
+  legsPost: 'text-red-600',
+  fullBody: 'text-orange-600',
+  fullGym: 'text-orange-600',
+  fullHome: 'text-orange-600',
+  fullHomeDb: 'text-orange-600',
+  gym: 'text-red-600',
   class: 'text-violet-600',
   walk: 'text-emerald-600',
   cardio: 'text-cyan-600',
+  sport: 'text-lime-700',
   stretch: 'text-teal-600',
   rest: 'text-indigo-600',
 }
@@ -112,6 +170,33 @@ export function TileIcon({ id, size = 36, color }) {
       aria-hidden="true"
     >
       {PATHS[id]}
+    </svg>
+  )
+}
+
+// Small line icons for what a cardio session or sport was, on a 24 grid.
+// A sport typed in under Other gets the dots.
+const TYPE_PATHS = {
+  Run: <><circle cx="15" cy="4.5" r="2" /><path d="M8 21l3-6 3 2v5M6 11l3-3h4l3 4 3 1M11 15l1-5" /></>,
+  Bike: <><circle cx="6" cy="16" r="4" /><circle cx="18" cy="16" r="4" /><path d="M6 16l4-8h5l3 8M10 8l2 8h-6M14 5h3" /></>,
+  Swim: <><path d="M2 17c2 0 2-1.5 4-1.5S8 17 10 17s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5M2 21c2 0 2-1.5 4-1.5S8 21 10 21s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5" /><circle cx="16" cy="7" r="2" /><path d="M5 13l5-4 3 3" /></>,
+  Row: <><path d="M3 18h18M5 14l14-8M17 4l4 3" /><circle cx="9" cy="9" r="2" /></>,
+  Elliptical: <><ellipse cx="12" cy="15" rx="8" ry="4" /><path d="M8 11V4M16 11V4M6 4h4M14 4h4" /></>,
+  Stairs: <path d="M3 20h5v-5h5v-5h5V5h3" />,
+  Hike: <><path d="M2 20l7-11 4 6 3-4 6 9z" /><circle cx="18" cy="5" r="2" /></>,
+  Pickleball: <><rect x="3" y="3" width="10" height="12" rx="5" /><path d="M8 15v6" /><circle cx="18" cy="17" r="2.5" /></>,
+  Tennis: <><circle cx="12" cy="12" r="9" /><path d="M5.5 5.5c3 3.5 3 9.5 0 13M18.5 5.5c-3 3.5-3 9.5 0 13" /></>,
+  Basketball: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3v18M6 5.5c2.7 3.8 2.7 9.2 0 13M18 5.5c-2.7 3.8-2.7 9.2 0 13" /></>,
+  Soccer: <><circle cx="12" cy="12" r="9" /><path d="M12 8l3.5 2.5-1.3 4h-4.4l-1.3-4zM12 8V3.5M15.5 10.5l4.5-1.5M14.2 14.5l2.8 4M9.8 14.5L7 18.5M8.5 10.5L4 9" /></>,
+  Golf: <><path d="M9 21V3l8 4-8 4" /><path d="M4 21h12" /></>,
+  Ski: <><path d="M3 18l18-7M5 21l16-6" /><circle cx="14" cy="4" r="2" /><path d="M10 13l2-5 4 3" /></>,
+  Other: <><circle cx="12" cy="12" r="9" /><path d="M8 12h.01M12 12h.01M16 12h.01" strokeWidth="3" /></>,
+}
+
+export function TypeIcon({ name, size = 22 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+      {TYPE_PATHS[name] ?? TYPE_PATHS.Other}
     </svg>
   )
 }

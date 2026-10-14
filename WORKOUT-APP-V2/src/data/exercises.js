@@ -1,4 +1,4 @@
-import { workouts, MUSCLE_GROUPS } from './workout'
+import { workouts, GYM_ORDER, MUSCLE_GROUPS } from './workout'
 
 // Every exercise you can swap into a workout, by the muscle group Trends
 // files it under. The ones the workouts start with keep their ids and
@@ -53,6 +53,9 @@ const MORE = [
   { id: 'lying-leg-curl', name: 'Lying Leg Curl', sets: 3, reps: '10–12', weight: B(0, 60), group: 'legs' },
   { id: 'seated-leg-curl', name: 'Seated Leg Curl', sets: 3, reps: '10–12', weight: B(0, 70), group: 'legs' },
   { id: 'glute-bridge', name: 'Glute Bridge', sets: 3, reps: '12–14', weight: B(0, 0, true), group: 'legs' },
+  // No-equipment leg work, for the Full Body · Home plan.
+  { id: 'bodyweight-split-squat', name: 'Bodyweight Split Squat', sets: 3, reps: '10–12', weight: B(0, 0, true), group: 'legs', perSide: true },
+  { id: 'bodyweight-squat', name: 'Bodyweight Squat', sets: 3, reps: '15–20', weight: B(0, 0, true), group: 'legs' },
   { id: 'cable-kickback', name: 'Cable Glute Kickback', sets: 3, reps: '12–14', weight: B(0, 20), group: 'legs', perSide: true },
   { id: 'single-leg-rdl', name: 'Single-Leg Romanian Deadlift', sets: 3, reps: '8–10', weight: B(0, 25), group: 'legs', perSide: true },
   // Core
@@ -172,7 +175,8 @@ const EVEN_MORE = [
 ]
 
 const groupOf = id => MUSCLE_GROUPS.find(g => g.exercises.includes(id))?.id ?? 'core'
-const starting = Object.values(workouts).flatMap(w => w.exercises).map(x => ({ ...x, group: groupOf(x.id) }))
+// The four plans' own exercises (the full-body days only list bank ids).
+const starting = GYM_ORDER.flatMap(id => workouts[id].exercises).map(x => ({ ...x, group: groupOf(x.id) }))
 
 export const EXERCISE_BANK = [...starting, ...MORE, ...EVEN_MORE]
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISE_BANK.map(x => [x.id, x]))
@@ -199,6 +203,7 @@ const FITS = {
   // Quads & Glutes: quads, glutes, inner and outer thighs
   [QUAD]: [
     'cable-squat', 'back-squat', 'goblet-squat', 'leg-press', 'bulgarian-split-squat', 'walking-lunges', 'step-ups',
+    'bodyweight-split-squat', 'bodyweight-squat',
     'leg-extension', 'front-squat', 'hack-squat', 'smith-squat', 'box-squat', 'pendulum-squat', 'belt-squat',
     'reverse-lunge', 'lateral-lunge', 'single-leg-press', 'sissy-squat', 'wall-sit', 'box-jumps',
     'trap-bar-deadlift', 'sumo-deadlift',
@@ -228,8 +233,14 @@ const FITS = {
   ],
 }
 
+// The full-body days take anything a plan does; at home, only what needs no
+// equipment (or, with dumbbells, a pair of those).
+FITS.fullGym = [...new Set([PUSH, QUAD, PULL, POST].flatMap(k => FITS[k]))]
+
 // Whether an exercise belongs in a plan's main list, or in its Core section.
 export function fitsPlan(exercise, planId) {
+  if (planId === 'fullHome') return FITS.fullGym.includes(exercise.id) && defaultEquipment(exercise) === 'bodyweight'
+  if (planId === 'fullHomeDb') return FITS.fullGym.includes(exercise.id) && ['bodyweight', 'dumbbell'].includes(defaultEquipment(exercise))
   return !!FITS[planId]?.includes(exercise.id)
 }
 export function isCore(exercise) {
@@ -242,10 +253,13 @@ export const DEFAULT_CORE = {
   legsQuad: ['plank', 'dead-bugs', 'side-plank'],
   pull: ['hanging-leg-raises', 'pallof-press'],
   legsPost: ['woodchoppers', 'ab-wheel'],
+  fullGym: ['plank', 'pallof-press'],
+  fullHomeDb: ['plank', 'russian-twists'],
+  fullHome: ['plank', 'side-plank'],
 }
 
 // Which plans start with their Core section on: the ones that had core work.
-export const CORE_ON_BY_DEFAULT = { push: false, legsQuad: true, pull: true, legsPost: true }
+export const CORE_ON_BY_DEFAULT = { push: false, legsQuad: true, pull: true, legsPost: true, fullGym: true, fullHomeDb: true, fullHome: true }
 
 // How well each exercise targets what a plan (or the Core section) is for:
 //   3 – best: the most direct, effective choices for those muscles
@@ -292,6 +306,9 @@ export const SUGGESTED_GROUPS = {
   legsQuad: ['legs', 'core'],
   pull: ['back', 'arms', 'core'],
   legsPost: ['legs', 'back', 'core'],
+  fullGym: ['legs', 'chest', 'back', 'shoulders'],
+  fullHomeDb: ['legs', 'chest', 'back', 'shoulders'],
+  fullHome: ['legs', 'chest', 'back', 'shoulders'],
 }
 
 // ── Coverage ───────────────────────────────────────────────────────────────
@@ -302,6 +319,9 @@ export const PLAN_AREAS = {
   legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs']],
   pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps']],
   legsPost: [['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['lower-back', 'Lower back'], ['calves', 'Calves']],
+  fullGym: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders']],
+  fullHomeDb: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders']],
+  fullHome: [['quads', 'Quads'], ['glutes', 'Glutes'], ['chest', 'Chest'], ['lower-back', 'Back'], ['front-delts', 'Shoulders']],
   core: [['abs', 'Abs'], ['obliques', 'Obliques']],
 }
 
@@ -336,7 +356,8 @@ const COVERS = {
   ...T([], 'wrist-curl', 'reverse-wrist-curl', 'tibialis-raise'),
   ...T(['quads'], 'cable-squat', 'goblet-squat', 'leg-press', 'leg-extension', 'front-squat', 'hack-squat', 'smith-squat',
     'pendulum-squat', 'belt-squat', 'single-leg-press', 'sissy-squat', 'wall-sit', 'box-jumps'),
-  ...T(['quads', 'glutes'], 'back-squat', 'box-squat', 'bulgarian-split-squat', 'walking-lunges', 'reverse-lunge', 'step-ups'),
+  ...T(['quads', 'glutes'], 'back-squat', 'box-squat', 'bulgarian-split-squat', 'walking-lunges', 'reverse-lunge', 'step-ups',
+    'bodyweight-split-squat', 'bodyweight-squat'),
   ...T(['inner-thighs', 'quads'], 'lateral-lunge'),
   ...T(['quads', 'glutes', 'hamstrings'], 'trap-bar-deadlift'),
   ...T(['glutes', 'inner-thighs', 'hamstrings'], 'sumo-deadlift'),

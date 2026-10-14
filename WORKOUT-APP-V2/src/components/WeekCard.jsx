@@ -13,7 +13,7 @@ const WORKOUT_KINDS = ['gym', 'class', 'cardio', 'stretchWork']
 // even when it was too short to be a workout.
 const tileOf = id => activities.find(a => a.id === id).tile
 const CHIPS = [
-  { id: 'gym', icon: 'gym', tile: 'from-orange-50 to-orange-100', one: 'gym workout', many: 'gym workouts' },
+  { id: 'gym', icon: 'gym', tile: 'from-red-50 to-red-100', one: 'gym workout', many: 'gym workouts' },
   { id: 'class', icon: 'class', tile: tileOf('class'), one: 'class', many: 'classes' },
   { id: 'cardio', icon: 'cardio', tile: 'from-cyan-50 to-cyan-100', one: 'cardio session', many: 'cardio sessions' },
   { id: 'walk', icon: 'walk', tile: tileOf('walk'), one: 'walk', many: 'walks' },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { workouts, activities, GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
+import { workouts, activities, PLAN_IDS, FULL_BODY_BY_ID, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { weekDays, sameDay } from '../utils/days'
@@ -23,7 +23,8 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     perSide           { [stretchId]: bool }
 //     stretchSets       { [stretchId]: count }  (rounds of a stretch, default 1)
 //     stretchRest       { [stretchId]: seconds } (rest between those rounds, default 20)
-//     cardioSettings    { walk | other: { minutes, hard } }  (length of one session)
+//     cardioSettings    { walk | other | sport: { minutes, hard, type? } }  (where the next one starts)
+//     sportNames        [name, …]  (sports you typed in, offered next to SPORTS)
 //     lastClass         your answers for the last class logged (its length and effort carry over)
 //     lastBackupAt      ISO time of the last backup file you saved
 //     history           [weekSummary, …] newest first — saved by each reset, never cleared
@@ -31,6 +32,8 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     goals             { workouts | stretch | cardio: { min, max } }  (your weekly goals; defaults in GOAL_DEFAULTS)
 //     newWeek           { weekStart } while the "new week" note is showing
 //     timer             { sound: 'music' | 'silent', prep: seconds }  (see timerOf)
+//     seenNotes         [id, …]  (notifications you've seen; the bell's dot is for the rest)
+//     dismissedNotes    [id, …]  (ones you cleared with ✕; they don't show again)
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool,
@@ -39,7 +42,8 @@ const STORAGE_KEY = 'workout-tracker-v2'
 //     activities        { class | walk | rest: count }
 //     stretchExtra      count of stretch sessions done on your own
 //     stretchLog        [{ at, minutes }, …] — how long each of those was
-//     cardio            [{ kind: 'walk' | 'other', minutes, hard }, …] — one per session
+//     cardio            [{ kind: 'walk' | 'other' | 'sport', minutes, hard, at, type? }, …] — one per session
+//                       (type: what it was, as "Run" or "Pickleball")
 //     classLog          [{ at, cardio, minutes, hard, strength, areas, stretch, stretchMinutes }, …] — one per class
 //     restLog           [at | null, …] — the day of each rest day (null: added before days were saved)
 
@@ -157,19 +161,19 @@ function writeChecks(s, workoutId, fn) {
   return { ...s, checks: { ...s.checks, [workoutId]: stamped } }
 }
 
-// What was done on each day of this week, Monday to Sunday, for the week
+// What was done on each day of this week, Sunday to Saturday, for the week
 // strip: [{ kind, icon, label, tags? }, …] per day. A class's tags say what
 // it was: cardio length and effort, the areas worked, stretching. Things logged before days were
 // saved have no day, so they don't show.
 function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
   const items = []
   const add = (at, kind, icon, label, tags) => at && items.push({ at: new Date(at), kind, icon, label, tags })
-  for (const id of GYM_ORDER) {
-    add(s.checks?.[id]?.at, 'plan', id, workouts[id].short)
+  for (const id of PLAN_IDS) {
+    add(s.checks?.[id]?.at, FULL_BODY_BY_ID[id] ? 'full' : 'plan', id, workouts[id].short)
     add(s.checks?.[id]?.stretchedAt, 'stretch', 'stretch', `Stretched · ${workouts[id].short}`)
   }
   add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, 'stretch', 'stretch', STRETCH_ROUTINE.name)
-  for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, 'stretch', 'stretch', `Cool-down · ${COOL_DOWN_BY_ID[c.id].label}`)
+  for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, 'stretch', 'stretch', `Cool Down · ${COOL_DOWN_BY_ID[c.id].label}`)
   for (const c of classesOf(s)) {
     const areas = c.strength ? c.areas ?? [] : []
     add(c.at, 'class', 'class', 'Class', [
@@ -179,8 +183,10 @@ function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
     ].filter(Boolean))
   }
   for (const x of s.cardio ?? []) {
+    const length = `${x.minutes} min${x.hard ? ' hard' : ''}`
     if (x.kind === 'walk') add(x.at, 'walk', 'walk', `Walk · ${x.minutes} min`)
-    else add(x.at, 'cardio', 'cardio', `Cardio · ${x.minutes} min${x.hard ? ' hard' : ''}`)
+    else if (x.kind === 'sport') add(x.at, 'sport', 'sport', `${x.type ?? 'Sport'} · ${length}`)
+    else add(x.at, 'cardio', 'cardio', `${x.type && x.type !== 'Other' ? x.type : 'Cardio'} · ${length}`)
   }
   for (const x of ownStretchesOf(s)) add(x.at, 'stretch', 'stretch', x.minutes ? `Stretched · ${x.minutes} min` : 'Stretched')
   for (const at of restDaysOf(s)) add(at, 'rest', 'rest', 'Rest day')
@@ -233,16 +239,22 @@ function newClassOf(s) {
 function cardioSessionsOf(s) {
   const logged = s.cardio ?? []
   const out = classesOf(s).filter(c => c.cardio).map(c => ({ kind: 'class', minutes: c.minutes, hard: c.hard }))
-  out.push(...logged.filter(x => x.kind === 'other'))
+  out.push(...logged.filter(x => x.kind === 'other' || x.kind === 'sport'))
   const walks = logged.filter(x => x.kind === 'walk').slice(0, countOf(s, 'walk'))
   const missing = countOf(s, 'walk') - walks.length
   out.push(...walks, ...Array.from({ length: missing }, () => ({ kind: 'walk', ...cardioSettingOf(s, 'walk') })))
   // A gym plan's warm-up, once it's on and ticked.
-  for (const id of GYM_ORDER) {
+  for (const id of PLAN_IDS) {
     const w = warmupOf(s, id)
     if (w.on && s.checks?.[id]?.warmup) out.push(...w.sets.map(x => ({ kind: 'warmup', ...x })))
   }
   return out
+}
+
+// A sport you typed in joins the choices for next time.
+function rememberSport(s, name) {
+  const known = [...SPORTS, ...(s.sportNames ?? [])].some(x => x.toLowerCase() === name.toLowerCase())
+  return known ? s : { ...s, sportNames: [...(s.sportNames ?? []), name] }
 }
 
 // A plan's warm-up: whether it's added, and its sets back to back (5 min easy
@@ -258,7 +270,8 @@ function warmupOf(s, workoutId) {
 // as two easy ones. Split by kind for history, plus the total.
 function cardioWeekOf(s) {
   const by = { class: 0, walk: 0, other: 0, warmup: 0 }
-  for (const x of cardioSessionsOf(s)) by[x.kind] += x.minutes * (x.hard ? 2 : 1)
+  // Sports and hikes add to `other`, so saved weeks keep the same shape.
+  for (const x of cardioSessionsOf(s)) by[x.kind === 'sport' ? 'other' : x.kind] += x.minutes * (x.hard ? 2 : 1)
   return { ...by, total: by.class + by.walk + by.other + by.warmup }
 }
 
@@ -352,10 +365,10 @@ function writeList(s, workoutId, section, ids) {
 // sessions long enough to count as workouts.
 function weekOf(s) {
   return {
-    gym: GYM_ORDER.filter(id => workoutComplete(s, id)).length,
+    gym: PLAN_IDS.filter(id => workoutComplete(s, id)).length,
     ...Object.fromEntries(activities.map(a => [a.id, countOf(s, a.id)])),
     class: classesOf(s).filter(classIsWorkout).length,
-    cardio: (s.cardio ?? []).filter(x => x.kind === 'other' && cardioIsWorkout(x)).length,
+    cardio: (s.cardio ?? []).filter(x => (x.kind === 'other' || x.kind === 'sport') && cardioIsWorkout(x)).length,
     stretchWork: stretchWorkoutsOf(s),
   }
 }
@@ -376,7 +389,7 @@ function ownStretchesOf(s) {
   return [...log, ...Array.from({ length: n - log.length }, () => ({ minutes: null }))]
 }
 
-// A list's stretches — a gym workout's or the Full-Body Stretch — as you've
+// A list's stretches — a gym workout's or the Full Body Stretch — as you've
 // set them up from the stretch bank, or its starting stretches.
 // Only stretches that fit the list count (see stretchFits); if none of a saved
 // list does, it falls back to the starting stretches.
@@ -405,7 +418,7 @@ function routineSecondsOf(s, listId = STRETCH_ROUTINE.id) {
 
 const longEnough = minutes => minutes >= STRETCH_WORKOUT_MINUTES
 
-// Stretching that counts as a workout: the Full-Body Stretch, finished, if
+// Stretching that counts as a workout: the Full Body Stretch, finished, if
 // it runs 30+ minutes, and each 30+ minute session on your own.
 function stretchWorkoutsOf(s) {
   const routineDone = stretchesOf(s, STRETCH_ROUTINE.id).every(x => s.checks?.[STRETCH_ROUTINE.id]?.stretches?.[x.id])
@@ -419,7 +432,7 @@ function stretchWorkoutsOf(s) {
 function stretchWeekOf(s) {
   const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
   const st = {
-    gym: GYM_ORDER.filter(id => all(id, stretchesOf(s, id))).length,
+    gym: PLAN_IDS.filter(id => all(id, stretchesOf(s, id))).length,
     routine: all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0,
     cool: COOL_DOWNS.filter(c => all(c.id, stretchesOf(s, c.id))).length,
     class: classesOf(s).filter(c => c.stretch).length,
@@ -434,7 +447,7 @@ function stretchWeekOf(s) {
 function summarize(s, endedAt) {
   let lifted = 0
   const lifts = {}
-  const plans = GYM_ORDER.map(id => {
+  const plans = PLAN_IDS.map(id => {
     let done = 0
     let total = 0
     for (const ex of exercisesOf(s, id)) {
@@ -517,7 +530,7 @@ function weeksOf(s) {
     weekStart: calendarWeekOf(e),
     dayLog: e.details ? dayLogOf(weekStateOf(s, e)) : null,
   }))
-  return [...saved, { weekStart: mondayOf(new Date()), dayLog: dayLogOf(s), live: true }]
+  return [...saved, { weekStart: weekKeyOf(new Date()), dayLog: dayLogOf(s), live: true }]
 }
 
 // Two saves in the same calendar week as one: ticks from either, everything
@@ -592,26 +605,26 @@ function clearWeek(s, now, weekStart) {
 }
 
 // The week resets itself: the first time the app runs in a new calendar week
-// (Monday–Sunday), the last week is filed under the week it started in and a
+// (Sunday–Saturday), the last week is filed under the week it started in and a
 // note says so. A first run just starts the clock.
 export function rollWeek(s, date = new Date()) {
   if (!s.lastResetAt) return { ...s, lastResetAt: date.toISOString() }
-  const thisWeek = mondayOf(date)
-  if (mondayOf(s.lastResetAt) === thisWeek) return s
-  const weekStart = mondayOf(s.lastResetAt)
-  const monday = new Date(`${thisWeek}T00:00:00`).toISOString()
-  return { ...clearWeek(s, monday, weekStart), newWeek: { weekStart } }
+  const thisWeek = weekKeyOf(date)
+  if (weekKeyOf(s.lastResetAt) === thisWeek) return s
+  const weekStart = weekKeyOf(s.lastResetAt)
+  const sunday = new Date(`${thisWeek}T00:00:00`).toISOString()
+  return { ...clearWeek(s, sunday, weekStart), newWeek: { weekStart } }
 }
 
 // ── Calendar weeks for history ─────────────────────────────────────────────
-// Past weeks are filed by calendar week (Monday–Sunday, as "YYYY-MM-DD" of
-// the Monday). A saved period belongs to the week its middle falls in, so a
-// reset on Sunday night or Monday morning both file the week just finished;
+// Past weeks are filed by calendar week (Sunday–Saturday, as "YYYY-MM-DD" of
+// the Sunday). A saved period belongs to the week its middle falls in, so a
+// reset on Saturday night or Sunday morning both file the week just finished;
 // with no earlier reset, the day before the reset stands in for the middle.
-function mondayOf(date) {
+function weekKeyOf(date) {
   const d = new Date(date)
   d.setHours(12, 0, 0, 0)
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  d.setDate(d.getDate() - d.getDay())
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -619,7 +632,7 @@ export function calendarWeekOf(entry) {
   if (entry.weekStart) return entry.weekStart
   const end = new Date(entry.end).getTime()
   const anchor = entry.start ? (new Date(entry.start).getTime() + end) / 2 : end - 86400000
-  return mondayOf(anchor)
+  return weekKeyOf(anchor)
 }
 
 // Two saved periods in the same calendar week become one entry. With both
@@ -665,7 +678,27 @@ function migrate(s) {
       }
     }
   }
-  return settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
+  const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
+  return toSundayWeeks(next)
+}
+
+// Weeks used to run Monday to Sunday and were filed under their Monday; now
+// they start on Sunday. A week filed under a Monday moves to the Sunday
+// before, so Trends and swiping line up with the new weeks.
+function toSundayWeeks(s) {
+  const sunday = key => {
+    const [y, m, d] = key.split('-').map(Number)
+    const day = new Date(y, m - 1, d, 12)
+    if (day.getDay() !== 1) return key
+    day.setDate(day.getDate() - 1)
+    return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+  }
+  if (!s.history?.some(e => e.weekStart && e.weekStart !== sunday(e.weekStart)) && !s.newWeek) return s
+  return {
+    ...s,
+    ...(s.history && { history: s.history.map(e => (e.weekStart ? { ...e, weekStart: sunday(e.weekStart) } : e)) }),
+    ...(s.newWeek && { newWeek: { weekStart: sunday(s.newWeek.weekStart) } }),
+  }
 }
 
 function loadState() {
@@ -738,6 +771,24 @@ export function useStore() {
     })
   }
 
+  // The notifications you've opened the bell on (the last 50 are plenty).
+  function markNotesSeen(ids) {
+    update(s => {
+      const seen = s.seenNotes ?? []
+      return ids.every(id => seen.includes(id)) ? s : { ...s, seenNotes: [...new Set([...seen, ...ids])].slice(-50) }
+    })
+  }
+
+  // ✕ on a notification: it's gone (and seen). One that's news again later,
+  // like next week's backup reminder, has a new id and shows again.
+  function dismissNote(id) {
+    update(s => ({
+      ...s,
+      dismissedNotes: [...new Set([...(s.dismissedNotes ?? []), id])].slice(-50),
+      seenNotes: [...new Set([...(s.seenNotes ?? []), id])].slice(-50),
+    }))
+  }
+
   function setTimer(patch) {
     update(s => ({ ...s, timer: { ...timerOf(s), ...patch } }))
   }
@@ -795,12 +846,16 @@ export function useStore() {
     history: state.history ?? [],
     // This week so far, worked out the same way a saved week is, so Trends
     // can show it as it happens.
-    current: { ...summarize(state, new Date().toISOString()), weekStart: mondayOf(new Date()), live: true },
+    current: { ...summarize(state, new Date().toISOString()), weekStart: weekKeyOf(new Date()), live: true },
     weeks: weeksOf(state),
     weekStore,
     goals: goalsOf(state),
     setGoal,
     setTimer,
+    seenNotes: state.seenNotes ?? [],
+    markNotesSeen,
+    dismissedNotes: state.dismissedNotes ?? [],
+    dismissNote,
     newWeek: state.newWeek ?? null,
     dismissNewWeek,
     canUndoReset: undoSnapshot !== null,
@@ -1246,9 +1301,12 @@ function makeStore(state, update) {
     })
   }
 
-  // kind: 'walk' or 'other'
+  // kind: 'walk', 'other' or 'sport'
   function editCardio(kind, index, patch) {
-    update(s => writeSessions(s, kind, sessionsOfKind(s, kind).map((x, i) => (i === index ? { ...x, ...patch } : x))))
+    update(s => {
+      const next = writeSessions(s, kind, sessionsOfKind(s, kind).map((x, i) => (i === index ? { ...x, ...patch } : x)))
+      return kind === 'sport' && patch.type ? rememberSport(next, patch.type) : next
+    })
   }
 
   function deleteCardio(kind, index) {
@@ -1325,12 +1383,33 @@ function makeStore(state, update) {
   // This week's walks, each with its length (oldest first).
   const walks = cardioSessionsOf(state).filter(x => x.kind === 'walk')
 
-  function addOtherCardio(minutes, hard, at = nowIso()) {
-    update(s => ({ ...s, cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at }] }))
+  // A run, ride, swim…: `type` is what it was. The next one starts from it.
+  function addOtherCardio(minutes, hard, at = nowIso(), type) {
+    update(s => ({
+      ...s,
+      cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at, ...(type && { type }) }],
+      cardioSettings: { ...s.cardioSettings, other: { minutes, hard, ...(type && { type }) } },
+    }))
   }
 
   function removeOtherCardio() {
     update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'other') }))
+  }
+
+  // ── Sports & hikes ───────────────────────────────────────────────────────
+  // Logged like other cardio, with what you played or where you went.
+  const sports = (state.cardio ?? []).filter(x => x.kind === 'sport')
+
+  function addSport(minutes, hard, at = nowIso(), type) {
+    update(s => rememberSport({
+      ...s,
+      cardio: [...(s.cardio ?? []), { kind: 'sport', minutes, hard, at, type }],
+      cardioSettings: { ...s.cardioSettings, sport: { minutes, hard, type } },
+    }, type))
+  }
+
+  function removeSport() {
+    update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'sport') }))
   }
 
   // Anything to clear? Drives whether the reset button is enabled.
@@ -1516,6 +1595,10 @@ function makeStore(state, update) {
     getCardioSetting,
     setCardioSetting,
     otherCardio,
+    sports,
+    addSport,
+    removeSport,
+    sportNames: [...SPORTS, ...(state.sportNames ?? [])],
     walks,
     addWalk,
     getCardioMinutes,

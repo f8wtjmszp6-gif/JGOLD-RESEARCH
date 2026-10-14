@@ -1,12 +1,12 @@
-// The days of this calendar week, Monday to Sunday — at noon, so a time
+// The days of this calendar week, Sunday to Saturday — at noon, so a time
 // zone or daylight-saving change never tips one into the next day.
 export function weekDays(now = new Date()) {
-  const mon = new Date(now)
-  mon.setHours(12, 0, 0, 0)
-  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7))
+  const first = new Date(now)
+  first.setHours(12, 0, 0, 0)
+  first.setDate(first.getDate() - first.getDay())
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(mon)
-    d.setDate(mon.getDate() + i)
+    const d = new Date(first)
+    d.setDate(first.getDate() + i)
     return d
   })
 }
@@ -27,22 +27,22 @@ export function inDayOrder(list) {
 }
 
 const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-const mondayDate = weekStart => {
+const startDate = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
   return new Date(y, m - 1, d, 12)
 }
 
-// A calendar week by its Monday ("YYYY-MM-DD"): "Sep 29 – Oct 5", or
-// "Oct 6 – 12" within one month.
+// A calendar week by its Sunday ("YYYY-MM-DD"): "Sep 28 – Oct 4", or
+// "Oct 11 – 17" within one month.
 export function weekRange(weekStart) {
-  const mon = mondayDate(weekStart)
-  const sun = new Date(mon)
-  sun.setDate(mon.getDate() + 6)
-  return mon.getMonth() === sun.getMonth() ? `${short(mon)} – ${sun.getDate()}` : `${short(mon)} – ${short(sun)}`
+  const first = startDate(weekStart)
+  const last = new Date(first)
+  last.setDate(first.getDate() + 6)
+  return first.getMonth() === last.getMonth() ? `${short(first)} – ${last.getDate()}` : `${short(first)} – ${short(last)}`
 }
 
 // "Last week", "3 weeks ago".
 export function weeksAgo(weekStart, now = new Date()) {
-  const n = Math.round((weekDays(now)[0] - mondayDate(weekStart)) / (7 * 86400000))
+  const n = Math.round((weekDays(now)[0] - startDate(weekStart)) / (7 * 86400000))
   return n === 1 ? 'Last week' : `${n} weeks ago`
 }

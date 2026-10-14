@@ -90,8 +90,8 @@ export const REST_ACCESSORY = 90
 // stretch bank (data/stretches.js).
 export const STRETCH_ROUTINE = {
   id: 'routine',
-  name: 'Full-Body Stretch',
-  short: 'Full-Body Stretch',
+  name: 'Full Body Stretch',
+  short: 'Full Body Stretch',
   exercises: [],
   stretches: [
     'cat-cow', 'worlds-greatest', 'downward-dog', 'hip-flexor', 'pigeon-pose', 'hamstring-stretch', 'butterfly',
@@ -109,7 +109,7 @@ export const COOL_DOWNS = [
   { id: 'coolBike', label: 'Bike', stretches: ['couch-stretch', 'kneeling-quad', 'pigeon-pose', 'doorway-pec', 'cat-cow', 'knees-to-chest'] },
   { id: 'coolSwim', label: 'Swim', stretches: ['lat-stretch', 'doorway-pec', 'sleeper-stretch', 'overhead-tricep-stretch', 'thread-the-needle', 'lateral-neck-tilts'] },
   { id: 'coolRow', label: 'Row / Elliptical', chip: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'] },
-].map(c => ({ ...c, chip: c.chip ?? c.label, name: `Cool-down · ${c.label}`, short: 'Cool-down', exercises: [] }))
+].map(c => ({ ...c, chip: c.chip ?? c.label, name: `Cool Down · ${c.label}`, short: 'Cool Down', exercises: [] }))
 export const COOL_DOWN_BY_ID = Object.fromEntries(COOL_DOWNS.map(c => [c.id, c]))
 
 // Weekly goal for both home cards — workouts and stretching: 3 a week
@@ -141,7 +141,14 @@ export function cardioIsWorkout(session) {
 export const CARDIO_DEFAULTS = {
   walk: { minutes: 30, hard: false },
   other: { minutes: 30, hard: false },
+  sport: { minutes: 60, hard: false },
 }
+
+// What a cardio session was: picked when you log it, shown on the card, the
+// week strip and past weeks. Sessions logged before this have none.
+export const CARDIO_TYPES = ['Run', 'Bike', 'Swim', 'Row', 'Elliptical', 'Stairs', 'Other']
+// Sports and hikes; a name typed under Other joins this list for next time.
+export const SPORTS = ['Hike', 'Pickleball', 'Tennis', 'Basketball', 'Soccer', 'Golf', 'Ski']
 
 // Which body regions each workout trains, per view, for the home screen's
 // Muscles this week figure. Pushing works the front of the upper body and
@@ -152,6 +159,9 @@ export const MUSCLE_MAP = {
   legsQuad: { front: ['thighs', 'hips', 'core'], back: ['hips'] },
   pull: { front: ['arms', 'core'], back: ['back', 'shoulders'] },
   legsPost: { front: ['core'], back: ['thighs', 'calves', 'hips', 'back'] },
+  fullGym: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
+  fullHomeDb: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
+  fullHome: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
 }
 
 // Trends groups exercises by the muscles they mainly work — not by which
@@ -175,7 +185,7 @@ export const CLASS_DEFAULT = {
   stretch: false, stretchMinutes: 30,
 }
 
-// Stretching on its own — the Full-Body Stretch, a session on your own —
+// Stretching on its own — the Full Body Stretch, a session on your own —
 // counts as a workout from 30 minutes. (Any stretching is a stretch day.)
 export const STRETCH_WORKOUT_MINUTES = 30
 
@@ -205,6 +215,45 @@ export const CLASS_AREAS = [
 // Display order of the gym workouts on the home screen.
 
 export const GYM_ORDER = ['push', 'legsQuad', 'pull', 'legsPost']
+
+// Full-body days, for weeks the four plans won't fit: one session that trains
+// every area, at the gym or at home with or without dumbbells. Picked from one card,
+// like a cool-down. Each is a plan like the four (its own lists, stretches
+// and Trends) and counts as a gym workout once finished. Exercises come from
+// the bank, so only their ids are listed.
+export const FULL_BODY = [
+  {
+    id: 'fullGym',
+    name: 'Full body at the gym',
+    short: 'Full Body · Gym',
+    label: 'At the gym',
+    chip: 'Gym',
+    exercises: ['goblet-squat', 'db-rdl', 'db-bench-press', 'lat-pulldown', 'db-shoulder-press'].map(id => ({ id })),
+    stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'lat-stretch'],
+  },
+  {
+    id: 'fullHomeDb',
+    name: 'Full body at home with dumbbells',
+    short: 'Full Body · At Home · Equipment',
+    label: 'At home with dumbbells',
+    chip: 'At Home · Equipment',
+    exercises: ['goblet-squat', 'db-rdl', 'push-ups', 'one-arm-db-row', 'db-shoulder-press'].map(id => ({ id })),
+    stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'childs-pose'],
+  },
+  {
+    id: 'fullHome',
+    name: 'Full body at home, no equipment',
+    short: 'Full Body · At Home · No Equipment',
+    label: 'At home, no equipment',
+    chip: 'At Home · No Equipment',
+    exercises: ['bodyweight-split-squat', 'single-leg-hip-thrust', 'push-ups', 'pike-push-ups', 'superman'].map(id => ({ id })),
+    stretches: ['downward-dog', 'pigeon-pose', 'childs-pose', 'cat-cow', 'hip-flexor'],
+  },
+]
+export const FULL_BODY_BY_ID = Object.fromEntries(FULL_BODY.map(p => [p.id, p]))
+for (const p of FULL_BODY) workouts[p.id] = p
+// Every plan you tick sets in: the four, then the full-body days.
+export const PLAN_IDS = [...GYM_ORDER, ...FULL_BODY.map(p => p.id)]
 
 // Days you didn't make it to the gym — counted, so three walks read as 3.
 //   one / many  – how the count reads ("1 walk", "3 rest days").

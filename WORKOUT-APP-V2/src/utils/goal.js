@@ -12,11 +12,11 @@ export function goalFill(count) {
   return FILLS[Math.min(count, FILLS.length - 1)]
 }
 
-// Today's short name and the days left in the calendar week (Mon–Sun,
+// Today's short name and the days left in the calendar week (Sun–Sat,
 // today included).
 export function weekDay(now = new Date()) {
   return {
     day: now.toLocaleDateString('en-US', { weekday: 'short' }),
-    daysLeft: 7 - ((now.getDay() + 6) % 7),
+    daysLeft: 7 - now.getDay(),
   }
 }

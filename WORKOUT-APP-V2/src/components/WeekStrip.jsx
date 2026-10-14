@@ -2,26 +2,40 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { TileIcon } from './Icons'
 import { weekDays, sameDay } from '../utils/days'
 
-// A dot per thing done, in these colors (the key underneath names them).
-const KINDS = [
-  ['plan', 'Gym', 'bg-orange-500', 'bg-orange-50'],
-  ['class', 'Class', 'bg-violet-500', 'bg-violet-50'],
-  ['walk', 'Walk', 'bg-emerald-500', 'bg-emerald-50'],
-  ['cardio', 'Cardio', 'bg-cyan-500', 'bg-cyan-50'],
-  ['stretch', 'Stretch', 'bg-pink-500', 'bg-pink-50'],
-  ['rest', 'Rest', 'bg-stone-400', 'bg-stone-100'],
+// On the strip, a dot per thing done in its tab's color, with the key under
+// it: Gym, Cardio, Stretch, Rest.
+const TABS = [
+  ['gym', 'Gym', 'bg-red-500'],
+  ['cardio', 'Cardio', 'bg-cyan-500'],
+  ['stretch', 'Stretch', 'bg-pink-500'],
+  ['rest', 'Rest', 'bg-stone-400'],
 ]
-const DOT = Object.fromEntries(KINDS.map(([k, , dot]) => [k, dot]))
-const TILE = Object.fromEntries(KINDS.map(([k, , , tile]) => [k, tile]))
+const TAB_DOT = Object.fromEntries(TABS.map(([k, , dot]) => [k, dot]))
+// Each kind of thing: its tab, then (tapping a day) its own name and the
+// color of its card on that tab.
+const KINDS = {
+  plan: ['gym', 'Gym', 'bg-red-500', 'bg-red-50'],
+  full: ['gym', 'Full Body', 'bg-orange-500', 'bg-orange-50'],
+  class: ['gym', 'Class', 'bg-violet-500', 'bg-violet-50'],
+  walk: ['cardio', 'Walk', 'bg-emerald-500', 'bg-emerald-50'],
+  cardio: ['cardio', 'Cardio', 'bg-cyan-500', 'bg-cyan-50'],
+  sport: ['cardio', 'Sport', 'bg-lime-500', 'bg-lime-50'],
+  stretch: ['stretch', 'Stretch', 'bg-teal-500', 'bg-teal-50'],
+  rest: ['rest', 'Rest', 'bg-indigo-400', 'bg-indigo-50'],
+}
+const tabDot = kind => TAB_DOT[KINDS[kind][0]]
+const NAME = Object.fromEntries(Object.entries(KINDS).map(([k, [, name]]) => [k, name]))
+const DOT = Object.fromEntries(Object.entries(KINDS).map(([k, [, , dot]]) => [k, dot]))
+const TILE = Object.fromEntries(Object.entries(KINDS).map(([k, [, , , tile]]) => [k, tile]))
 // A class's tags, colored like the ones on its card.
 const TAG = { cardio: 'bg-emerald-50 text-emerald-700', strength: 'bg-orange-50 text-orange-700', stretch: 'bg-teal-50 text-teal-700' }
 
-const mondayOf = weekStart => {
+const firstDay = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
   return new Date(y, m - 1, d, 12)
 }
 
-// Every week, Monday to Sunday, one page each: swipe right for earlier weeks.
+// Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
 // Each date has a dot for everything done that day. Tap a day to list it;
 // tap it again or ✕ to close. `weeks` is oldest first, ending with this week;
 // `at` is the one showing.
@@ -31,7 +45,7 @@ export default function WeekStrip({ weeks, at, onAt }) {
   const settle = useRef(null)
   const now = new Date()
   const week = weeks[at]
-  const days = weekDays(mondayOf(week.weekStart))
+  const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
   const shown = picked === null ? null : days[picked]
 
@@ -101,17 +115,19 @@ export default function WeekStrip({ weeks, at, onAt }) {
       </div>
 
       {/* Weeks saved before days were kept have their totals only; the note
-          takes the key's place so the strip doesn't change height. */}
+          takes the key's place. */}
       {!week.dayLog ? (
         <p className="text-center text-[11px] text-stone-400">Days weren’t recorded this week</p>
-      ) : <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] text-stone-500">
-        {KINDS.map(([k, label, dot]) => (
-          <span key={k} className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-            {label}
-          </span>
-        ))}
-      </div>}
+      ) : (
+        <div className="flex justify-center gap-x-3.5 text-[11px] text-stone-500">
+          {TABS.map(([k, label, dot]) => (
+            <span key={k} className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
 
       {shown && (
         <div className="bg-white rounded-2xl shadow-sm px-4 py-3 space-y-2">
@@ -125,16 +141,21 @@ export default function WeekStrip({ weeks, at, onAt }) {
             week.dayLog[picked].map((x, j) => (
               <div key={j} className={`flex gap-2.5 text-sm text-stone-900 ${x.tags?.length ? 'items-start' : 'items-center'}`}>
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TILE[x.kind]}`}>
-                  <TileIcon id={x.icon} size={18} color={x.kind === 'stretch' ? 'text-pink-600' : x.kind === 'rest' ? 'text-stone-500' : undefined} />
+                  <TileIcon id={x.icon} size={18} />
                 </span>
                 {/* A class's tags go on their own line under its name. */}
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block">{x.label}</span>
                   {x.tags?.length > 0 && (
                     <span className="flex flex-wrap gap-1.5 mt-1">
                       {x.tags.map(t => <span key={t.kind} className={`text-xs font-semibold px-2 py-0.5 rounded-md ${TAG[t.kind]}`}>{t.text}</span>)}
                     </span>
                   )}
+                </span>
+                {/* What it was, in the color of its card. */}
+                <span className="shrink-0 flex items-center gap-1 text-[11px] font-medium text-stone-400">
+                  <span className={`w-1.5 h-1.5 rounded-full ${DOT[x.kind]}`} />
+                  {NAME[x.kind]}
                 </span>
               </div>
             ))
@@ -163,7 +184,7 @@ function Arrow({ label, right, disabled, onClick }) {
 // One week's seven days. Only this week has a today and days still to come.
 function WeekPage({ week, current, picked, onPick }) {
   const now = new Date()
-  const days = weekDays(mondayOf(week.weekStart))
+  const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
   return (
     <div className="w-full shrink-0 snap-center snap-always py-2" role="tablist" aria-hidden={!current}>
@@ -190,7 +211,7 @@ function WeekPage({ week, current, picked, onPick }) {
                 {d.getDate()}
               </span>
               <span className="flex gap-0.5 h-1.5">
-                {items.slice(0, 4).map((x, j) => <span key={j} className={`w-1.5 h-1.5 rounded-full ${DOT[x.kind]}`} />)}
+                {items.slice(0, 4).map((x, j) => <span key={j} className={`w-1.5 h-1.5 rounded-full ${tabDot(x.kind)}`} />)}
               </span>
             </button>
           )

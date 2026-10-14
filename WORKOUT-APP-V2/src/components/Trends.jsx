@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react'
 import { useDragToClose } from '../hooks/useDragToClose'
-import { workouts, GYM_ORDER, MUSCLE_GROUPS } from '../data/workout'
+import { workouts, GYM_ORDER, PLAN_IDS, MUSCLE_GROUPS } from '../data/workout'
 import { calendarWeekOf } from '../hooks/useStore'
 import { goalLevel } from '../utils/goal'
 import { EXERCISE_BANK } from '../data/exercises'
+import { metric } from '../utils/lifts'
 
 const WEEKS = 12
 
 const DAY = 86400000
 
-// "YYYY-MM-DD" Monday → Date, and back.
+// "YYYY-MM-DD" Sunday → Date, and back.
 const toDate = key => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d) }
 const toKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -22,19 +23,10 @@ function lastWeeks(history, current) {
   return Array.from({ length: WEEKS }, (_, i) => {
     const d = new Date(newest.getTime() - (WEEKS - 1 - i) * 7 * DAY)
     d.setHours(12)
-    return { monday: d, entry: byWeek[toKey(d)] ?? null }
+    return { start: d, entry: byWeek[toKey(d)] ?? null }
   }).filter((w, i, all) => w.entry || all.slice(0, i).some(x => x.entry))
 }
 
-// What a mini chart tracks for an exercise in a given week.
-//   hold → longest hold (s) · weighted → weight (lb; less is better when
-//   assisted) · bodyweight → best set (reps)
-function metric(lift) {
-  if (!lift?.sets?.length) return null
-  if (lift.mode === 'hold') return { v: Math.max(...lift.sets), unit: 's', better: 1 }
-  if (lift.weight > 0) return { v: lift.weight, unit: 'lb', better: lift.assist ? -1 : 1, assist: lift.assist }
-  return { v: Math.max(...lift.sets), unit: 'reps', better: 1 }
-}
 
 // The Trends screen: its own page off the header, like Past weeks.
 export default function TrendsScreen({ store, onBack }) {
@@ -63,7 +55,7 @@ function Trends({ store }) {
   const [open, setOpen] = useState(null) // exercise shown in the detail sheet
   // A group's charts: exercises from the bank that are in one of your
   // workouts now, or that you've done in any week.
-  const inWorkouts = new Set(GYM_ORDER.flatMap(id => store.getExercises(id).map(x => x.id)))
+  const inWorkouts = new Set(PLAN_IDS.flatMap(id => store.getExercises(id).map(x => x.id)))
   const done = new Set([store.current, ...store.history].flatMap(w => Object.keys(w.lifts ?? {})))
   const shown = EXERCISE_BANK.filter(x => x.group === group.id && (inWorkouts.has(x.id) || done.has(x.id)))
 
@@ -141,14 +133,14 @@ function WeekGrid({ weeks, goals }) {
         <div key={label} className="flex items-center gap-2 mb-1.5">
           <span className="w-[68px] text-xs font-semibold text-stone-500 shrink-0">{label}</span>
           <div className="flex-1 grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`, maxWidth: `${weeks.length * 26}px` }}>
-            {weeks.map(({ monday, entry }) => {
+            {weeks.map(({ start, entry }) => {
               const v = entry ? value(entry) : 0
               // This week is still filling in: outlined until its goal is met.
               const live = entry?.live && v < 3
               return (
                 <div
-                  key={monday.getTime()}
-                  title={`${entry?.live ? 'This week so far' : `Week of ${short(monday)}`}: ${entry ? text(entry) : 'not saved'}`}
+                  key={start.getTime()}
+                  title={`${entry?.live ? 'This week so far' : `Week of ${short(start)}`}: ${entry ? text(entry) : 'not saved'}`}
                   className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]} ${live ? 'ring-1 ring-inset ring-stone-300' : ''}`}
                 >
                   {v >= 3 ? '✓' : ''}
@@ -159,7 +151,7 @@ function WeekGrid({ weeks, goals }) {
         </div>
       ))}
       <div className="flex justify-between text-[10px] text-stone-400 pl-[76px] mt-1">
-        <span>{short(weeks[0].monday)}</span>
+        <span>{short(weeks[0].start)}</span>
         <span>This week</span>
       </div>
     </div>
@@ -173,7 +165,7 @@ const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 // in the better direction (lower when the move is assisted).
 function seriesFor(exercise, weeks) {
   const all = weeks
-    .map(w => ({ monday: w.monday, live: !!w.entry?.live, lift: w.entry?.lifts?.[exercise.id] }))
+    .map(w => ({ start: w.start, live: !!w.entry?.live, lift: w.entry?.lifts?.[exercise.id] }))
     .map(p => ({ ...p, m: metric(p.lift) }))
     .filter(p => p.m)
   const unit = all.at(-1)?.m.unit
@@ -245,7 +237,7 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 pt-3 h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
+        className="relative bg-white rounded-t-3xl w-full max-w-md px-5 h-[88dvh] overflow-y-auto overscroll-contain touch-pan-y"
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,
@@ -253,15 +245,18 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-stone-900 font-bold text-lg leading-tight">{exercise.name}</h3>
-            <p className="text-sm text-stone-400">
-              {group.label} · {UNIT_LABEL[latest.unit]}{latest.assist ? ' (assisted — less is better)' : ''}
-            </p>
+        {/* The handle and title stay put while the rest scrolls. */}
+        <div className="sticky top-0 z-10 bg-white rounded-t-3xl -mx-5 px-5 pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-stone-900 font-bold text-lg leading-tight">{exercise.name}</h3>
+              <p className="text-sm text-stone-400">
+                {group.label} · {UNIT_LABEL[latest.unit]}{latest.assist ? ' (assisted — less is better)' : ''}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70 shrink-0">Done</button>
           </div>
-          <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70 shrink-0">Done</button>
         </div>
 
         <div className="grid grid-cols-3 gap-2 my-4">
@@ -279,9 +274,9 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
         <p className="text-sm font-bold text-stone-900 mt-4 mb-1">Recent weeks</p>
         <div className="divide-y divide-stone-100">
           {points.slice(-5).reverse().map(p => (
-            <div key={p.monday.getTime()} className="flex items-center justify-between py-2 text-sm">
+            <div key={p.start.getTime()} className="flex items-center justify-between py-2 text-sm">
               <span className="text-stone-700">
-                {p.live ? 'This week' : short(p.monday)}
+                {p.live ? 'This week' : short(p.start)}
                 {p.pr && <span className="ml-1.5 text-[10px] font-extrabold text-white bg-orange-600 rounded px-1 py-px align-[1px]">PR</span>}
               </span>
               <span className="text-stone-500">{setsText(p)}</span>
@@ -339,7 +334,7 @@ function BigChart({ points }) {
       ))}
       {dates.map(i => (
         <text key={i} x={x(i)} y={H - 4} textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--color-stone-400)">
-          {points[i].live ? 'This week' : short(points[i].monday)}
+          {points[i].live ? 'This week' : short(points[i].start)}
         </text>
       ))}
     </svg>
@@ -399,7 +394,7 @@ function Balance({ weeks }) {
           <span className="w-[128px] shrink-0 text-xs font-semibold text-stone-700 truncate">{workouts[id].short}</span>
           <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full ${behind.some(b => b.id === id) ? 'bg-orange-300' : 'bg-orange-600'}`}
+              className={`h-full rounded-full ${behind.some(b => b.id === id) ? 'bg-red-300' : 'bg-red-600'}`}
               style={{ width: `${saved.length ? (done / saved.length) * 100 : 0}%` }}
             />
           </div>

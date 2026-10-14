@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { workouts, GYM_ORDER, MUSCLE_MAP, CLASS_AREAS } from '../data/workout'
+import { workouts, PLAN_IDS, MUSCLE_MAP, CLASS_AREAS } from '../data/workout'
 
 // Same silhouette as the workout body maps; regions are bands clipped to it.
 const SILHOUETTE = (
@@ -33,7 +33,7 @@ function regionScores(status, classes, view) {
     if (!c.strength) continue
     for (const a of CLASS_AREAS) if (c.areas.includes(a.id)) for (const r of a[view]) scores[r] += 1
   }
-  for (const id of GYM_ORDER) {
+  for (const id of PLAN_IDS) {
     for (const r of MUSCLE_MAP[id][view]) scores[r] += status[id] === 2 ? 1 : status[id] === 1 ? 0.5 : 0
   }
   return scores
@@ -80,12 +80,12 @@ function Figure({ status, classes, view }) {
 export default function MuscleMap({ store }) {
   // Finished = every set ticked (same rule as the weekly goal); started = any.
   const status = {}
-  for (const id of GYM_ORDER) {
+  for (const id of PLAN_IDS) {
     const { done, total } = store.workoutProgress(id)
     status[id] = total > 0 && done === total ? 2 : done > 0 ? 1 : 0
   }
   const classes = store.classes
-  const done = GYM_ORDER.filter(id => status[id] === 2).map(id => workouts[id].short)
+  const done = PLAN_IDS.filter(id => status[id] === 2).map(id => workouts[id].short)
 
   return (
     <div

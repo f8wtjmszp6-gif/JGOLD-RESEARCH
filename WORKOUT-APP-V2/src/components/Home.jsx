@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, COOL_DOWNS, CLASS_AREAS, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
+import { workouts, GYM_ORDER, FULL_BODY, activities, STRETCH_ROUTINE, COOL_DOWNS, CLASS_AREAS, CARDIO_TYPES, CARDIO_WORKOUT_MINUTES, cardioIsWorkout, CLASS_STRETCH_WORKOUT_MINUTES, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT } from '../data/workout'
 import { SettingsSheet, StepperRow, Segmented, ToggleRow } from './WorkoutDetail'
-import { TileIcon } from './Icons'
+import { TileIcon, TypeIcon } from './Icons'
 import WeekStrip from './WeekStrip'
 import { weekDays, sameDay, dayLabel, inDayOrder } from '../utils/days'
 
@@ -64,6 +64,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
   const walks = store.walks
   const other = store.otherCardio
   const otherMinutes = store.getCardioMinutes('other')
+  const sports = store.sports
 
   return (
     <div className="h-full flex flex-col">
@@ -107,6 +108,11 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
             ))}
           </Section>
 
+          {/* For weeks the four won't fit: asks gym or home first. */}
+          <Section title="Full body">
+            <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
+          </Section>
+
           <Section title="Gym class">
             <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={edit => open('class', edit)} />
           </Section>
@@ -140,6 +146,21 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
               {other.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
                   {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('other', e)} />)}
+                </div>
+              )}
+            </ActivityCard>
+            {/* Games and hikes, each with what it was. */}
+            <ActivityCard
+              activity={SPORTS_CARD}
+              icon="sport"
+              count={sports.length}
+              detail={sports.length ? `${sports.length} ${sports.length === 1 ? 'session' : 'sessions'} · ${store.getCardioMinutes('sport')} min` : undefined}
+              onAdd={() => open('sport')}
+              onRemove={store.removeSport}
+            >
+              {sports.length > 0 && (
+                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
+                  {inDayOrder(sports).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('sport', e)} />)}
                 </div>
               )}
             </ActivityCard>
@@ -198,8 +219,10 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
+      {sheet?.type === 'full' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'rest' && <RestSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'sport' && <AddCardioSheet kind="sport" store={store} edit={sheet.edit} onClose={close} />}
     </div>
   )
 }
@@ -225,7 +248,7 @@ function PlanBadge({ plan }) {
   const name = workouts[plan.id]?.short ?? plan.id
   const complete = plan.total > 0 && plan.done === plan.total
   const style = complete
-    ? 'bg-orange-50 text-orange-700 border-orange-200'
+    ? 'bg-red-50 text-red-700 border-red-200'
     : plan.done > 0
       ? 'bg-white text-stone-700 border-stone-200'
       : 'bg-stone-50 text-stone-400 border-transparent'
@@ -236,10 +259,20 @@ function PlanBadge({ plan }) {
   )
 }
 
+// Sports and hikes: pickleball, a long hike, a round of golf.
+const SPORTS_CARD = {
+  id: 'sport',
+  name: 'Sports & Hikes',
+  note: 'Hike, pickleball, tennis, golf',
+  one: 'session',
+  many: 'sessions',
+  tile: 'from-lime-50 to-lime-100',
+}
+
 // Cardio that isn't a class or a walk: a run, a ride, a swim.
 const OTHER_CARDIO = {
   id: 'otherCardio',
-  name: 'Other cardio',
+  name: 'Cardio Session',
   note: 'Run, bike, swim, elliptical',
   one: 'session',
   many: 'sessions',
@@ -320,8 +353,11 @@ function ClassLine({ entry, onEdit }) {
 function CardioLine({ session, showWorkout = true, onEdit }) {
   const day = dayLabel(session.at)
   return (
-    <LineButton label={`${day} ${session.kind === 'walk' ? 'walk' : 'cardio'}`} onEdit={onEdit}>
+    <LineButton label={`${day} ${session.type ?? (session.kind === 'walk' ? 'walk' : 'cardio')}`} onEdit={onEdit}>
       <span className="w-12 font-semibold text-stone-600">{day}</span>
+      {session.type && session.type !== 'Other' && (
+        <span className={`${TAG} ${session.kind === 'sport' ? 'bg-lime-50 text-lime-800' : 'bg-cyan-50 text-cyan-700'}`}>{session.type}</span>
+      )}
       <span className={`${TAG} bg-emerald-50 text-emerald-700`}>{session.minutes} min {session.hard ? 'hard' : 'easy'}</span>
       {showWorkout && cardioIsWorkout(session) && <span className={`${TAG} bg-cyan-50 text-cyan-700`}>Workout</span>}
     </LineButton>
@@ -420,32 +456,73 @@ function LogClassSheet({ store, edit, onClose }) {
   )
 }
 
-// Logs a walk (kind "walk") or other cardio. Starts from the last one you
-// added. Only other cardio can count as a workout, so only it shows how close
-// it is.
+// Logs a walk (kind "walk"), other cardio ("other") or a sport or hike
+// ("sport"). Starts from the last one you added. Other cardio and sports say
+// what they were, and can count as a workout, so they show how close they are.
 function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   const isWalk = kind === 'walk'
+  const isSport = kind === 'sport'
   const start = edit?.entry ?? store.getCardioSetting(kind)
   const [minutes, setMinutes] = useState(start.minutes)
   const [hard, setHard] = useState(start.hard)
   const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
+  // What it was. Sports: one of the list, or a name typed under Other.
+  const choices = isSport ? store.sportNames : CARDIO_TYPES
+  const [type, setType] = useState(isWalk ? null : start.type ?? (edit ? null : choices[0]))
+  const [typing, setTyping] = useState(false)
+  const [name, setName] = useState('')
+  const picked = typing ? name.trim() : type
 
   const workout = !isWalk && cardioIsWorkout({ minutes, hard })
   const need = CARDIO_WORKOUT_MINUTES[hard ? 'hard' : 'easy'] - minutes
 
   function add() {
-    if (edit) store.editCardio(kind, edit.index, { minutes, hard, at })
+    const what = picked || undefined
+    if (edit) store.editCardio(kind, edit.index, { minutes, hard, at, ...(what && { type: what }) })
     else if (isWalk) store.addWalk(minutes, hard, at)
-    else {
-      store.addOtherCardio(minutes, hard, at)
-      store.setCardioSetting('other', { minutes, hard })
-    }
+    else if (isSport) store.addSport(minutes, hard, at, what)
+    else store.addOtherCardio(minutes, hard, at, what)
     onClose()
   }
 
+  const title = isWalk ? (edit ? 'Edit walk' : 'Add a walk') : isSport ? (edit ? 'Edit sport or hike' : 'Add a sport or hike') : edit ? 'Edit cardio' : 'Add cardio'
+  // A tile per choice: its icon and name, the picked one outlined in the card's color.
+  const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2.5 pb-2 border-[1.5px] text-[11.5px] font-semibold transition-colors min-w-0 ${
+    on ? (isSport ? 'bg-lime-50 text-lime-800 border-lime-600' : 'bg-cyan-50 text-cyan-700 border-cyan-600') : 'bg-stone-100 text-stone-500 border-transparent active:bg-stone-200'
+  }`
   return (
-    <SettingsSheet title={edit ? (isWalk ? 'Edit walk' : 'Edit cardio') : isWalk ? 'Add a walk' : 'Add cardio'} closeLabel="Cancel" onClose={onClose}>
-      <StepperRow label="Length" value={minutes} step={5} min={5} max={240} editable suffix=" min" onChange={setMinutes} />
+    <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
+      {!isWalk && (
+        <div className="space-y-2">
+          <span className="text-base text-stone-600">What did you do?</span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {choices.map(c => (
+              <button key={c} onClick={() => { setType(c); setTyping(false) }} aria-pressed={!typing && type === c} className={tile(!typing && type === c)}>
+                <TypeIcon name={c} />
+                <span className="w-full truncate text-center">{c}</span>
+              </button>
+            ))}
+            {/* Sports: anything else, by name, kept for next time. */}
+            {isSport && (
+              <button onClick={() => setTyping(true)} aria-pressed={typing} className={tile(typing)}>
+                <TypeIcon name="Other" />
+                <span>Other</span>
+              </button>
+            )}
+          </div>
+          {typing && (
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="What was it? (Climbing, Kayaking…)"
+              autoFocus
+              maxLength={24}
+              className="w-full rounded-xl bg-stone-100 px-3 py-2.5 text-base text-stone-900 outline-none placeholder:text-stone-400"
+            />
+          )}
+        </div>
+      )}
+      <StepperRow label="Length" value={minutes} step={5} min={5} max={480} editable suffix=" min" onChange={setMinutes} />
       <Segmented label="Effort" value={hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => setHard(v === 'hard')} />
       {/* 30 min hard or 45 easy makes it a workout, not just cardio minutes. */}
       {isWalk ? null : workout ? (
@@ -460,9 +537,13 @@ function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
       <DayPicker now={store.today} at={at} onChange={setAt} />
       <button
         onClick={add}
-        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
+        disabled={isSport && !picked}
+        className="w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
       >
-        {edit ? 'Save' : 'Add'} {minutes} min · {workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}
+        {isSport && !picked ? 'Name it to add it' : picked && picked !== 'Other'
+          // Whether it counts shows just above, so a named one keeps the button short.
+          ? `${edit ? 'Save' : 'Add'} ${picked} · ${minutes} min`
+          : `${edit ? 'Save' : 'Add'} ${minutes} min · ${workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}`}
       </button>
       {edit && <DeleteButton what={isWalk ? 'walk' : 'session'} onDelete={() => { store.deleteCardio(kind, edit.index); onClose() }} />}
     </SettingsSheet>
@@ -593,7 +674,7 @@ function Section({ title, children }) {
 // Stretching done outside the app's lists — after a class, at home.
 const OWN_STRETCH = {
   id: 'ownStretch',
-  name: 'On my own',
+  name: 'Log a Stretch',
   note: 'Stretched after a class or at home',
   one: 'session',
   many: 'sessions',
@@ -668,14 +749,15 @@ function RoutineCard({ store, onOpen }) {
               {STRETCH_ROUTINE.name}
               {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
             </p>
+            {/* Like a plan card: what's in it until you start, then how far along. */}
             <p className="text-sm text-stone-400 truncate">
-              {list.length} stretches · {store.routineMinutes} min{workout && <span className="text-pink-700"> · workout</span>}
+              {done > 0 ? `${done}/${list.length}` : list.length} stretches · {store.routineMinutes} min{workout && <span className="text-pink-700"> · workout</span>}
             </p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <span className="text-sm font-medium text-stone-500">{done}/{list.length}</span>
-          <div className="w-16 h-1 bg-stone-100 rounded-full mt-1.5">
+        {/* Progress only: a bar that fills as you tick stretches, no number. */}
+        <div className="shrink-0">
+          <div className="w-16 h-1 bg-stone-100 rounded-full">
             <div
               className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-teal-400'}`}
               style={{ width: `${(done / list.length) * 100}%` }}
@@ -710,7 +792,7 @@ function CoolDownCard({ store, onOpen }) {
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-stone-900">
-              Cool-down
+              Cool Down
               {current?.complete && <span className="text-emerald-600 ml-1.5">✓</span>}
             </p>
             <p className="text-sm text-stone-400 truncate">
@@ -738,10 +820,87 @@ function CoolDownCard({ store, onOpen }) {
   )
 }
 
+// A full-body day's progress this week: sets and stretches ticked.
+function fullProgress(store, id) {
+  const { done, total, exercises } = store.workoutProgress(id)
+  const stretches = store.getStretches(id)
+  const stretched = stretches.filter(x => store.getStretchDone(id, x.id)).length
+  return { done, total, exercises, stretches: stretches.length, stretched, complete: total > 0 && done === total, started: done > 0 || stretched > 0 }
+}
+
+// One card for both full-body days. Until you start one it asks gym or home;
+// once one is under way it shows that one and opens straight to it.
+function FullBodyCard({ store, onOpen }) {
+  const all = FULL_BODY.map(p => ({ ...p, ...fullProgress(store, p.id) }))
+  const current = all.find(p => p.started && !p.complete) ?? all.find(p => p.complete)
+  const inProgress = current && !current.complete
+  return (
+    <button onClick={() => onOpen(inProgress ? current.id : null)} className="w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0">
+            <TileIcon id="fullBody" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-stone-900">
+              Full Body Workout
+              {current?.complete && <span className="text-emerald-600 ml-1.5">✓</span>}
+            </p>
+            <p className="text-sm text-stone-400 truncate">
+              {current
+                ? `${current.label} · ${current.done}/${current.total} sets · ${current.stretched}/${current.stretches} stretches`
+                : 'At the gym or at home'}
+            </p>
+          </div>
+        </div>
+        {current ? (
+          <div className="shrink-0 w-16 h-1 bg-stone-100 rounded-full">
+            <div
+              className={`h-full rounded-full transition-all ${current.complete ? 'bg-emerald-400' : 'bg-orange-400'}`}
+              style={{ width: `${current.total ? (current.done / current.total) * 100 : 0}%` }}
+            />
+          </div>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+        )}
+      </div>
+    </button>
+  )
+}
+
+// Picks which full-body day: where you're working out.
+function FullBodySheet({ store, onPick, onClose }) {
+  return (
+    <SettingsSheet title="Full Body Workout" closeLabel="Cancel" onClose={onClose}>
+      <p className="text-sm text-stone-500 -mt-1">Where are you working out?</p>
+      <div className="space-y-2">
+        {FULL_BODY.map(p => {
+          const { exercises, complete } = fullProgress(store, p.id)
+          return (
+            <button key={p.id} onClick={() => onPick(p.id)} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-3 text-left active:bg-stone-100">
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0">
+                <TileIcon id={p.id} size={26} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-semibold text-stone-900">
+                  {p.label}
+                  {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
+                </span>
+                <span className="block text-sm text-stone-400">{exercises} exercises</span>
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          )
+        })}
+      </div>
+    </SettingsSheet>
+  )
+}
+
 // Picks which cool-down to do: you say what you just did.
 function CoolDownSheet({ store, onPick, onClose }) {
   return (
-    <SettingsSheet title="Cool-down" closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title="Cool Down" closeLabel="Cancel" onClose={onClose}>
       <p className="text-sm text-stone-500 -mt-1">What did you just do?</p>
       <div className="space-y-2">
         {COOL_DOWNS.map(c => {
@@ -787,7 +946,7 @@ function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpen }) {
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center shrink-0">
+          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center shrink-0">
             <TileIcon id={workout.id} />
           </div>
           <div className="min-w-0">
@@ -802,7 +961,7 @@ function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpen }) {
         <div className="shrink-0">
           <div className="w-16 h-1 bg-stone-100 rounded-full">
             <div
-              className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-orange-400'}`}
+              className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-red-400'}`}
               style={{ width: `${total ? (done / total) * 100 : 0}%` }}
             />
           </div>

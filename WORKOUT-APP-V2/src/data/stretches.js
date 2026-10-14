@@ -1,4 +1,4 @@
-import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID } from './workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY_BY_ID } from './workout'
 
 const S = (id, name, duration, perSide, area) => ({ id, name, duration, perSide, area })
 
@@ -98,7 +98,7 @@ export const STRETCH_BANK = [...ORIGINAL, ...MORE]
 export const STRETCH_BY_ID = Object.fromEntries(STRETCH_BANK.map(x => [x.id, x]))
 
 // A list's starting stretches: each gym workout's own, a cool-down's, or the
-// Full-Body Stretch.
+// Full Body Stretch.
 export function defaultStretchIds(listId) {
   return workouts[listId]?.stretches ?? COOL_DOWN_BY_ID[listId]?.stretches ?? (listId === STRETCH_ROUTINE.id ? STRETCH_ROUTINE.stretches : [])
 }
@@ -110,6 +110,9 @@ export const SUGGESTED_AREAS = {
   pull: ['back', 'shoulders', 'arms', 'neck'],
   legsPost: ['legs', 'hips', 'calves', 'back'],
   routine: ['full', 'hips', 'back'],
+  fullGym: ['full', 'hips', 'legs', 'back'],
+  fullHomeDb: ['full', 'hips', 'legs', 'back'],
+  fullHome: ['full', 'hips', 'legs', 'back'],
   coolWalk: ['calves', 'legs', 'hips'],
   coolRun: ['calves', 'legs', 'hips'],
   coolBike: ['hips', 'legs', 'shoulders', 'back'],
@@ -118,7 +121,7 @@ export const SUGGESTED_AREAS = {
 }
 
 // Which stretches fit each plan — the muscles it trains, nothing else. The
-// Full-Body Stretch and the cool-downs take any stretch.
+// Full Body Stretch, the cool-downs and the full-body days take any stretch.
 const STRETCH_FITS = {
   // Chest, front and side shoulders, triceps, upper traps and neck
   push: ['doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'puppy-pose', 'sleeper-stretch',
@@ -139,12 +142,12 @@ const STRETCH_FITS = {
 }
 
 export function stretchFits(stretch, listId) {
-  return listId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
+  return listId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[listId] || !!FULL_BODY_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
 }
 
 // How well a stretch suits a list: 3 best, 2 good (anything not listed), 1
 // okay. For the plans, how directly it stretches what that plan trained; for
-// the Full-Body Stretch, how much of the body it reaches.
+// the Full Body Stretch, how much of the body it reaches.
 const STRETCH_BEST = {
   push: ['doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'overhead-tricep-stretch'],
   legsQuad: ['hip-flexor', 'couch-stretch', 'quad-stretch', 'kneeling-quad', 'figure-4', 'pigeon-pose', '90-90', 'butterfly'],

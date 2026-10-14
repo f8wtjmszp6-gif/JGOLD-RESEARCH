@@ -22,14 +22,17 @@ export default function SettingsDrawer({ store, onClose }) {
         onClick={e => e.stopPropagation()}
         className="absolute inset-0 bg-white overflow-y-auto overscroll-contain touch-pan-y animate-[drawer-in_240ms_ease-out]"
         style={{
-          paddingTop: 'env(safe-area-inset-top)',
           paddingBottom: 'env(safe-area-inset-bottom)',
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform 180ms ease-out',
         }}
       >
-        <div className="px-5 pt-5 pb-8 space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="px-5 pb-8 space-y-6">
+          {/* The title stays at the top while the settings scroll under it. */}
+          <div
+            className="sticky top-0 z-10 bg-white -mx-5 px-5 pb-3 flex items-center justify-between"
+            style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top))' }}
+          >
             <h2 className="text-2xl font-bold text-stone-900 tracking-tight">Settings</h2>
             <button onClick={onClose} className="text-accent-500 font-semibold active:opacity-60">Done</button>
           </div>
