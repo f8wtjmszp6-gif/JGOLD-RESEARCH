@@ -4,6 +4,7 @@ import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { TypeIcon } from '../ui/Icons'
 import { weekDays, sameDay } from '../../utils/days'
+import { TAB_DOT, tabsOf } from '../../utils/dayKinds'
 
 const EFFORT = [['easy', 'Easy'], ['hard', 'Hard']]
 
@@ -95,14 +96,10 @@ export function LogClassSheet({ store, edit, onClose }) {
           <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
         ))}
       </div>
-      <DayPicker now={store.today} at={c.at} onChange={at => set({ at })} />
-      <button
-        onClick={log}
-        disabled={nothing}
-        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
-      >
+      <DayPicker now={store.today} dayLog={store.dayLog} at={c.at} onChange={at => set({ at })} />
+      <LogButton store={store} at={c.at} verb={edit ? 'Save' : 'Log'} disabled={nothing} onSave={log}>
         {nothing ? 'Turn on what you did' : `${edit ? 'Save' : 'Log class'}${counts && ` · ${counts}`}`}
-      </button>
+      </LogButton>
       {edit && <DeleteButton what="class" onDelete={() => { store.deleteClass(edit.index); onClose() }} />}
     </SettingsSheet>
   )
@@ -186,17 +183,13 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
         </p>
       )}
       <EffortNote />
-      <DayPicker now={store.today} at={at} onChange={setAt} />
-      <button
-        onClick={add}
-        disabled={isSport && !picked}
-        className="w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
-      >
+      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
+      <LogButton store={store} at={at} verb={edit ? 'Save' : 'Add'} disabled={isSport && !picked} onSave={add}>
         {isSport && !picked ? 'Name it to add it' : picked && picked !== 'Other'
           // Whether it counts shows just above, so a named one keeps the button short.
           ? `${edit ? 'Save' : 'Add'} ${picked} · ${minutes} min`
           : `${edit ? 'Save' : 'Add'} ${minutes} min · ${workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}`}
-      </button>
+      </LogButton>
       {edit && <DeleteButton what={isWalk ? 'walk' : 'session'} onDelete={() => { store.deleteCardio(kind, edit.index); onClose() }} />}
     </SettingsSheet>
   )
@@ -205,13 +198,14 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
 // Which day of the week something happened: Mon–Sun, days still to come
 // greyed out. Today keeps the time you logged it. `now` is today, or a past
 // week's last day.
-function DayPicker({ now, at, onChange }) {
+// Each day shows a dot for every tab it already has something logged in.
+function DayPicker({ now, at, dayLog, onChange }) {
   const picked = at ? new Date(at) : null
   return (
     <div className="space-y-2">
       <span className="text-base text-stone-600">Day</span>
       <div className="grid grid-cols-7 gap-1">
-        {weekDays(now).map(d => {
+        {weekDays(now).map((d, i) => {
           const today = sameDay(d, now)
           const future = !today && d > now
           const on = picked && sameDay(d, picked)
@@ -228,6 +222,9 @@ function DayPicker({ now, at, onChange }) {
             >
               <span className="block text-[11px] font-medium">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
               <span className="block text-sm font-semibold">{d.getDate()}</span>
+              <span className="flex justify-center gap-0.5 h-1 mt-0.5">
+                {tabsOf(dayLog?.[i] ?? []).map(k => <span key={k} className={`w-1 h-1 rounded-full ${TAB_DOT[k]} ${on ? 'ring-1 ring-white' : ''}`} />)}
+              </span>
             </button>
           )
         })}
@@ -240,9 +237,27 @@ function DayPicker({ now, at, onChange }) {
 // Adds a rest day, or moves or deletes one: which day was it?
 export function RestSheet({ store, edit, onClose }) {
   const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
+  const day = weekDays(store.today).findIndex(d => sameDay(d, new Date(at)))
+  const there = (store.dayLog[day] ?? []).filter(x => x.kind !== 'rest')
   return (
     <SettingsSheet title={edit ? 'Edit rest day' : 'Add a rest day'} closeLabel="Cancel" onClose={onClose}>
-      <DayPicker now={store.today} at={at} onChange={setAt} />
+      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
+      {there.length > 0 && (
+        <Heads title={`${weekdayOf(at)} already has`}>
+          <ul className="space-y-1">
+            {there.flatMap(x => [
+              [x.label, tabsOf([{ kind: x.kind }])[0]],
+              ...(x.tags ?? []).filter(t => t.kind !== 'strength').map(t => [t.text, t.kind]),
+            ]).map(([text, tab], i) => (
+              <li key={i} className="flex items-center gap-2 text-stone-600">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TAB_DOT[tab]}`} />
+                {text}
+              </li>
+            ))}
+          </ul>
+          <p className="text-stone-600">Still mark it as a rest day?</p>
+        </Heads>
+      )}
       <button
         onClick={() => {
           if (edit) store.editRest(edit.index, at)
@@ -251,10 +266,49 @@ export function RestSheet({ store, edit, onClose }) {
         }}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
       >
-        {edit ? 'Save' : 'Add rest day'}
+        {edit ? 'Save' : 'Add rest day'}{there.length > 0 && ' anyway'}
       </button>
       {edit && <DeleteButton what="rest day" onDelete={() => { store.deleteRest(edit.index); onClose() }} />}
     </SettingsSheet>
+  )
+}
+
+const weekdayOf = at => new Date(at).toLocaleDateString('en-US', { weekday: 'long' })
+
+// A yellow note above a sheet's button.
+function Heads({ title, children }) {
+  return (
+    <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-2 text-sm">
+      <p className="flex items-center gap-1.5 font-semibold text-amber-800">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        </svg>
+        {title}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+// A log sheet's main button. On a rest day it says so and asks whether to keep
+// the rest day, as two buttons; `verb` starts each ("Add · keep rest day").
+function LogButton({ store, at, verb, disabled, onSave, children }) {
+  const rest = disabled ? -1 : store.restIndexOn(at)
+  const main = 'w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400'
+  if (rest < 0) return <button onClick={onSave} disabled={disabled} className={main}>{children}</button>
+  return (
+    <>
+      <Heads title={`${weekdayOf(at)} is a rest day`}>
+        <p className="text-stone-600">Keep it as a rest day, or remove it?</p>
+      </Heads>
+      <button onClick={onSave} className={main}>{verb} · keep rest day</button>
+      <button
+        onClick={() => { onSave(); store.deleteRest(rest) }}
+        className="w-full py-3.5 rounded-2xl bg-stone-100 text-stone-900 font-semibold active:bg-stone-200 transition-colors"
+      >
+        {verb} · remove rest day
+      </button>
+    </>
   )
 }
 
@@ -286,17 +340,19 @@ export function AddStretchSheet({ store, edit, onClose }) {
       ) : (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
       )}
-      <DayPicker now={store.today} at={at} onChange={setAt} />
-      <button
-        onClick={() => {
+      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
+      <LogButton
+        store={store}
+        at={at}
+        verb={edit ? 'Save' : 'Add'}
+        onSave={() => {
           if (edit) store.editOwnStretch(edit.index, { minutes, at })
           else store.addOwnStretch(minutes, at)
           onClose()
         }}
-        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
       >
         {edit ? 'Save' : 'Add'} {minutes} min · {need > 0 ? 'stretch day' : 'counts as a workout'}
-      </button>
+      </LogButton>
       {edit && <DeleteButton what="session" onDelete={() => { store.deleteOwnStretch(edit.index); onClose() }} />}
     </SettingsSheet>
   )

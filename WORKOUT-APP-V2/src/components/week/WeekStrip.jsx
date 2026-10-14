@@ -1,29 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { TileIcon } from '../ui/Icons'
 import { weekDays, sameDay } from '../../utils/days'
+import { TABS, TAB_DOT, TILE, tabsOf } from '../../utils/dayKinds'
 
-// On the strip, a dot per thing done in its tab's color, with the key under
-// it: Gym, Cardio, Stretch, Rest.
-const TABS = [
-  ['gym', 'Gym', 'bg-red-500'],
-  ['cardio', 'Cardio', 'bg-cyan-500'],
-  ['stretch', 'Stretch', 'bg-violet-500'],
-  ['rest', 'Rest', 'bg-stone-400'],
-]
-const TAB_DOT = Object.fromEntries(TABS.map(([k, , dot]) => [k, dot]))
-// Each kind of thing: its tab, then (tapping a day) the color of its card's tile.
-const KINDS = {
-  plan: ['gym', 'bg-red-50'],
-  full: ['gym', 'bg-orange-50'],
-  class: ['gym', 'bg-violet-50'],
-  walk: ['cardio', 'bg-emerald-50'],
-  cardio: ['cardio', 'bg-cyan-50'],
-  sport: ['cardio', 'bg-lime-50'],
-  stretch: ['stretch', 'bg-teal-50'],
-  rest: ['rest', 'bg-indigo-50'],
-}
-const tabDot = kind => TAB_DOT[KINDS[kind][0]]
-const TILE = Object.fromEntries(Object.entries(KINDS).map(([k, [, tile]]) => [k, tile]))
 // A class's tags, colored like the ones on its card.
 const TAG = { cardio: 'bg-emerald-50 text-emerald-700', strength: 'bg-orange-50 text-orange-700', stretch: 'bg-teal-50 text-teal-700' }
 
@@ -203,7 +182,7 @@ function WeekPage({ week, current, picked, onPick }) {
                 {d.getDate()}
               </span>
               <span className="flex gap-0.5 h-1.5">
-                {items.slice(0, 4).map((x, j) => <span key={j} className={`w-1.5 h-1.5 rounded-full ${tabDot(x.kind)}`} />)}
+                {tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)}
               </span>
             </button>
           )

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { SPORTS } from '../data/workout'
 import { STRETCH_BY_ID, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan } from '../data/exercises'
+import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
@@ -542,6 +543,19 @@ function makeStore(state, update) {
     })
   }
 
+  // Which rest day falls on the day of `at`, or -1 if none does.
+  function restIndexOn(at) {
+    const day = new Date(at)
+    return restDaysOf(state).findIndex(r => r && sameDay(new Date(r), day))
+  }
+
+  // When a plan's first set was ticked (`at`) and its stretches finished
+  // (`stretchedAt`), as ISO times, or undefined.
+  function stampsOf(workoutId) {
+    const { at, stretchedAt } = state.checks?.[workoutId] ?? {}
+    return { at, stretchedAt }
+  }
+
   function getNewClass() {
     return newClassOf(state)
   }
@@ -738,6 +752,8 @@ function makeStore(state, update) {
     addRest,
     editRest,
     deleteRest,
+    restIndexOn,
+    stampsOf,
     dayLog: dayLogOf(state),
     goals: goalsOf(state),
     timer: timerOf(state),

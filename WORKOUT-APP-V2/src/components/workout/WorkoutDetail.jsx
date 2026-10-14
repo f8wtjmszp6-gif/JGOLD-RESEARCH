@@ -3,11 +3,11 @@ import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID } from '../../data/workout'
 import { gapsAfter } from '../../data/exercises'
-import { weekRange } from '../../utils/days'
+import { weekRange, sameDay } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab } from './StretchesTab'
 import { ExercisePicker } from './pickers'
-import { ConfirmSheet } from '../ui/Sheet'
+import { ConfirmSheet, SettingsSheet } from '../ui/Sheet'
 import { CoveragePill, GapRows, AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
@@ -25,6 +25,22 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const isRoutine = workout.exercises.length === 0
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
+  // The first set ticked (or last stretch) on a rest day asks whether it's
+  // still a rest day, once. A plan already ticked when you open it doesn't ask.
+  const stamps = store.stampsOf(workoutId)
+  const clash = [stamps.at, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
+  const [answered, setAnswered] = useState(clash)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  function removeRest() {
+    const i = store.restIndexOn(clash)
+    const at = store.restDays[i]
+    store.deleteRest(i)
+    setAnswered(clash)
+    setToast({ text: 'Rest day removed', undo: () => store.addRest(at) })
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 4000)
+  }
   const warmup = store.getWarmup(workoutId)
   // Every exercise starts folded; tapping one opens it (and folds any other).
   // Finishing it folds it again.
@@ -417,7 +433,26 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           onClose={() => setRemoving(null)}
         />
       )}
-
+      {clash && clash !== answered && (() => {
+        const day = sameDay(new Date(clash), store.today) ? 'Today' : new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
+        const weekday = new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
+        return (
+          <SettingsSheet title={`${day} is a rest day`} closeLabel="Keep it" onClose={() => setAnswered(clash)}>
+            <p className="text-stone-500 leading-relaxed">
+              You marked {weekday} as a rest day. Keep it, or remove it now that you’ve {clash === stamps.at ? 'worked out' : 'stretched'}?
+            </p>
+            <button onClick={removeRest} className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors">
+              Remove rest day
+            </button>
+          </SettingsSheet>
+        )
+      })()}
+      {toast && (
+        <div role="status" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 rounded-2xl bg-stone-800 text-white text-sm px-4 py-3 flex items-center justify-between gap-3 shadow-lg">
+          {toast.text}
+          <button onClick={() => { toast.undo(); setToast(null) }} className="font-semibold text-blue-300 active:opacity-60">Undo</button>
+        </div>
+      )}
     </div>
   )
 }
