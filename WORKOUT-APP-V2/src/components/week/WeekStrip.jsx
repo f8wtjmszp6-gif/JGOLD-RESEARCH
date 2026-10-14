@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { TileIcon } from './Icons'
-import { weekDays, sameDay } from '../utils/days'
+import { TileIcon } from '../ui/Icons'
+import { weekDays, sameDay } from '../../utils/days'
 
 // On the strip, a dot per thing done in its tab's color, with the key under
 // it: Gym, Cardio, Stretch, Rest.

@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { workouts, PLAN_IDS, MUSCLE_MAP, CLASS_AREAS } from '../data/workout'
+import { workouts, PLAN_IDS, MUSCLE_MAP, CLASS_AREAS } from '../../data/workout'
 
 // Same silhouette as the workout body maps; regions are bands clipped to it.
 const SILHOUETTE = (

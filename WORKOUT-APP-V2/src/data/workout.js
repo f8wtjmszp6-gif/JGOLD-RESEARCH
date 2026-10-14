@@ -114,11 +114,11 @@ export const COOL_DOWN_BY_ID = Object.fromEntries(COOL_DOWNS.map(c => [c.id, c])
 
 // Weekly goal for both home cards — workouts and stretching: 3 a week
 // meets it, 4 is the stretch target.
-export const WEEKLY_GOAL = { min: 3, max: 4 }
+const WEEKLY_GOAL = { min: 3, max: 4 }
 
 // Weekly cardio, in minutes, from the health guidelines: 150 is the minimum
 // for most of the benefit, 300 the ideal. A hard minute counts as two.
-export const CARDIO_GOAL = { min: 150, max: 300 }
+const CARDIO_GOAL = { min: 150, max: 300 }
 
 // The weekly goals until you set your own in Settings, with what the health
 // guidelines say for each (shown under its setting).
@@ -227,7 +227,8 @@ export const FULL_BODY = [
     name: 'Full body at the gym',
     short: 'Full Body · Gym',
     label: 'At the gym',
-    chip: 'Gym',
+    where: 'At the gym',
+    chip: 'All equipment',
     exercises: ['goblet-squat', 'db-rdl', 'db-bench-press', 'lat-pulldown', 'db-shoulder-press'].map(id => ({ id })),
     stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'lat-stretch'],
   },
@@ -236,7 +237,8 @@ export const FULL_BODY = [
     name: 'Full body at home with dumbbells',
     short: 'Full Body · At Home · Equipment',
     label: 'At home with dumbbells',
-    chip: 'At Home · Equipment',
+    where: 'At home',
+    chip: 'Dumbbells',
     exercises: ['goblet-squat', 'db-rdl', 'push-ups', 'one-arm-db-row', 'db-shoulder-press'].map(id => ({ id })),
     stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'childs-pose'],
   },
@@ -245,7 +247,8 @@ export const FULL_BODY = [
     name: 'Full body at home, no equipment',
     short: 'Full Body · At Home · No Equipment',
     label: 'At home, no equipment',
-    chip: 'At Home · No Equipment',
+    where: 'At home',
+    chip: 'Bodyweight',
     exercises: ['bodyweight-split-squat', 'single-leg-hip-thrust', 'push-ups', 'pike-push-ups', 'superman'].map(id => ({ id })),
     stretches: ['downward-dog', 'pigeon-pose', 'childs-pose', 'cat-cow', 'hip-flexor'],
   },
@@ -256,29 +259,11 @@ for (const p of FULL_BODY) workouts[p.id] = p
 export const PLAN_IDS = [...GYM_ORDER, ...FULL_BODY.map(p => p.id)]
 
 // Days you didn't make it to the gym — counted, so three walks read as 3.
+//   note        – what its card says before you log one.
 //   one / many  – how the count reads ("1 walk", "3 rest days").
-//   short       – legend label on the week bar.
-//   tile / mark – the activity's color: a light gradient tile behind its figure, and the
-//                 solid fill for its days on the week bar.
+//   tile        – the light gradient tile behind its icon.
 export const activities = [
-  { id: 'class', name: 'Workout Class', short: 'Class', note: 'HIIT, spin, bootcamp, yoga', icon: '🔥', one: 'class', many: 'classes', tile: 'from-violet-50 to-violet-100', mark: 'bg-violet-600' },
-  { id: 'walk', name: 'Walking', short: 'Walk', note: 'Got a walk in instead', icon: '🚶', one: 'walk', many: 'walks', tile: 'from-emerald-50 to-emerald-100', mark: 'bg-emerald-600' },
-  { id: 'rest', name: 'Rest', short: 'Rest', note: 'Recovery day', icon: '😴', one: 'rest day', many: 'rest days', tile: 'from-indigo-50 to-indigo-100', mark: 'bg-indigo-400' },
+  { id: 'class', name: 'Workout Class', note: 'HIIT, spin, bootcamp, yoga', one: 'class', many: 'classes', tile: 'from-violet-50 to-violet-100' },
+  { id: 'walk', name: 'Walking', note: 'Got a walk in instead', one: 'walk', many: 'walks', tile: 'from-emerald-50 to-emerald-100' },
+  { id: 'rest', name: 'Rest', note: 'Recovery day', one: 'rest day', many: 'rest days', tile: 'from-indigo-50 to-indigo-100' },
 ]
-
-// Gym days on the week bar. The four marks, in bar order gym → class → walk →
-// rest, came out of the dataviz palette validator on the white week card:
-// every pair stays distinct under red-green colorblindness and every fill
-// clears 3:1 on white. Gray fails as a category color and orange beside red
-// fails outright, so re-run the validator before changing any of them.
-export const GYM_MARK = 'bg-orange-600'
-
-// Cardio sessions that count as workouts, after gym and class on the
-// Workouts bar. Cyan was validated against orange-600 and violet-600 (rose,
-// the obvious "cardio" color, fails beside orange for red-green colorblindness).
-export const CARDIO_MARK = 'bg-cyan-600'
-
-// Stretching long enough to count as a workout, last on the Workouts bar.
-// Pink-600 passed the validator against orange, violet and cyan; the teals
-// that match the stretch figures sit too close to cyan.
-export const STRETCH_MARK = 'bg-pink-600'

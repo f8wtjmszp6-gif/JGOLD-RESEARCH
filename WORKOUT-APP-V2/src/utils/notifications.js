@@ -1,4 +1,4 @@
-import { calendarWeekOf } from '../hooks/useStore'
+import { calendarWeekOf } from '../store/weeks'
 import { weekDays, weekRange } from './days'
 import { backupAge } from './backup'
 import { metric } from './lifts'
@@ -38,7 +38,7 @@ function newBests(store) {
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 // A backup is due when there's never been one, or the last is a week old.
-export function backupDue(lastBackupAt) {
+function backupDue(lastBackupAt) {
   return !lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > 7 * 86400000
 }
 

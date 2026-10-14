@@ -288,16 +288,12 @@ const OKAY = {
   legsPost: ['superman', 'frog-pumps', 'kettlebell-swing', 'tibialis-raise', 'trap-bar-deadlift', 'rack-pull', 'reverse-hyper'],
   core: ['crunches', 'russian-twists', 'mountain-climbers', 'plank-shoulder-taps', 'bird-dog'],
 }
-const RATING_LABEL = { 3: 'Best', 2: 'Good', 1: 'Okay' }
 
 // 3, 2 or 1 for an exercise in a plan (pass 'core' for the Core section).
 export function ratingFor(exercise, planId) {
   if (BEST[planId]?.includes(exercise.id)) return 3
   if (OKAY[planId]?.includes(exercise.id)) return 1
   return 2
-}
-export function ratingLabel(rating) {
-  return RATING_LABEL[rating]
 }
 
 // Muscle groups to suggest first when adding to a workout.
@@ -314,7 +310,7 @@ export const SUGGESTED_GROUPS = {
 // ── Coverage ───────────────────────────────────────────────────────────────
 // The areas each plan (and the Core section) is meant to work. A plan covers
 // an area when one of its exercises has that area as a main target.
-export const PLAN_AREAS = {
+const PLAN_AREAS = {
   push: [['chest', 'Chest'], ['front-delts', 'Front delts'], ['side-delts', 'Side delts'], ['triceps', 'Triceps']],
   legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs']],
   pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps']],

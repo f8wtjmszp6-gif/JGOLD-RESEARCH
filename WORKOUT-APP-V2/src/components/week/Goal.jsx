@@ -49,7 +49,7 @@ export function CardioRow({ minutes, fill, goal }) {
   )
 }
 
-export function GoalBar({ fills, goal, label }) {
+function GoalBar({ fills, goal, label }) {
   const slots = Math.max(goal.max, fills.length)
   return (
     <div className="flex gap-0.5" role="img" aria-label={label}>

@@ -1,7 +1,7 @@
-import { activities } from '../data/workout'
+import { activities } from '../../data/workout'
 import { GoalRow, CardioRow } from './Goal'
-import { TileIcon } from './Icons'
-import { goalFill, goalLevel } from '../utils/goal'
+import { TileIcon } from '../ui/Icons'
+import { goalFill, goalLevel } from '../../utils/goal'
 
 // What counts toward the weekly workout goal: gym workouts, classes, and
 // cardio or stretching long enough to count. The bar is one color, like the

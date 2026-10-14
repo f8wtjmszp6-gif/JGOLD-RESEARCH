@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useDragToClose } from '../hooks/useDragToClose'
 import { GOAL_SETTINGS } from '../data/workout'
-import { Segmented, StepperRow } from './WorkoutDetail'
+import { Segmented, StepperRow } from './ui/controls'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
 
 // App settings, full screen, sliding in from the right (and swiping back out

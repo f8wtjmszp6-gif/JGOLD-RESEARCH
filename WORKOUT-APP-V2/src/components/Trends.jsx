@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useDragToClose } from '../hooks/useDragToClose'
 import { workouts, GYM_ORDER, PLAN_IDS, MUSCLE_GROUPS } from '../data/workout'
-import { calendarWeekOf } from '../hooks/useStore'
+import { calendarWeekOf } from '../store/weeks'
 import { goalLevel } from '../utils/goal'
 import { EXERCISE_BANK } from '../data/exercises'
 import { metric } from '../utils/lifts'
@@ -107,13 +107,12 @@ function Trends({ store }) {
 
 // One square per week for workouts and for stretching, greener toward the
 // 3–4 goal, ✓ when met. Same green ramp as the This week card.
-// In dark mode more weeks read brighter, from shades the dark palette leaves alone.
 const LEVELS = [
   'bg-stone-100',
-  'bg-emerald-200 dark:bg-emerald-700',
-  'bg-emerald-300 dark:bg-emerald-600',
+  'bg-emerald-200',
+  'bg-emerald-300',
   'bg-emerald-500',
-  'bg-emerald-700 dark:bg-emerald-400',
+  'bg-emerald-700',
 ]
 function WeekGrid({ weeks, goals }) {
   const workouts = w => w.week.gym + w.week.class + (w.week.cardio ?? 0) + (w.week.stretchWork ?? 0)

@@ -1,4 +1,4 @@
-import { HOWTO, demoUrl } from '../data/howto'
+import { HOWTO, demoUrl } from '../../data/howto'
 
 // How to do an exercise or stretch: setup, numbered steps, a tip, the common
 // mistake, and a link out to a video demo.
