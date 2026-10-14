@@ -7,26 +7,23 @@ import { weekDays, sameDay } from '../utils/days'
 const TABS = [
   ['gym', 'Gym', 'bg-red-500'],
   ['cardio', 'Cardio', 'bg-cyan-500'],
-  ['stretch', 'Stretch', 'bg-pink-500'],
+  ['stretch', 'Stretch', 'bg-violet-500'],
   ['rest', 'Rest', 'bg-stone-400'],
 ]
 const TAB_DOT = Object.fromEntries(TABS.map(([k, , dot]) => [k, dot]))
-// Each kind of thing: its tab, then (tapping a day) its own name and the
-// color of its card on that tab.
+// Each kind of thing: its tab, then (tapping a day) the color of its card's tile.
 const KINDS = {
-  plan: ['gym', 'Gym', 'bg-red-500', 'bg-red-50'],
-  full: ['gym', 'Full Body', 'bg-orange-500', 'bg-orange-50'],
-  class: ['gym', 'Class', 'bg-violet-500', 'bg-violet-50'],
-  walk: ['cardio', 'Walk', 'bg-emerald-500', 'bg-emerald-50'],
-  cardio: ['cardio', 'Cardio', 'bg-cyan-500', 'bg-cyan-50'],
-  sport: ['cardio', 'Sport', 'bg-lime-500', 'bg-lime-50'],
-  stretch: ['stretch', 'Stretch', 'bg-teal-500', 'bg-teal-50'],
-  rest: ['rest', 'Rest', 'bg-indigo-400', 'bg-indigo-50'],
+  plan: ['gym', 'bg-red-50'],
+  full: ['gym', 'bg-orange-50'],
+  class: ['gym', 'bg-violet-50'],
+  walk: ['cardio', 'bg-emerald-50'],
+  cardio: ['cardio', 'bg-cyan-50'],
+  sport: ['cardio', 'bg-lime-50'],
+  stretch: ['stretch', 'bg-teal-50'],
+  rest: ['rest', 'bg-indigo-50'],
 }
 const tabDot = kind => TAB_DOT[KINDS[kind][0]]
-const NAME = Object.fromEntries(Object.entries(KINDS).map(([k, [, name]]) => [k, name]))
-const DOT = Object.fromEntries(Object.entries(KINDS).map(([k, [, , dot]]) => [k, dot]))
-const TILE = Object.fromEntries(Object.entries(KINDS).map(([k, [, , , tile]]) => [k, tile]))
+const TILE = Object.fromEntries(Object.entries(KINDS).map(([k, [, tile]]) => [k, tile]))
 // A class's tags, colored like the ones on its card.
 const TAG = { cardio: 'bg-emerald-50 text-emerald-700', strength: 'bg-orange-50 text-orange-700', stretch: 'bg-teal-50 text-teal-700' }
 
@@ -151,11 +148,6 @@ export default function WeekStrip({ weeks, at, onAt }) {
                       {x.tags.map(t => <span key={t.kind} className={`text-xs font-semibold px-2 py-0.5 rounded-md ${TAG[t.kind]}`}>{t.text}</span>)}
                     </span>
                   )}
-                </span>
-                {/* What it was, in the color of its card. */}
-                <span className="shrink-0 flex items-center gap-1 text-[11px] font-medium text-stone-400">
-                  <span className={`w-1.5 h-1.5 rounded-full ${DOT[x.kind]}`} />
-                  {NAME[x.kind]}
                 </span>
               </div>
             ))
