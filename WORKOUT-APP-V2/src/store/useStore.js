@@ -549,11 +549,11 @@ function makeStore(state, update) {
     return restDaysOf(state).findIndex(r => r && sameDay(new Date(r), day))
   }
 
-  // When a plan's first set was ticked (`at`) and its stretches finished
-  // (`stretchedAt`), as ISO times, or undefined.
+  // When a plan's first set was ticked (`at`), its stretches finished
+  // (`stretchedAt`) and its warm-up ticked (`warmedAt`), as ISO times.
   function stampsOf(workoutId) {
-    const { at, stretchedAt } = state.checks?.[workoutId] ?? {}
-    return { at, stretchedAt }
+    const { at, stretchedAt, warmedAt } = state.checks?.[workoutId] ?? {}
+    return { at, stretchedAt, warmedAt }
   }
 
   function getNewClass() {

@@ -25,10 +25,10 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const isRoutine = workout.exercises.length === 0
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
-  // The first set ticked (or last stretch) on a rest day asks whether it's
+  // The first set ticked (or warm-up, or last stretch) on a rest day asks whether it's
   // still a rest day, once. A plan already ticked when you open it doesn't ask.
   const stamps = store.stampsOf(workoutId)
-  const clash = [stamps.at, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
+  const clash = [stamps.at, stamps.warmedAt, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
   const [answered, setAnswered] = useState(clash)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
@@ -439,7 +439,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
         return (
           <SettingsSheet title={`${day} is a rest day`} closeLabel="Keep it" onClose={() => setAnswered(clash)}>
             <p className="text-stone-500 leading-relaxed">
-              You marked {weekday} as a rest day. Keep it, or remove it now that you’ve {clash === stamps.at ? 'worked out' : 'stretched'}?
+              You marked {weekday} as a rest day. Keep it, or remove it now that you’ve {clash === stamps.stretchedAt ? 'stretched' : 'worked out'}?
             </p>
             <button onClick={removeRest} className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors">
               Remove rest day

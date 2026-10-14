@@ -36,8 +36,8 @@ import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, def
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool,
-//                         splits: { [id]: split }, at, stretchedAt } }  (when its first set was ticked / its last
-//                         stretch; a split is this week's lighter sets — see splitOf)
+//                         splits: { [id]: split }, at, stretchedAt, warmedAt } }  (when its first set was ticked /
+//                         its last stretch / its warm-up; a split is this week's lighter sets — see splitOf)
 //     activities        { class | walk | rest: count }
 //     stretchExtra      count of stretch sessions done on your own
 //     stretchLog        [{ at, minutes }, …] — how long each of those was
@@ -155,8 +155,13 @@ export function writeChecks(s, workoutId, fn) {
     Object.values(next.splits ?? {}).some(x => x.parts.some(p => p.ticks.some(Boolean)))
   const list = stretchesOf(s, workoutId)
   const stretched = list.length > 0 && list.every(x => next.stretches?.[x.id])
-  const { at, stretchedAt, ...rest } = next
-  const stamped = { ...rest, ...(lifted && { at: at ?? now }), ...(stretched && { stretchedAt: stretchedAt ?? now }) }
+  const { at, stretchedAt, warmedAt, ...rest } = next
+  const stamped = {
+    ...rest,
+    ...(lifted && { at: at ?? now }),
+    ...(stretched && { stretchedAt: stretchedAt ?? now }),
+    ...(next.warmup && { warmedAt: warmedAt ?? now }),
+  }
   return { ...s, checks: { ...s.checks, [workoutId]: stamped } }
 }
 
@@ -170,6 +175,13 @@ export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
   for (const id of PLAN_IDS) {
     add(s.checks?.[id]?.at, FULL_BODY_BY_ID[id] ? 'full' : 'plan', id, workouts[id].short)
     add(s.checks?.[id]?.stretchedAt, 'stretch', 'stretch', `Stretched · ${workouts[id].short}`)
+    // A ticked warm-up is cardio; ones ticked before warm-ups kept their time
+    // go on the plan's day.
+    const warmup = warmupOf(s, id)
+    if (warmup.on && s.checks?.[id]?.warmup) {
+      const minutes = warmup.sets.reduce((n, x) => n + x.minutes, 0)
+      add(s.checks[id].warmedAt ?? s.checks[id].at, 'cardio', 'cardio', `Warm-up · ${workouts[id].short} · ${minutes} min`)
+    }
   }
   add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, 'stretch', 'stretch', STRETCH_ROUTINE.name)
   for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, 'stretch', 'stretch', `Cool Down · ${COOL_DOWN_BY_ID[c.id].label}`)
