@@ -3,11 +3,13 @@ import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID } from '../../data/workout'
 import { gapsAfter } from '../../data/exercises'
-import { weekRange, sameDay } from '../../utils/days'
+import { weekRange, sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab } from './StretchesTab'
 import { ExercisePicker } from './pickers'
 import { ConfirmSheet, SettingsSheet } from '../ui/Sheet'
+import { DayPicker } from '../ui/DayPicker'
+import { LogButton } from '../ui/LogButton'
 import { CoveragePill, GapRows, AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
@@ -31,6 +33,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const clash = [stamps.at, stamps.warmedAt, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
   const [answered, setAnswered] = useState(clash)
   const [toast, setToast] = useState(null)
+  const [pickingDay, setPickingDay] = useState(false)
   const toastTimer = useRef(null)
   function removeRest() {
     const i = store.restIndexOn(clash)
@@ -292,13 +295,16 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 bg-stone-50 shrink-0">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-accent-500 mb-4 active:opacity-70">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          {/* In a saved week, back goes to that week. */}
-          <span className="text-sm font-medium">{store.past ? weekRange(store.weekStart) : 'Workouts'}</span>
-        </button>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <button onClick={onBack} className="flex items-center gap-1.5 text-accent-500 active:opacity-70">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            {/* In a saved week, back goes to that week. */}
+            <span className="text-sm font-medium">{store.past ? weekRange(store.weekStart) : 'Workouts'}</span>
+          </button>
+          <DayPill stamps={stamps} today={store.today} past={store.past} onClick={() => setPickingDay(true)} />
+        </div>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{FULL_BODY_BY_ID[workoutId] ? 'Full Body' : workout.short}</h1>
         </div>
@@ -447,6 +453,14 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           </SettingsSheet>
         )
       })()}
+      {pickingDay && (
+        <PlanDaySheet
+          store={store}
+          stamps={stamps}
+          onPick={at => { store.setPlanDay(workoutId, at); setAnswered(at) }}
+          onClose={() => setPickingDay(false)}
+        />
+      )}
       {toast && (
         <div role="status" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 rounded-2xl bg-stone-800 text-white text-sm px-4 py-3 flex items-center justify-between gap-3 shadow-lg">
           {toast.text}
@@ -468,6 +482,49 @@ function PartHead({ title, pill, right, done }) {
         {right && <span className={`text-xs font-semibold ${done ? 'text-accent-500' : 'text-stone-400'}`}>{right}</span>}
       </span>
     </div>
+  )
+}
+
+// The day a plan goes on, top right: Today until you pick another day, then
+// that day in blue; once something's ticked, the day it was logged. Tap to
+// pick or change it.
+function DayPill({ stamps, today, past, onClick }) {
+  const logged = stamps.at ?? stamps.warmedAt ?? stamps.stretchedAt
+  const shown = logged ?? stamps.day
+  const isToday = shown ? sameDay(new Date(shown), today) : !past
+  const text = logged
+    ? `Logged ${isToday ? 'today' : weekdayOf(logged)}`
+    : isToday ? 'Today'
+    : shown ? new Date(shown).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : 'Pick a day'
+  return (
+    <button
+      onClick={onClick}
+      aria-label={`${text}. Change the day`}
+      className={`flex items-center gap-1 pl-3 pr-2.5 py-1.5 rounded-full text-sm font-medium active:opacity-70 ${isToday ? 'bg-stone-100 text-stone-700' : 'bg-accent-50 text-accent-600'}`}
+    >
+      {text}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="opacity-60" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+    </button>
+  )
+}
+
+// Which day a plan goes on. Before anything's ticked it sets the day ticks
+// land on; after, it moves the whole session (sets, warm-up, stretches).
+function PlanDaySheet({ store, stamps, onPick, onClose }) {
+  const logged = stamps.at ?? stamps.warmedAt ?? stamps.stretchedAt
+  const [at, setAt] = useState(logged ?? stamps.day ?? store.today.toISOString())
+  const today = sameDay(new Date(at), store.today)
+  return (
+    <SettingsSheet title="Which day?" closeLabel="Cancel" onClose={onClose}>
+      <p className="text-stone-500">
+        {logged ? 'Move this session (sets, warm-up and stretches) to another day.' : 'Everything you tick in this plan goes on this day.'}
+      </p>
+      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
+      <LogButton store={store} at={at} verb={logged ? 'Move' : 'Log'} onSave={() => { onPick(at); onClose() }}>
+        {logged ? (today ? 'Move to today' : `Move to ${weekdayOf(at)}`) : today ? 'Log today' : `Log on ${weekdayOf(at)}`}
+      </LogButton>
+    </SettingsSheet>
   )
 }
 

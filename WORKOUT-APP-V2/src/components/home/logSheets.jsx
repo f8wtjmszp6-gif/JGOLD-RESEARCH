@@ -3,8 +3,10 @@ import { CLASS_AREAS, CLASS_DEFAULT, CARDIO_TYPES, CARDIO_WORKOUT_MINUTES, cardi
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { TypeIcon } from '../ui/Icons'
-import { weekDays, sameDay } from '../../utils/days'
+import { weekDays, sameDay, weekdayOf } from '../../utils/days'
 import { TAB_DOT, tabsOf } from '../../utils/dayKinds'
+import { DayPicker } from '../ui/DayPicker'
+import { Heads, LogButton } from '../ui/LogButton'
 
 const EFFORT = [['easy', 'Easy'], ['hard', 'Hard']]
 
@@ -198,41 +200,6 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
 // Which day of the week something happened: Mon–Sun, days still to come
 // greyed out. Today keeps the time you logged it. `now` is today, or a past
 // week's last day.
-// Each day shows a dot for every tab it already has something logged in.
-function DayPicker({ now, at, dayLog, onChange }) {
-  const picked = at ? new Date(at) : null
-  return (
-    <div className="space-y-2">
-      <span className="text-base text-stone-600">Day</span>
-      <div className="grid grid-cols-7 gap-1">
-        {weekDays(now).map((d, i) => {
-          const today = sameDay(d, now)
-          const future = !today && d > now
-          const on = picked && sameDay(d, picked)
-          return (
-            <button
-              key={d.getDate()}
-              disabled={future}
-              onClick={() => onChange(today ? now.toISOString() : d.toISOString())}
-              aria-pressed={!!on}
-              aria-label={d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-              className={`rounded-xl py-1.5 text-center transition-colors disabled:opacity-30 ${
-                on ? 'bg-accent-500 text-white' : 'bg-stone-100 text-stone-600 active:bg-stone-200'
-              }`}
-            >
-              <span className="block text-[11px] font-medium">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-              <span className="block text-sm font-semibold">{d.getDate()}</span>
-              <span className="flex justify-center gap-0.5 h-1 mt-0.5">
-                {tabsOf(dayLog?.[i] ?? []).map(k => <span key={k} className={`w-1 h-1 rounded-full ${TAB_DOT[k]} ${on ? 'ring-1 ring-white' : ''}`} />)}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // Deleting asks once more, in place.
 // Adds a rest day, or moves or deletes one: which day was it?
 export function RestSheet({ store, edit, onClose }) {
@@ -270,45 +237,6 @@ export function RestSheet({ store, edit, onClose }) {
       </button>
       {edit && <DeleteButton what="rest day" onDelete={() => { store.deleteRest(edit.index); onClose() }} />}
     </SettingsSheet>
-  )
-}
-
-const weekdayOf = at => new Date(at).toLocaleDateString('en-US', { weekday: 'long' })
-
-// A yellow note above a sheet's button.
-function Heads({ title, children }) {
-  return (
-    <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-2 text-sm">
-      <p className="flex items-center gap-1.5 font-semibold text-amber-800">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-        </svg>
-        {title}
-      </p>
-      {children}
-    </div>
-  )
-}
-
-// A log sheet's main button. On a rest day it says so and asks whether to keep
-// the rest day, as two buttons; `verb` starts each ("Add · keep rest day").
-function LogButton({ store, at, verb, disabled, onSave, children }) {
-  const rest = disabled ? -1 : store.restIndexOn(at)
-  const main = 'w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400'
-  if (rest < 0) return <button onClick={onSave} disabled={disabled} className={main}>{children}</button>
-  return (
-    <>
-      <Heads title={`${weekdayOf(at)} is a rest day`}>
-        <p className="text-stone-600">Keep it as a rest day, or remove it?</p>
-      </Heads>
-      <button onClick={onSave} className={main}>{verb} · keep rest day</button>
-      <button
-        onClick={() => { onSave(); store.deleteRest(rest) }}
-        className="w-full py-3.5 rounded-2xl bg-stone-100 text-stone-900 font-semibold active:bg-stone-200 transition-colors"
-      >
-        {verb} · remove rest day
-      </button>
-    </>
   )
 }
 

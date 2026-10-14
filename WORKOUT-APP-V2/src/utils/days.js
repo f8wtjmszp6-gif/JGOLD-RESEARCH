@@ -46,3 +46,6 @@ export function weeksAgo(weekStart, now = new Date()) {
   const n = Math.round((weekDays(now)[0] - startDate(weekStart)) / (7 * 86400000))
   return n === 1 ? 'Last week' : `${n} weeks ago`
 }
+
+// "Wednesday"
+export const weekdayOf = at => new Date(at).toLocaleDateString('en-US', { weekday: 'long' })

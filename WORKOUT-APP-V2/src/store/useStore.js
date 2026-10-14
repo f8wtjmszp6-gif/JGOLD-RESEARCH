@@ -543,6 +543,22 @@ function makeStore(state, update) {
     })
   }
 
+  // Puts a plan on a day: what's ticked moves there, and what's ticked next
+  // goes there too.
+  function setPlanDay(workoutId, at) {
+    update(s => {
+      const cur = s.checks?.[workoutId] ?? {}
+      const moved = {
+        ...cur,
+        day: at,
+        ...(cur.at && { at }),
+        ...(cur.warmedAt && { warmedAt: at }),
+        ...(cur.stretchedAt && { stretchedAt: at }),
+      }
+      return { ...s, checks: { ...s.checks, [workoutId]: moved } }
+    })
+  }
+
   // Which rest day falls on the day of `at`, or -1 if none does.
   function restIndexOn(at) {
     const day = new Date(at)
@@ -550,10 +566,11 @@ function makeStore(state, update) {
   }
 
   // When a plan's first set was ticked (`at`), its stretches finished
-  // (`stretchedAt`) and its warm-up ticked (`warmedAt`), as ISO times.
+  // (`stretchedAt`) and its warm-up ticked (`warmedAt`), as ISO times, and
+  // the day picked for it (`day`).
   function stampsOf(workoutId) {
-    const { at, stretchedAt, warmedAt } = state.checks?.[workoutId] ?? {}
-    return { at, stretchedAt, warmedAt }
+    const { at, stretchedAt, warmedAt, day } = state.checks?.[workoutId] ?? {}
+    return { at, stretchedAt, warmedAt, day }
   }
 
   function getNewClass() {
@@ -753,6 +770,7 @@ function makeStore(state, update) {
     editRest,
     deleteRest,
     restIndexOn,
+    setPlanDay,
     stampsOf,
     dayLog: dayLogOf(state),
     goals: goalsOf(state),

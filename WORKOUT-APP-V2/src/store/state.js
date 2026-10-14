@@ -36,8 +36,9 @@ import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, def
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool,
-//                         splits: { [id]: split }, at, stretchedAt, warmedAt } }  (when its first set was ticked /
-//                         its last stretch / its warm-up; a split is this week's lighter sets — see splitOf)
+//                         splits: { [id]: split }, at, stretchedAt, warmedAt, day } }  (when its first set was ticked /
+//                         its last stretch / its warm-up; `day`: the day picked to log it on, if one was;
+//                         a split is this week's lighter sets — see splitOf)
 //     activities        { class | walk | rest: count }
 //     stretchExtra      count of stretch sessions done on your own
 //     stretchLog        [{ at, minutes }, …] — how long each of those was
@@ -150,7 +151,8 @@ export function writeSettings(s, exercise, fn) {
 // again if every set is unticked), `stretchedAt` once every stretch is.
 export function writeChecks(s, workoutId, fn) {
   const next = fn(s.checks?.[workoutId] ?? {})
-  const now = s.clockAt ?? new Date().toISOString()
+  // Ticks go on the plan's picked day, if one was picked.
+  const now = next.day ?? s.clockAt ?? new Date().toISOString()
   const lifted = Object.values(next.exercises ?? {}).some(t => t.some(Boolean)) ||
     Object.values(next.splits ?? {}).some(x => x.parts.some(p => p.ticks.some(Boolean)))
   const list = stretchesOf(s, workoutId)
