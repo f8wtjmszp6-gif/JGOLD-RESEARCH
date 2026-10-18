@@ -43,7 +43,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
   }
 
   return (
-    <div className="bg-white shadow-sm rounded-2xl px-4 py-3">
+    <div className="bg-white shadow-sm rounded-2xl px-4 py-2.5">
       {/* The live week's title is what's still to go; a saved week's is its
           dates. */}
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
@@ -54,7 +54,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
         ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
         {figure}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <GoalRow label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
         <GoalRow label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioRow minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}

@@ -77,7 +77,7 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
       </div>
       {/* The key along the bottom. Weeks saved before days were kept have
           their totals only; a note takes its place. */}
-      <div className="border-t border-stone-100 py-2">
+      <div className="border-t border-stone-100 py-1.5">
         {!week.dayLog ? <p className="text-center text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend />}
       </div>
     </div>
@@ -105,7 +105,7 @@ function WeekPage({ week, current, picked, onPick }) {
   const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
   return (
-    <div className="w-full shrink-0 snap-center snap-always py-2" role="tablist" aria-hidden={!current}>
+    <div className="w-full shrink-0 snap-center snap-always py-1.5" role="tablist" aria-hidden={!current}>
       <div className="grid grid-cols-7">
         {days.map((d, i) => {
           const items = week.dayLog?.[i] ?? []

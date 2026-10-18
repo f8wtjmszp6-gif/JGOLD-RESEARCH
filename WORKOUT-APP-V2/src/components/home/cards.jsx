@@ -61,25 +61,31 @@ export function RoutineCard({ store, onOpen, onEditSession }) {
 // On the right: what's in the plan until you start it, then how far along
 // you are. Both counts follow the plan as you add or remove exercises and
 // stretches.
-// `upNext`: this is the plan to do next, marked over its name.
+// Over its name, where it stands, with a border to match: Complete, Up next
+// (`upNext`: the plan to do next), In progress or Not started.
+const STATUS = {
+  complete: ['Complete', 'text-emerald-500', 'ring-emerald-300'],
+  next: ['Up next', 'text-red-600', 'ring-red-200'],
+  started: ['In progress', 'text-amber-500', 'ring-amber-300'],
+  none: ['Not started', 'text-stone-400', 'ring-stone-200'],
+}
 export function WorkoutCard({ workout, progress, stretches, stretchesDone, upNext, onOpen }) {
   const { done, total, exercises } = progress
   const complete = total > 0 && done === total
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
   const started = done > 0 || stretchesDone > 0
+  const [label, text, ring] = STATUS[complete ? 'complete' : upNext ? 'next' : started ? 'started' : 'none']
 
   return (
     <button
       onClick={onOpen}
       aria-label={`${workout.short}${complete ? ', done' : ''}`}
-      className={`${CARD} transition-all active:scale-[0.98] ${upNext ? 'ring-1 ring-red-200' : ''}`}
+      className={`${CARD} transition-all active:scale-[0.98] ring-1 ${ring}`}
     >
       <div className="flex items-center gap-3">
         <CardIcon icon={workout.id} tile="from-red-50 to-red-100" value={total ? done / total : 0} done={complete} fill="stroke-red-400" />
         <div className="min-w-0 flex-1">
-          {upNext && (
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Up next</p>
-          )}
+          <p className={`text-[11px] font-semibold uppercase tracking-wide ${text}`}>{label}</p>
           <p className="font-semibold text-stone-900 truncate">{workout.short}</p>
         </div>
         {/* What's in the plan until you start it, then how far along. */}

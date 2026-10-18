@@ -42,6 +42,14 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
     if (weeks[i].live) setPicked(p => Math.min(p, new Date().getDay()))
   }
   const upNext = store && upNextOf(store)
+  // Plans in order: under way (a set or a stretch ticked), up next, not
+  // started, then complete (every set done).
+  const rank = id => {
+    const { done, total } = store.workoutProgress(id)
+    if (total > 0 && done >= total) return 3
+    if (done > 0 || store.getStretches(id).some(x => store.getStretchDone(id, x.id))) return 0
+    return id === upNext?.id ? 1 : 2
+  }
   function setTab(t) {
     setTabState(t)
     try {
@@ -61,7 +69,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
   const strip = (
-    <div className="shrink-0 px-5 pb-3 space-y-3">
+    <div className="shrink-0 px-5 pb-2.5 space-y-2.5">
       <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} />
       <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} />
     </div>
@@ -84,7 +92,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
     <div className="h-full flex flex-col">
       {/* The tabs stay put; only what's under them scrolls. */}
       {strip}
-      <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
+      <div className="shrink-0 px-5 pb-2.5 flex items-center gap-2">
         <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
           {TABS.map(([id, label]) => (
             <button
@@ -110,8 +118,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
         {tab === 'gym' && <>
           <Section title="Workout plans" note="Each plan can be completed once a week">
-            {/* The plan to do next goes first, with why. */}
-            {[...GYM_ORDER].sort((a, b) => (b === upNext?.id) - (a === upNext?.id)).map(id => (
+            {/* Under way first, then up next; complete ones last. */}
+            {[...GYM_ORDER].sort((a, b) => rank(a) - rank(b)).map(id => (
               <WorkoutCard
                 key={id}
                 workout={workouts[id]}

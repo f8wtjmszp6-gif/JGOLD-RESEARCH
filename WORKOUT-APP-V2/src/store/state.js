@@ -476,20 +476,24 @@ function stretchWorkoutsOf(s) {
 }
 
 // Stretch days: each gym workout whose stretches are all ticked, the
-// full-body routine and each cool-down once all ticked, and stretches done
-// on your own.
+// full-body routine and each cool-down once all ticked, a class with
+// stretching, and stretches done on your own. The goal counts days, so more
+// than one on a day counts once (`total`); the rest say what each one was.
+// Something with no day (saved before days were kept) counts on its own.
 export function stretchWeekOf(s) {
-  const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
-  const filed = sessionsOf(s)
-  const st = {
-    gym: PLAN_IDS.filter(id => all(id, stretchesOf(s, id))).length +
-      filed.filter(x => !stretchList(x.id) && x.stretches > 0 && x.stretched === x.stretches).length,
-    routine: (all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0) + filed.filter(x => x.id === STRETCH_ROUTINE.id && x.stretched === x.stretches).length,
-    cool: COOL_DOWNS.filter(c => all(c.id, stretchesOf(s, c.id))).length + filed.filter(x => COOL_DOWN_BY_ID[x.id] && x.stretched === x.stretches).length,
-    class: classesOf(s).filter(c => c.stretch).length,
-    extra: Number(s.stretchExtra) || 0,
+  const all = id => { const list = stretchesOf(s, id); return list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id]) }
+  const at = id => s.checks?.[id]?.stretchedAt ?? s.checks?.[id]?.at
+  const filed = sessionsOf(s).filter(x => x.stretches > 0 && x.stretched === x.stretches)
+  const done = {
+    gym: [...PLAN_IDS.filter(all).map(at), ...filed.filter(x => !stretchList(x.id)).map(x => x.at)],
+    routine: [...(all(STRETCH_ROUTINE.id) ? [at(STRETCH_ROUTINE.id)] : []), ...filed.filter(x => x.id === STRETCH_ROUTINE.id).map(x => x.at)],
+    cool: [...COOL_DOWNS.filter(c => all(c.id)).map(c => at(c.id)), ...filed.filter(x => COOL_DOWN_BY_ID[x.id]).map(x => x.at)],
+    class: classesOf(s).filter(c => c.stretch).map(c => c.at),
+    extra: ownStretchesOf(s).map(x => x.at),
   }
-  return { ...st, total: st.gym + st.routine + st.cool + st.class + st.extra }
+  const ats = Object.values(done).flat()
+  const days = new Set(ats.filter(Boolean).map(x => new Date(x).toDateString()))
+  return { ...Object.fromEntries(Object.entries(done).map(([k, v]) => [k, v.length])), total: days.size + ats.filter(x => !x).length }
 }
 
 // How timers sound and count in. `sound`: 'music' mixes beeps over other

@@ -33,7 +33,7 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
       <button
         onClick={() => setOpen(true)}
         aria-label={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}: ${title}. Open the day`}
-        className="w-full flex items-center gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-sm active:bg-stone-50"
+        className="w-full flex items-center gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-left shadow-sm active:bg-stone-50"
       >
         <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${one ? TILE[one.kind] : 'bg-stone-100 text-stone-600'}`}>
           {one ? <TileIcon id={one.icon} size={20} /> : <span className="text-sm font-bold">{day.getDate()}</span>}
