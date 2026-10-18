@@ -53,7 +53,7 @@ export function LogClassSheet({ store, edit, onClose }) {
   }`
 
   return (
-    <SettingsSheet title={edit ? 'Edit class' : 'Log a class'} closeLabel="Cancel" tall onClose={onClose}>
+    <SettingsSheet title={edit ? editTitle(edit.entry.at, 'Class') : 'Log a class'} closeLabel="Cancel" tall onClose={onClose}>
       <div className="space-y-4">
         <ToggleRow label="Cardio" on={c.cardio} onChange={v => set({ cardio: v })} />
         {c.cardio && (
@@ -98,11 +98,10 @@ export function LogClassSheet({ store, edit, onClose }) {
           <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
         ))}
       </div>
-      <DayPicker now={store.today} dayLog={store.dayLog} at={c.at} onChange={at => set({ at })} />
-      <LogButton store={store} at={c.at} verb={edit ? 'Save' : 'Log'} disabled={nothing} onSave={log}>
+      {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={c.at} onChange={at => set({ at })} />}
+      <LogButton store={store} at={c.at} verb={edit ? 'Save' : 'Log'} disabled={nothing} plain={!!edit} onSave={log}>
         {nothing ? 'Turn on what you did' : `${edit ? 'Save' : 'Log class'}${counts && ` · ${counts}`}`}
       </LogButton>
-      {edit && <DeleteButton what="class" onDelete={() => { store.deleteClass(edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }
@@ -149,7 +148,9 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
     onClose()
   }
 
-  const title = isWalk ? (edit ? 'Edit walk' : 'Add a walk') : isSport ? (edit ? 'Edit sport or hike' : 'Add a sport or hike') : edit ? 'Edit cardio' : 'Add cardio'
+  const title = edit
+    ? editTitle(edit.entry.at, isWalk ? 'Walk' : edit.entry.type && edit.entry.type !== 'Other' ? edit.entry.type : isSport ? 'Sport' : 'Cardio')
+    : isWalk ? 'Add a walk' : isSport ? 'Add a sport or hike' : 'Add cardio'
   // A tile per choice: its icon and name, the picked one outlined in the card's color.
   const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2.5 pb-2 border-[1.5px] text-[11.5px] font-semibold transition-colors min-w-0 ${
     on ? (isSport ? 'bg-lime-50 text-lime-800 border-lime-600' : 'bg-cyan-50 text-cyan-700 border-cyan-600') : 'bg-stone-100 text-stone-500 border-transparent active:bg-stone-200'
@@ -206,14 +207,13 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
         </p>
       )}
       <EffortNote />
-      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
-      <LogButton store={store} at={at} verb={edit ? 'Save' : 'Add'} disabled={isSport && !picked} onSave={add}>
+      {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />}
+      <LogButton store={store} at={at} verb={edit ? 'Save' : 'Add'} disabled={isSport && !picked} plain={!!edit} onSave={add}>
         {isSport && !picked ? 'Pick what you did' : picked && picked !== 'Other'
           // Whether it counts shows just above, so a named one keeps the button short.
           ? `${edit ? 'Save' : 'Add'} ${picked} · ${minutes} min`
           : `${edit ? 'Save' : 'Add'} ${minutes} min · ${workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}`}
       </LogButton>
-      {edit && <DeleteButton what={isWalk ? 'walk' : 'session'} onDelete={() => { store.deleteCardio(kind, edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }
@@ -256,7 +256,6 @@ export function RestSheet({ store, edit, onClose }) {
       >
         {edit ? 'Save' : 'Add rest day'}{there.length > 0 && ' anyway'}
       </button>
-      {edit && <DeleteButton what="rest day" onDelete={() => { store.deleteRest(edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }
@@ -375,17 +374,9 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
   )
 }
 
-function DeleteButton({ what, onDelete }) {
-  const [sure, setSure] = useState(false)
-  return (
-    <button
-      onClick={() => (sure ? onDelete() : setSure(true))}
-      className="w-full py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold active:bg-red-100 transition-colors"
-    >
-      {sure ? `Tap again to delete this ${what}` : `Delete ${what}`}
-    </button>
-  )
-}
+// An edit sheet's title: the day and what it is, as "Tuesday · Run".
+// Its day and Delete live on the screen before it (see LineMenu).
+const editTitle = (at, name) => `${at ? weekdayOf(at) : 'Earlier'} · ${name}`
 
 // Logs a stretch session on your own; 30+ minutes also counts as a workout.
 export function AddStretchSheet({ store, edit, onClose }) {
@@ -393,7 +384,7 @@ export function AddStretchSheet({ store, edit, onClose }) {
   const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
   const need = STRETCH_WORKOUT_MINUTES - minutes
   return (
-    <SettingsSheet title={edit ? 'Edit stretching' : 'Add stretching'} closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={edit ? editTitle(edit.entry.at, 'Stretch') : 'Add stretching'} closeLabel="Cancel" onClose={onClose}>
       <StepperRow label="Length" value={minutes} step={5} min={5} max={240} editable suffix=" min" onChange={setMinutes} />
       {need > 0 ? (
         <p className="text-sm text-stone-500">
@@ -403,11 +394,12 @@ export function AddStretchSheet({ store, edit, onClose }) {
       ) : (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
       )}
-      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
+      {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />}
       <LogButton
         store={store}
         at={at}
         verb={edit ? 'Save' : 'Add'}
+        plain={!!edit}
         onSave={() => {
           if (edit) store.editOwnStretch(edit.index, { minutes, at })
           else store.addOwnStretch(minutes, at)
@@ -416,7 +408,6 @@ export function AddStretchSheet({ store, edit, onClose }) {
       >
         {edit ? 'Save' : 'Add'} {minutes} min · {need > 0 ? 'stretch day' : 'counts as a workout'}
       </LogButton>
-      {edit && <DeleteButton what="session" onDelete={() => { store.deleteOwnStretch(edit.index); onClose() }} />}
     </SettingsSheet>
   )
 }

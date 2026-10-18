@@ -7,10 +7,14 @@ import { playBeep, setVolume } from '../utils/sound'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend), timers,
-// backups and reset. Light or dark follows the phone.
+// backups and reset, each a row that opens in place with what it's set to
+// underneath. Light or dark follows the phone.
 export default function SettingsDrawer({ store, onClose }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose, 'x')
+  // One section open at a time; tap it again to close it.
+  const [open, setOpen] = useState(null)
+  const toggle = id => setOpen(o => (o === id ? null : id))
   return (
     // Dragging on the shade does nothing, and the panel's scroll stops at its
     // ends, so the page behind never moves.
@@ -38,23 +42,24 @@ export default function SettingsDrawer({ store, onClose }) {
             <button onClick={onClose} className="text-accent-500 font-semibold active:opacity-60">Done</button>
           </div>
 
-          <Section title="Weekly goals">
-            {GOAL_SETTINGS.map(g => (
-              <GoalSetting key={g.id} setting={g} goal={store.goals[g.id]} onChange={patch => store.setGoal(g.id, patch)} />
-            ))}
-          </Section>
-
-          <Section title="Timers">
-            <TimerSettings timer={store.timer} onChange={store.setTimer} />
-          </Section>
-
-          <Section title="Backup">
-            <Backup store={store} />
-          </Section>
-
-          <Section title="Reset">
-            <FactoryReset store={store} />
-          </Section>
+          <div className="space-y-3">
+            <Section id="goals" title="Weekly goals" summary={goalsSummary(store.goals)} tile="bg-green-600" icon={ICONS.goals} open={open} onToggle={toggle}>
+              <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+                {GOAL_SETTINGS.map(g => (
+                  <GoalSetting key={g.id} setting={g} goal={store.goals[g.id]} onChange={patch => store.setGoal(g.id, patch)} />
+                ))}
+              </div>
+            </Section>
+            <Section id="timers" title="Timers" summary={timerSummary(store.timer)} tile="bg-amber-500" icon={ICONS.timers} open={open} onToggle={toggle}>
+              <TimerSettings timer={store.timer} onChange={store.setTimer} />
+            </Section>
+            <Section id="backup" title="Backup" summary={backupSummary(store.lastBackupAt)} tile="bg-blue-600" icon={ICONS.backup} open={open} onToggle={toggle}>
+              <Backup store={store} />
+            </Section>
+            <Section id="reset" title="Reset the app" red tile="bg-stone-500" icon={ICONS.reset} open={open} onToggle={toggle}>
+              <FactoryReset store={store} />
+            </Section>
+          </div>
         </div>
       </aside>
     </div>
@@ -146,37 +151,73 @@ function FactoryReset({ store }) {
   )
 }
 
-function Section({ title, children }) {
+// A section's row: its icon, its name, and while it's closed what it's set
+// to. Tap to open its settings underneath.
+function Section({ id, title, summary, tile, icon, red, open, onToggle, children }) {
+  const shown = open === id
   return (
-    <section className="space-y-2">
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium px-1">{title}</p>
-      {children}
+    <section className="rounded-2xl border border-stone-100 bg-white shadow-sm overflow-hidden">
+      <button onClick={() => onToggle(id)} aria-expanded={shown} className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-stone-50">
+        <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center text-white shrink-0 ${tile}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className={`block text-base font-medium ${red ? 'text-red-600' : 'text-stone-900'}`}>{title}</span>
+          {!shown && summary && <span className={`block text-[13px] leading-snug ${summary.warn ? 'text-amber-700' : 'text-stone-400'}`}>{summary.text}</span>}
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`text-stone-300 shrink-0 transition-transform ${shown ? 'rotate-90' : ''}`} aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+      </button>
+      {shown && <div className="px-3 pb-3 space-y-2">{children}</div>}
     </section>
   )
 }
 
-// One goal: its min and max. The ⓘ shows what the guidelines recommend.
+const ICONS = {
+  goals: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></>,
+  timers: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M10 2h4" /></>,
+  backup: <><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z" /><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5" /></>,
+  reset: <><path d="M4 12a8 8 0 1 0 2.3-5.7" /><path d="M4 4v4h4" /></>,
+}
+
+// What each section is set to, for its closed row.
+const range = (g, unit) => `${g.min === g.max ? g.min : `${g.min}–${g.max}`} ${unit}`
+const goalsSummary = goals => ({ text: [range(goals.workouts, 'workouts'), range(goals.stretch, 'stretches'), range(goals.cardio, 'min')].join(' · ') })
+const timerSummary = t => ({ text: [t.sound === 'music' ? 'Over music' : 'On silent', t.volume === 0 ? 'Muted' : `${t.volume}%`, t.prep === 0 ? 'No get-ready' : `${t.prep} s get-ready`].join(' · ') })
+// Amber once it's been a week or more, or never.
+function backupSummary(at) {
+  if (!at) return { text: 'Never backed up', warn: true }
+  const days = (Date.now() - new Date(at).getTime()) / 86400000
+  return { text: `Last backup ${backupAge(at)}`, warn: days >= 7 }
+}
+
+// One goal on one line: its range with − and +, which move both ends
+// together (3–4 becomes 4–5). Tap the range to set the min and max apart.
+// What the guidelines recommend is written underneath.
 function GoalSetting({ setting, goal, onChange }) {
   const { label, step, least, advice } = setting
-  const [info, setInfo] = useState(false)
+  const [apart, setApart] = useState(false)
+  const shift = d => {
+    if (goal.min + d < least) return
+    onChange({ min: goal.min + d, max: goal.max + d })
+  }
+  const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0 disabled:opacity-30'
   return (
-    <div className="rounded-2xl bg-stone-50 px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold text-stone-900">{label}</p>
-        <button
-          onClick={() => setInfo(!info)}
-          aria-label={`Recommended ${label.toLowerCase()}`}
-          aria-expanded={info}
-          className={`w-8 h-8 -mr-1.5 rounded-lg flex items-center justify-center active:bg-stone-100 ${info ? 'text-accent-500' : 'text-stone-400'}`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5M12 7.6v.1" strokeWidth="2.4" /></svg>
+    <div className="py-2.5 space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 min-w-0 text-base text-stone-700 whitespace-nowrap">{label}{setting.id === 'cardio' && ' min'}</p>
+        <button onClick={() => shift(-step)} disabled={goal.min - step < least} className={btn} aria-label={`${label} down`}>−</button>
+        <button onClick={() => setApart(!apart)} aria-expanded={apart} aria-label={`${label}: ${goal.min} to ${goal.max}. Set min and max`} className="min-w-[4.5rem] text-center text-lg font-bold text-stone-900 tabular-nums active:opacity-60">
+          {goal.min === goal.max ? goal.min : `${goal.min}–${goal.max}`}
         </button>
+        <button onClick={() => shift(step)} className={btn} aria-label={`${label} up`}>+</button>
       </div>
-      {info && <p className="text-xs text-stone-500 leading-relaxed">{advice}</p>}
-      <div className="grid grid-cols-2 gap-3">
-        <SmallStepper label="Min" value={goal.min} step={step} least={least} onChange={min => onChange({ min })} />
-        <SmallStepper label="Max" value={goal.max} step={step} least={least} onChange={max => onChange({ max })} />
-      </div>
+      {apart && (
+        <div className="grid grid-cols-2 gap-3 pb-1">
+          <SmallStepper label="Min" value={goal.min} step={step} least={least} onChange={min => onChange({ min })} />
+          <SmallStepper label="Max" value={goal.max} step={step} least={least} onChange={max => onChange({ max })} />
+        </div>
+      )}
+      <p className="text-xs text-stone-500 leading-relaxed">{advice}</p>
     </div>
   )
 }

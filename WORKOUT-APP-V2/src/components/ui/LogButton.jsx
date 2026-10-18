@@ -17,8 +17,9 @@ export function Heads({ title, children }) {
 
 // A log sheet's main button. On a rest day it says so and asks whether to keep
 // the rest day, as two buttons; `verb` starts each ("Add · keep rest day").
-export function LogButton({ store, at, verb, disabled, onSave, children }) {
-  const rest = disabled ? -1 : store.restIndexOn(at)
+export function LogButton({ store, at, verb, disabled, plain = false, onSave, children }) {
+  // `plain`: just the button, as when editing something already on its day.
+  const rest = disabled || plain ? -1 : store.restIndexOn(at)
   const main = 'w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400'
   if (rest < 0) return <button onClick={onSave} disabled={disabled} className={main}>{children}</button>
   return (

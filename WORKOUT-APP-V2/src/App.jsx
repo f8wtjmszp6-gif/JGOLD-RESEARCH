@@ -41,7 +41,9 @@ export default function App() {
     setBell({ fresh: unread })
     store.markNotesSeen(notes.map(n => n.id))
   }
+  // Following a notification clears it, as if you'd tapped its ✕.
   function act(n) {
+    store.dismissNote(n.id)
     setBell(null)
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings(true)
@@ -80,7 +82,10 @@ export default function App() {
       ) : (
         <>
           {past ? (
-            <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onThisWeek={() => setWeekStart(null)} onCalendar={() => setCalendar(true)} />
+            <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onToday={() => {
+              setWeekStart(null)
+              setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
+            }} onCalendar={() => setCalendar(true)} />
           ) : (
             <Header
               onSettings={() => setSettings(true)}
@@ -173,21 +178,22 @@ function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretc
   )
 }
 
-// A saved week: its dates, how long ago, and a way back to this week. Its card
+// A saved week: its dates, how long ago, and a way back to today. Its card
 // shows the week as it ended, with what was left to go. Weeks saved before
 // their details were kept show their totals only.
-function PastHeader({ weekStart, entry, week, goals, onThisWeek, onCalendar }) {
+function PastHeader({ weekStart, entry, week, goals, onToday, onCalendar }) {
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[30px] leading-[1.1] font-bold text-stone-900 tracking-tight whitespace-nowrap">{weekRange(weekStart)}</h1>
+          {/* A week across two months has a longer name: smaller, so it fits beside the buttons. */}
+          <h1 className={`${weekRange(weekStart).split(' ').length > 4 ? 'text-[22px]' : 'text-[30px]'} leading-[33px] font-bold text-stone-900 tracking-tight whitespace-nowrap truncate`}>{weekRange(weekStart)}</h1>
           <p className="text-sm text-stone-500 mt-0.5">{weeksAgo(weekStart)}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <HeaderBtn onClick={onCalendar} label="Jump to a week"><CalendarIcon /></HeaderBtn>
-          <button onClick={onThisWeek} className="h-9 px-3.5 rounded-full bg-accent-50 text-accent-500 text-sm font-semibold active:bg-accent-100">
-            This week ›
+          <button onClick={onToday} className="h-10 px-3 rounded-xl bg-white shadow-sm text-stone-500 text-sm font-semibold whitespace-nowrap active:bg-stone-100 transition-colors">
+            Return to today
           </button>
         </div>
       </div>

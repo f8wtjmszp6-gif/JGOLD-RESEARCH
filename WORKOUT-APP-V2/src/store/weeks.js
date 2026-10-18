@@ -9,9 +9,9 @@ import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, dayLogOf, classe
 // Each saved week keeps everything you ticked and logged, and how your plans
 // were set up that week (lists, weights, timers), so it can be opened and
 // changed later without touching this week's numbers.
-const WEEK_KEYS = ['checks', 'activities', 'stretchExtra', 'stretchLog', 'cardio', 'classLog', 'restLog']
+const WEEK_KEYS = ['checks', 'activities', 'stretchExtra', 'stretchLog', 'cardio', 'classLog', 'restLog', 'sessionLog']
 const SETUP_KEYS = ['exerciseSettings', 'setup', 'warmups', 'order', 'coreLists', 'coreOn', 'stretchLists', 'equipment', 'assist', 'customDurations', 'perSide', 'stretchSets', 'stretchRest']
-const EMPTY_WEEK = { checks: {}, activities: {}, stretchExtra: 0, stretchLog: [], cardio: [], classLog: [], restLog: [] }
+const EMPTY_WEEK = { checks: {}, activities: {}, stretchExtra: 0, stretchLog: [], cardio: [], classLog: [], restLog: [], sessionLog: [] }
 
 export function detailsOf(s) {
   return Object.fromEntries([...WEEK_KEYS, ...SETUP_KEYS].filter(k => s[k] !== undefined).map(k => [k, s[k]]))
@@ -35,7 +35,9 @@ export function writeWeek(s, weekStart, fn) {
   const after = fn(before)
   if (after === before) return s
   const entry = { ...summarize(after, history[i].end), start: history[i].start, weekStart }
-  return { ...s, history: history.map((e, j) => (j === i ? entry : e)) }
+  // Your sports list isn't the week's own: adding or removing one from a
+  // saved week changes the list everywhere.
+  return { ...s, sportNames: after.sportNames, history: history.map((e, j) => (j === i ? entry : e)) }
 }
 
 // Every week to swipe through, oldest first, ending with this one:
@@ -78,6 +80,7 @@ function mergeDetails(a, b) {
     restLog: rest,
     stretchLog: own,
     stretchExtra: own.length,
+    sessionLog: [...sa.sessionLog, ...sb.sessionLog],
   }
 }
 
@@ -102,6 +105,7 @@ export function clearWeek(s, now, weekStart) {
     stretchExtra: 0,
     stretchLog: [],
     restLog: [],
+    sessionLog: [],
   }
 }
 

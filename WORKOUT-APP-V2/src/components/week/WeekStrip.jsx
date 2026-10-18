@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import { weekDays, sameDay } from '../../utils/days'
-import { TABS, TAB_DOT, tabsOf } from '../../utils/dayKinds'
+import { TAB_DOT, tabsOf } from '../../utils/dayKinds'
+import Legend from './Legend'
 
 
 const firstDay = weekStart => {
@@ -10,19 +11,17 @@ const firstDay = weekStart => {
 
 // Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
 // Each date has a dot for everything done that day. Tap a day to show it in
-// the bar at the bottom (see DayBar); tap it again to close. `weeks` is
-// oldest first, ending with this week; `at` is the one showing; `picked` is
-// the day open (0 = Sunday) or null.
+// the bar under the strip (see DayBar). `weeks` is oldest first, ending with
+// this week; `at` is the one showing; `picked` is the day shown (0 = Sunday).
 export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
-  const setPicked = onPick
   const pager = useRef(null)
   const settle = useRef(null)
   const week = weeks[at]
 
-  // Keeps the strip on the showing week when it's changed from outside (This
-  // week ›, a new week starting); smooth unless it's the first time.
+  // Keeps the strip on the showing week when it's changed from outside
+  // (Return to today, a new week starting); smooth unless it's the first time.
   const placed = useRef(false)
-  // The week an arrow (or This week ›) is sliding to; until it gets there,
+  // The week an arrow (or Return to today) is sliding to; until it gets there,
   // pauses in the slide aren't taken as a swipe coming to rest.
   const sliding = useRef(null)
   useLayoutEffect(() => {
@@ -35,10 +34,6 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
     placed.current = true
   }, [at, weeks.length])
 
-  function go(i) {
-    setPicked(null)
-    onAt(i)
-  }
 
   // Once a swipe comes to rest, that week shows.
   function onScroll() {
@@ -51,54 +46,40 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
         if (Math.abs(el.scrollLeft - sliding.current * el.clientWidth) < 2) sliding.current = null
         return
       }
-      if (i !== at && weeks[i]) {
-        setPicked(null)
-        onAt(i)
-      }
+      if (i !== at && weeks[i]) onAt(i)
     }, 90)
   }
 
   return (
-    <div className="space-y-2">
+    <div className="bg-white rounded-2xl shadow-sm">
       {/* Arrows either side show the days slide, and step a week at a time;
           each fades out at the end it can't go past. */}
-      <div className="bg-white rounded-2xl shadow-sm flex items-stretch">
-      <Arrow label="Previous week" disabled={at === 0} onClick={() => go(at - 1)} />
-      <div
-        ref={pager}
-        onScroll={onScroll}
-        onPointerDown={() => { sliding.current = null }}
-        className="flex-1 min-w-0 flex overflow-x-auto snap-x snap-mandatory overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        aria-label="Weeks, swipe for earlier ones"
-      >
-        {weeks.map((w, wi) => (
-          <WeekPage
-            key={w.weekStart}
-            week={w}
-            current={wi === at}
-            picked={wi === at ? picked : null}
-            onPick={i => setPicked(picked === i ? null : i)}
-          />
-        ))}
-      </div>
-      <Arrow label="Next week" right disabled={at === weeks.length - 1} onClick={() => go(at + 1)} />
-      </div>
-
-      {/* Weeks saved before days were kept have their totals only; the note
-          takes the key's place. */}
-      {!week.dayLog ? (
-        <p className="text-center text-[11px] text-stone-400">Days weren’t recorded this week</p>
-      ) : (
-        <div className="flex justify-center gap-x-3.5 text-[11px] text-stone-500">
-          {TABS.map(([k, label, dot]) => (
-            <span key={k} className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-              {label}
-            </span>
+      <div className="flex items-stretch">
+        <Arrow label="Previous week" disabled={at === 0} onClick={() => onAt(at - 1)} />
+        <div
+          ref={pager}
+          onScroll={onScroll}
+          onPointerDown={() => { sliding.current = null }}
+          className="flex-1 min-w-0 flex overflow-x-auto snap-x snap-mandatory overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Weeks, swipe for earlier ones"
+        >
+          {weeks.map((w, wi) => (
+            <WeekPage
+              key={w.weekStart}
+              week={w}
+              current={wi === at}
+              picked={wi === at ? picked : null}
+              onPick={onPick}
+            />
           ))}
         </div>
-      )}
-
+        <Arrow label="Next week" right disabled={at === weeks.length - 1} onClick={() => onAt(at + 1)} />
+      </div>
+      {/* The key along the bottom. Weeks saved before days were kept have
+          their totals only; a note takes its place. */}
+      <div className="border-t border-stone-100 py-2">
+        {!week.dayLog ? <p className="text-center text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend />}
+      </div>
     </div>
   )
 }

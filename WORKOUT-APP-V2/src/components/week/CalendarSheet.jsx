@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { SettingsSheet } from '../ui/Sheet'
 import { sameDay } from '../../utils/days'
 import { TAB_DOT, tabsOf } from '../../utils/dayKinds'
+import Legend from './Legend'
 
 const keyOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 // The Sunday a day's week starts on, as "YYYY-MM-DD".
@@ -12,16 +13,31 @@ function weekKey(d) {
 }
 const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1, 12)
 
-// A month at a time, Sunday first. Days in a week you have saved (or this
-// week) can be tapped to jump there; each shows a dot for every tab it
-// covered, like the week strip. The week showing is shaded. Picking a day
-// opens its week with that day open. `weeks` is the
-// app's weeks (saved ones and this one), `at` the one showing.
+// Picking a day opens its week with that day open. `weeks` is the app's
+// weeks (saved ones and this one), `at` the one showing.
 export default function CalendarSheet({ weeks, at, onPick, onClose }) {
+  return (
+    <SettingsSheet title="Jump to a week" closeLabel="Cancel" onClose={onClose}>
+      <MonthGrid weeks={weeks} at={at} onPick={onPick} />
+    </SettingsSheet>
+  )
+}
+
+// A month at a time, Sunday first, starting on the month of `picked` (a day
+// of the week showing, 0 = Sunday) or the week showing. Days in a week you
+// have saved (or this week) can be tapped: onPick(week, day). Each shows a
+// dot for every tab it covered, like the week strip. The week showing is
+// shaded and `picked` circled.
+export function MonthGrid({ weeks, at, picked = null, onPick }) {
   const today = new Date()
   const byKey = Object.fromEntries(weeks.map(w => [w.weekStart, w]))
   const showing = weeks[at]?.weekStart
-  const [month, setMonth] = useState(() => monthOf(showing ? new Date(`${showing}T12:00:00`) : today))
+  const [month, setMonth] = useState(() => {
+    if (!showing) return monthOf(today)
+    const d = new Date(`${showing}T12:00:00`)
+    d.setDate(d.getDate() + (picked ?? 0))
+    return monthOf(d)
+  })
   const first = weeks.find(w => w.dayLog || w.live) ?? weeks[0]
   const earliest = first ? monthOf(new Date(`${first.weekStart}T12:00:00`)) : monthOf(today)
   const thisMonth = monthOf(today)
@@ -40,7 +56,7 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
   const canNext = month < thisMonth
 
   return (
-    <SettingsSheet title="Jump to a week" closeLabel="Cancel" onClose={onClose}>
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <button onClick={() => step(-1)} disabled={!canBack} aria-label="Previous month" className="w-9 h-9 rounded-lg flex items-center justify-center text-stone-500 active:bg-stone-100 disabled:opacity-25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
@@ -62,6 +78,7 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
           const open = !!week && !future
           const isToday = sameDay(d, today)
           const shaded = key === showing
+          const circled = shaded && picked === d.getDay() && !isToday
           const items = week?.dayLog?.[d.getDay()] ?? []
           return (
             <button
@@ -73,8 +90,8 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
                 d.getDay() === 0 ? 'rounded-l-xl' : d.getDay() === 6 ? 'rounded-r-xl' : ''
               } ${open ? 'active:bg-stone-100' : ''}`}
             >
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm tabular-nums ${
-                isToday ? 'bg-accent-500 text-white font-bold' : open ? (inMonth ? 'text-stone-900 font-semibold' : 'text-stone-400 font-semibold') : 'text-stone-300'
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm tabular-nums ${
+                isToday ? 'bg-accent-500 text-white font-bold' : circled ? 'ring-2 ring-accent-500 text-accent-500 font-bold' : open ? (inMonth ? 'text-stone-900 font-semibold' : 'text-stone-400 font-semibold') : 'text-stone-300'
               }`}>
                 {d.getDate()}
               </span>
@@ -85,7 +102,7 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
           )
         })}
       </div>
-      <p className="text-xs text-stone-400">Tap a day to go to its week. Grey days have nothing saved.</p>
-    </SettingsSheet>
+      <Legend />
+    </div>
   )
 }

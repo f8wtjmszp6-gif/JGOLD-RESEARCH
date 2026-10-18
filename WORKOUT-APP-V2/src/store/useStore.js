@@ -4,7 +4,7 @@ import { STRETCH_BY_ID, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 
 // The store every screen reads and changes: this week's state plus the
@@ -560,6 +560,60 @@ function makeStore(state, update) {
     })
   }
 
+  // ── Doing it again (full-body days, the Full Body Stretch) ──────────────
+  // Finished ones filed away, oldest first, each with its place in the log
+  // (`index`) and whether it counted as a workout. See fileSession.
+  const sessions = sessionsOf(state).map((x, index) => ({ ...x, index, counts: sessionCounts(x) }))
+
+  // The one under way, as it would be filed, and whether it's finished.
+  function currentSession(id) {
+    const x = sessionOf(state, id)
+    return { ...x, finished: finishedOf(state, id), counts: sessionCounts(x) }
+  }
+
+  // Files the finished one so a fresh one starts; a no-op if it isn't
+  // finished, so the one under way just opens.
+  // A card's sessions this week, each finished one on its own line, oldest
+  // first: the filed ones (`filed`), then the newest of each, still open to
+  // tick or untick.
+  function sessionsFor(ids) {
+    const filed = sessions.filter(x => ids.includes(x.id)).map(x => ({ ...x, filed: true }))
+    const open = ids.map(currentSession).filter(x => x.finished)
+    return [...filed, ...open].sort((a, b) => new Date(a.at) - new Date(b.at))
+  }
+
+  function startAgain(id) {
+    update(s => fileSession(s, id))
+  }
+
+  // Opening a filed one again: see reopenOf and reopenSession.
+  const canReopen = index => reopenOf(state, index)
+  function reopen(index) {
+    update(s => reopenSession(s, index))
+  }
+
+  // Logs the one under way as it stands, unfinished (see endSession).
+  function endEarly(id) {
+    update(s => endSession(s, id))
+  }
+
+  // Deletes the open one of a kind: its ticks go, as if it weren't done.
+  function clearSession(id) {
+    update(s => {
+      const checks = { ...s.checks }
+      delete checks[id]
+      return { ...s, checks }
+    })
+  }
+
+  function moveSession(index, at) {
+    update(s => ({ ...s, sessionLog: sessionsOf(s).map((x, i) => (i === index ? { ...x, at } : x)) }))
+  }
+
+  function deleteSession(index) {
+    update(s => ({ ...s, sessionLog: sessionsOf(s).filter((_, i) => i !== index) }))
+  }
+
   // A week's cardio sessions ({ kind, minutes, hard, type? }) for Trends:
   // this week's, or a saved week's when it kept its details (else null).
   function cardioLogOf(entry) {
@@ -814,6 +868,16 @@ function makeStore(state, update) {
     cardioLogOf,
     setPlanDay,
     stampsOf,
+    sessions,
+    currentSession,
+    sessionsFor,
+    startAgain,
+    canReopen,
+    reopen,
+    moveSession,
+    clearSession,
+    endEarly,
+    deleteSession,
     dayLog: dayLogOf(state),
     goals: goalsOf(state),
     timer: timerOf(state),

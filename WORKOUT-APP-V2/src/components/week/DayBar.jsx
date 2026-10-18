@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { TileIcon } from '../ui/Icons'
 import { SettingsSheet } from '../ui/Sheet'
-import { weekDays, sameDay, weekRange } from '../../utils/days'
+import { MonthGrid } from './CalendarSheet'
+import { weekDays, sameDay } from '../../utils/days'
 import { TAB_DOT, TILE, tabsOf } from '../../utils/dayKinds'
 
 const firstDay = weekStart => {
@@ -11,15 +12,12 @@ const firstDay = weekStart => {
 const short = d => `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
 const dotsOf = items => tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)
 
-// The day tapped on the week strip, as a slim bar at the bottom of the
-// screen: one thing's name and details, or a busy day's count and what it
-// was. It stays put while the page scrolls. Tap it for the whole day, with
-// the week on top to move around (always the same height, so switching days
-// doesn't make it jump); swipe it down (or tap the day again) to
-// close it.
+// The day tapped on the week strip, as a slim bar under it: the date and how
+// many things were done, then what they were. Tap it for the whole
+// day, with the month on top to move around (always the same height, so
+// switching days doesn't make it jump).
 export default function DayBar({ weeks, at, picked, onPick, onAt }) {
   const [open, setOpen] = useState(false)
-  const startY = useRef(null)
   const week = weeks[at]
   const days = weekDays(firstDay(week.weekStart))
   const day = days[picked]
@@ -28,39 +26,27 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
 
   const one = items.length === 1 ? items[0] : null
   const title = items.length === 0 ? (future ? 'Nothing yet' : !week.dayLog ? 'Not recorded' : 'Nothing logged')
-    : one ? `${one.label}${one.detail?.includes('finished') ? ' ✓' : ''}`
-    : `${items.length} things`
-  const sub = one ? [one.detail?.replace(' · finished', ''), ...(one.tags ?? []).map(t => t.text)].filter(Boolean).join(' · ')
-    : items.map(x => x.label).join(' · ')
+    : `${items.length} ${items.length === 1 ? 'Activity' : 'Activities'}`
 
   return (
     <>
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          onPointerDown={e => { startY.current = e.clientY }}
-          onPointerUp={e => {
-            // A swipe down closes it instead of opening.
-            if (startY.current !== null && e.clientY - startY.current > 30) onPick(null)
-            startY.current = null
-          }}
-          aria-label={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}: ${title}. Open the day`}
-          className="fixed inset-x-4 z-30 flex items-center gap-3 rounded-2xl bg-stone-800 text-white px-3.5 py-3 text-left shadow-xl active:bg-stone-900 touch-none"
-          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-        >
-          <span className="w-9 h-9 rounded-xl bg-stone-700 flex items-center justify-center shrink-0">
-            {one ? <TileIcon id={one.icon} size={20} /> : <span className="text-sm font-bold">{day.getDate()}</span>}
+      <button
+        onClick={() => setOpen(true)}
+        aria-label={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}: ${title}. Open the day`}
+        className="w-full flex items-center gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-sm active:bg-stone-50"
+      >
+        <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${one ? TILE[one.kind] : 'bg-stone-100 text-stone-600'}`}>
+          {one ? <TileIcon id={one.icon} size={20} /> : <span className="text-sm font-bold">{day.getDate()}</span>}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 text-[15px] font-semibold text-stone-900">
+            <span className="truncate">{short(day)} · {title}</span>
+            <span className="flex gap-1 shrink-0">{dotsOf(items)}</span>
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2 text-[15px] font-semibold">
-              <span className="truncate">{short(day)} · {title}</span>
-              <span className="flex gap-1 shrink-0">{dotsOf(items)}</span>
-            </span>
-            {sub && <span className="block text-sm text-stone-300 truncate">{sub}</span>}
-          </span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="text-stone-400 shrink-0" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
-        </button>
-      )}
+          {items.length > 0 && <Names names={items.map(x => x.label)} />}
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="text-stone-400 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+      </button>
       {open && (
         <SettingsSheet
           title={day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -68,7 +54,15 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
           tall
           onClose={() => setOpen(false)}
         >
-          <WeekNav weeks={weeks} at={at} days={days} picked={picked} onPick={onPick} onAt={onAt} />
+          <MonthGrid
+            weeks={weeks}
+            at={at}
+            picked={picked}
+            onPick={(w, d) => {
+              onAt(weeks.indexOf(w))
+              onPick(d)
+            }}
+          />
           <div className="border-t border-stone-100 pt-3">
             <DayList items={items} empty={title} />
           </div>
@@ -78,47 +72,36 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
   )
 }
 
-// The week on top of the full day: ‹ › for the week before or after, and
-// each day with its dots to switch to it. Days still to come can't be picked.
-function WeekNav({ weeks, at, days, picked, onPick, onAt }) {
-  const week = weeks[at]
-  const now = new Date()
+// What a day had, on one line: as many names as fit, then "+2 more" for
+// the rest (tap the bar to see them all). Every way of cutting the list is
+// measured off-screen and the longest one that fits is shown.
+function Names({ names }) {
+  const box = useRef(null)
+  const probe = useRef(null)
+  const [count, setCount] = useState(names.length)
+  const options = names.map((_, i) => {
+    const k = names.length - i
+    return names.slice(0, k).join(' · ') + (k < names.length ? ` +${names.length - k} more` : '')
+  })
+  const key = names.join('|')
+  useLayoutEffect(() => {
+    const fit = () => {
+      const width = box.current?.clientWidth ?? 0
+      const widths = [...(probe.current?.children ?? [])].map(el => el.offsetWidth)
+      const i = widths.findIndex(w => w <= width)
+      setCount(names.length - (i < 0 ? names.length - 1 : i))
+    }
+    const watch = new ResizeObserver(fit)
+    watch.observe(box.current)
+    return () => watch.disconnect()
+  }, [key, names.length])
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <button onClick={() => onAt(at - 1)} disabled={at === 0} aria-label="Week before" className="w-9 h-9 rounded-lg flex items-center justify-center text-accent-500 active:bg-stone-100 disabled:opacity-25">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-        </button>
-        <p className="font-semibold text-stone-900">{weekRange(week.weekStart)}</p>
-        <button onClick={() => onAt(at + 1)} disabled={at === weeks.length - 1} aria-label="Week after" className="w-9 h-9 rounded-lg flex items-center justify-center text-accent-500 active:bg-stone-100 disabled:opacity-25">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-        </button>
-      </div>
-      <div className="grid grid-cols-7">
-        {days.map((d, i) => {
-          const isToday = sameDay(d, now)
-          const later = d > now && !isToday
-          return (
-            <button
-              key={i}
-              disabled={later}
-              onClick={() => onPick(i)}
-              aria-pressed={picked === i}
-              aria-label={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              className="flex flex-col items-center gap-1 py-0.5 rounded-xl active:bg-stone-100 disabled:opacity-35"
-            >
-              <span className="text-[11px] font-semibold text-stone-400">{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold tabular-nums ${
-                picked === i ? 'bg-accent-500 text-white' : isToday ? 'ring-2 ring-accent-500 text-accent-500' : 'text-stone-900'
-              }`}>
-                {d.getDate()}
-              </span>
-              <span className="flex gap-0.5 h-1.5">{dotsOf(week.dayLog?.[i] ?? [])}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
+    <span ref={box} className="relative block text-sm text-stone-500 truncate">
+      {options[names.length - count]}
+      <span ref={probe} aria-hidden="true" className="absolute left-0 top-0 invisible whitespace-nowrap pointer-events-none">
+        {options.map(o => <span key={o} className="absolute left-0 top-0">{o}</span>)}
+      </span>
+    </span>
   )
 }
 

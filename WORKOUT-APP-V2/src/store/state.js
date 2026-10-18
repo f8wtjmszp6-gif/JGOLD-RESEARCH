@@ -1,4 +1,4 @@
-import { workouts, activities, PLAN_IDS, FULL_BODY_BY_ID, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
+import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { weekDays, sameDay } from '../utils/days'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
@@ -46,6 +46,9 @@ import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, def
 //                       (type: what it was, as "Run" or "Pickleball")
 //     classLog          [{ at, cardio, minutes, hard, strength, areas, stretch, stretchMinutes }, …] — one per class
 //     restLog           [at | null, …] — the day of each rest day (null: added before days were saved)
+//     sessionLog        [{ id, at, done, total, stretched, stretches, warmup, minutes?, checks }, …] — finished
+//                       full-body days, Full Body Stretches and cool-downs filed away to do them again, each
+//                       with its ticks as they were (`checks`) so it can be opened again (see fileSession)
 
 function lowReps(repsStr) {
   const n = parseInt(String(repsStr).split('–')[0])
@@ -183,7 +186,7 @@ export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
       total += sets.length
       done += sets.filter(x => x.done).length
     }
-    add(c?.at, { kind: FULL_BODY_BY_ID[id] ? 'full' : 'plan', icon: id, label: workouts[id].short, detail: `${done}/${total} sets${total && done >= total ? ' · finished' : ''}` })
+    add(c?.at, { kind: FULL_BODY_BY_ID[id] ? 'full' : 'plan', plan: id, icon: FULL_BODY_BY_ID[id] ? 'fullBody' : id, label: workouts[id].short, detail: `${done}/${total} sets${total && done >= total ? ' · finished' : ''}` })
     // Its stretches and warm-up go under it on its day (see below). A warm-up
     // ticked before warm-ups kept their time goes on the plan's day.
     const n = stretchesOf(s, id).length
@@ -195,6 +198,18 @@ export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
     }
   }
   add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, { kind: 'stretch', icon: 'stretch', label: STRETCH_ROUTINE.name, detail: `${stretchesOf(s, STRETCH_ROUTINE.id).length} stretches` })
+  // Sessions filed to do them again, each on its own day with what it had.
+  for (const x of sessionsOf(s)) {
+    if (x.id === STRETCH_ROUTINE.id || COOL_DOWN_BY_ID[x.id]) {
+      add(x.at, { kind: 'stretch', icon: 'stretch', label: COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : STRETCH_ROUTINE.name, detail: x.stretched < x.stretches ? `${x.stretched}/${x.stretches} stretches` : `${x.stretches} stretches` })
+      continue
+    }
+    const minutes = (x.warmup ?? []).reduce((m, w) => m + w.minutes, 0)
+    add(x.at, { kind: 'full', icon: 'fullBody', label: workouts[x.id].short, detail: `${x.done}/${x.total} sets${sessionCounts(x) ? ' · finished' : ''}`, tags: [
+      x.stretches > 0 && x.stretched === x.stretches && { kind: 'stretch', text: `Stretches · ${x.stretched}/${x.stretches}` },
+      minutes > 0 && { kind: 'cardio', text: `Warm-up · ${minutes} min${effort(x.warmup)}` },
+    ].filter(Boolean) })
+  }
   for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, { kind: 'stretch', icon: 'stretch', label: `Cool Down · ${COOL_DOWN_BY_ID[c.id].label}`, detail: `${stretchesOf(s, c.id).length} stretches` })
   // A class lists what it was, a short line for each part.
   for (const c of classesOf(s)) {
@@ -218,7 +233,7 @@ export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
     const list = items.filter(x => sameDay(x.at, day))
     // A plan's warm-up and stretches sit under it when it's the same day.
     const kept = list.filter(x => {
-      const plan = x.of && list.find(p => p.icon === x.of && !p.of)
+      const plan = x.of && list.find(p => p.plan === x.of)
       if (plan) plan.tags = [...plan.tags, x.tag]
       return !plan
     })
@@ -280,6 +295,7 @@ export function cardioSessionsOf(s) {
     const w = warmupOf(s, id)
     if (w.on && s.checks?.[id]?.warmup) out.push(...w.sets.map(x => ({ kind: 'warmup', ...x })))
   }
+  for (const x of sessionsOf(s)) out.push(...(x.warmup ?? []).map(w => ({ kind: 'warmup', ...w })))
   return out
 }
 
@@ -397,7 +413,7 @@ export function writeList(s, workoutId, section, ids) {
 // sessions long enough to count as workouts.
 export function weekOf(s) {
   return {
-    gym: PLAN_IDS.filter(id => workoutComplete(s, id)).length,
+    gym: PLAN_IDS.filter(id => workoutComplete(s, id)).length + sessionsOf(s).filter(x => !stretchList(x.id) && sessionCounts(x)).length,
     ...Object.fromEntries(activities.map(a => [a.id, countOf(s, a.id)])),
     class: classesOf(s).filter(classIsWorkout).length,
     cardio: (s.cardio ?? []).filter(x => (x.kind === 'other' || x.kind === 'sport') && cardioIsWorkout(x)).length,
@@ -455,7 +471,8 @@ const longEnough = minutes => minutes >= STRETCH_WORKOUT_MINUTES
 function stretchWorkoutsOf(s) {
   const routineDone = stretchesOf(s, STRETCH_ROUTINE.id).every(x => s.checks?.[STRETCH_ROUTINE.id]?.stretches?.[x.id])
   const routine = routineDone && longEnough(Math.round(routineSecondsOf(s) / 60)) ? 1 : 0
-  return routine + ownStretchesOf(s).filter(x => x.minutes !== null && longEnough(x.minutes)).length
+  const filed = sessionsOf(s).filter(x => x.id === STRETCH_ROUTINE.id && sessionCounts(x)).length
+  return routine + filed + ownStretchesOf(s).filter(x => x.minutes !== null && longEnough(x.minutes)).length
 }
 
 // Stretch days: each gym workout whose stretches are all ticked, the
@@ -463,10 +480,12 @@ function stretchWorkoutsOf(s) {
 // on your own.
 export function stretchWeekOf(s) {
   const all = (id, list) => list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
+  const filed = sessionsOf(s)
   const st = {
-    gym: PLAN_IDS.filter(id => all(id, stretchesOf(s, id))).length,
-    routine: all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0,
-    cool: COOL_DOWNS.filter(c => all(c.id, stretchesOf(s, c.id))).length,
+    gym: PLAN_IDS.filter(id => all(id, stretchesOf(s, id))).length +
+      filed.filter(x => !stretchList(x.id) && x.stretches > 0 && x.stretched === x.stretches).length,
+    routine: (all(STRETCH_ROUTINE.id, stretchesOf(s, STRETCH_ROUTINE.id)) ? 1 : 0) + filed.filter(x => x.id === STRETCH_ROUTINE.id && x.stretched === x.stretches).length,
+    cool: COOL_DOWNS.filter(c => all(c.id, stretchesOf(s, c.id))).length + filed.filter(x => COOL_DOWN_BY_ID[x.id] && x.stretched === x.stretches).length,
     class: classesOf(s).filter(c => c.stretch).length,
     extra: Number(s.stretchExtra) || 0,
   }
@@ -486,4 +505,107 @@ export function timerOf(s) {
 // Your weekly goals, falling back to the defaults.
 export function goalsOf(s) {
   return Object.fromEntries(Object.entries(GOAL_DEFAULTS).map(([k, d]) => [k, { ...d, ...s.goals?.[k] }]))
+}
+
+// ── Doing it again ─────────────────────────────────────────────────────────
+// A full-body day, the Full Body Stretch or a cool-down can be done more than
+// once a week.
+// The one under way keeps its ticks in `checks`, like a plan. Starting it
+// again once it's finished files that one in `sessionLog` as it stood and
+// clears its ticks; your weights and lists stay as they are.
+export const REPEATABLE = new Set([...FULL_BODY.map(p => p.id), STRETCH_ROUTINE.id, ...COOL_DOWNS.map(c => c.id)])
+
+// The Full Body Stretch and the cool-downs: lists of stretches, no sets.
+const stretchList = id => id === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[id]
+
+export function sessionsOf(s) {
+  return s.sessionLog ?? []
+}
+
+// Whether a filed session counted as a workout: a full-body day with every
+// set done, or a Full Body Stretch of 30+ minutes. A cool-down never does.
+export function sessionCounts(x) {
+  if (COOL_DOWN_BY_ID[x.id]) return false
+  return x.id === STRETCH_ROUTINE.id ? x.stretched === x.stretches && longEnough(x.minutes ?? 0) : x.total > 0 && x.done >= x.total
+}
+
+// Whether the one under way is finished: every set ticked (a full-body day)
+// or every stretch (the Full Body Stretch, a cool-down).
+export function finishedOf(s, id) {
+  if (!stretchList(id)) return workoutComplete(s, id)
+  const list = stretchesOf(s, id)
+  return list.length > 0 && list.every(x => s.checks?.[id]?.stretches?.[x.id])
+}
+
+// The one under way, as it would be filed.
+export function sessionOf(s, id) {
+  const c = s.checks?.[id] ?? {}
+  const list = stretchesOf(s, id)
+  const stretched = list.filter(x => c.stretches?.[x.id]).length
+  if (stretchList(id)) {
+    return { id, at: c.stretchedAt ?? s.clockAt ?? new Date().toISOString(), stretched, stretches: list.length, minutes: Math.round(routineSecondsOf(s, id) / 60), checks: c }
+  }
+  let done = 0, total = 0
+  for (const ex of exercisesOf(s, id)) {
+    const sets = weekSetsOf(s, id, ex)
+    total += sets.length
+    done += sets.filter(x => x.done).length
+  }
+  const w = warmupOf(s, id)
+  return { id, at: c.at ?? s.clockAt ?? new Date().toISOString(), done, total, stretched, stretches: list.length, warmup: w.on && c.warmup ? w.sets : null, checks: c }
+}
+
+// Files the finished one away and clears its ticks for the next. Anything
+// not finished is left as it is.
+export function fileSession(s, id) {
+  if (!REPEATABLE.has(id) || !finishedOf(s, id)) return s
+  const checks = { ...s.checks }
+  delete checks[id]
+  return { ...s, sessionLog: [...sessionsOf(s), sessionOf(s, id)], checks }
+}
+
+// Ends the one under way before it's finished: it's filed as it stands, on
+// its day, and a fresh one starts. It counts only as far as it got (see
+// sessionCounts). Nothing ticked yet: nothing to end.
+export function endSession(s, id) {
+  if (!REPEATABLE.has(id)) return s
+  const x = sessionOf(s, id)
+  if (!((x.done ?? 0) > 0 || x.stretched > 0)) return s
+  const checks = { ...s.checks }
+  delete checks[id]
+  return { ...s, sessionLog: [...sessionsOf(s), x], checks }
+}
+
+// Whether a filed session can be opened again: 'ok', or 'busy' while
+// another of the same is under way and not finished.
+export function reopenOf(s, index) {
+  const x = sessionsOf(s)[index]
+  if (!x) return 'busy'
+  const now = sessionOf(s, x.id)
+  const started = (now.done ?? 0) > 0 || now.stretched > 0
+  return started && !finishedOf(s, x.id) ? 'busy' : 'ok'
+}
+
+// A filed session's ticks: as they were, or, for one filed before sessions
+// kept them, worked out from its counts (every set, since it was finished,
+// and that many stretches from the top of the list).
+function ticksOfSession(s, x) {
+  if (x.checks) return x.checks
+  const stretches = Object.fromEntries(stretchesOf(s, x.id).slice(0, x.stretched).map(y => [y.id, true]))
+  if (stretchList(x.id)) return { stretches, stretchedAt: x.at }
+  const exercises = Object.fromEntries(exercisesOf(s, x.id).map(ex => [ex.id, settingsOf(s, ex).reps.map(() => true)]))
+  return { exercises, stretches, at: x.at, ...(x.stretched === x.stretches && x.stretches > 0 && { stretchedAt: x.at }) }
+}
+
+// Opens a filed session again with its ticks as they were. A finished one
+// of the same in its place is filed first, so nothing is lost.
+export function reopenSession(s, index) {
+  if (reopenOf(s, index) !== 'ok') return s
+  const x = sessionsOf(s)[index]
+  const filed = fileSession(s, x.id)
+  return {
+    ...filed,
+    sessionLog: sessionsOf(filed).filter((_, i) => i !== index),
+    checks: { ...filed.checks, [x.id]: ticksOfSession(s, x) },
+  }
 }

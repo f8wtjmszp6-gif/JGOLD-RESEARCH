@@ -3,7 +3,7 @@
 // rest, or ?restore to put back what was there before. Never part of the
 // live app (main.jsx only loads this in development).
 import { GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS } from '../data/workout'
-import { exercisesOf, settingsOf, stretchesOf, weekSetsOf } from '../store/state'
+import { exercisesOf, settingsOf, stretchesOf, weekSetsOf, fileSession } from '../store/state'
 import { clearWeek } from '../store/weeks'
 import { STORAGE_KEY } from '../store/persist'
 import { weekDays } from '../utils/days'
@@ -26,7 +26,7 @@ function at(sunday, d, hour) {
 // One week's activity. `k` counts up to this week (12); later weeks lift a
 // bit more. `skip` is a plan left out that week; `upTo` stops at a weekday,
 // for this week so far.
-function weekOf(s, sunday, k, { skip = [], upTo = 6 } = {}) {
+function weekOf(s, sunday, k, { skip = [], upTo = 6, repeat = false } = {}) {
   const checks = {}
   const cardio = []
   const classLog = []
@@ -85,7 +85,7 @@ function weekOf(s, sunday, k, { skip = [], upTo = 6 } = {}) {
       if (base.weight > 0) exerciseSettings[ex.id] = { ...base, weight: Math.round((base.weight * (0.8 + 0.2 * (k / 12))) / 5) * 5 }
     }
   }
-  return {
+  const week = {
     ...s,
     exerciseSettings,
     warmups: { push: { on: true, sets: [{ minutes: 5, hard: false }, { minutes: 5, hard: true }] }, legsQuad: { on: true, sets: [{ minutes: 8, hard: false }] } },
@@ -99,7 +99,30 @@ function weekOf(s, sunday, k, { skip = [], upTo = 6 } = {}) {
     stretchExtra: stretchLog.length,
     sportNames: ['Spikeball', 'Climbing'],
     lastBackupAt: new Date().toISOString(),
+    sessionLog: [],
   }
+  return repeat ? repeats(week, sunday) : week
+}
+
+// One week with Full Body and the Full Body Stretch done twice each: the
+// first of each filed, the second still open.
+function repeats(s, sunday) {
+  const done = (s, id, when) => ({
+    ...s,
+    checks: {
+      ...s.checks,
+      [id]: {
+        exercises: Object.fromEntries(exercisesOf(s, id).map(ex => [ex.id, weekSetsOf(s, id, ex).map(() => true)])),
+        stretches: Object.fromEntries(stretchesOf(s, id).map((x, i) => [x.id, i < 3])),
+        at: when,
+      },
+    },
+  })
+  const stretch = (s, when) => ({ ...s, checks: { ...s.checks, [STRETCH_ROUTINE.id]: { stretches: Object.fromEntries(stretchesOf(s, STRETCH_ROUTINE.id).map(x => [x.id, true])), stretchedAt: when } } })
+  s = fileSession(done(s, 'fullGym', at(sunday, 1, 18)), 'fullGym')
+  s = done(s, 'fullHomeDb', at(sunday, 4, 7))
+  s = fileSession(stretch(s, at(sunday, 2, 20)), STRETCH_ROUTINE.id)
+  return stretch(s, at(sunday, 5, 20))
 }
 
 export function buildDemo(now = new Date()) {
@@ -116,7 +139,7 @@ export function buildDemo(now = new Date()) {
     const skip = k === 11 ? ['pull'] : k === 6 ? ['legsQuad', 'legsPost'] : rand() < 0.3 ? [pick(GYM_ORDER)] : []
     if (k < 12) {
       const key = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`
-      s = clearWeek(weekOf(s, sunday, k, { skip }), next.toISOString(), key)
+      s = clearWeek(weekOf(s, sunday, k, { skip, repeat: k === 11 }), next.toISOString(), key)
     } else {
       // This week so far: up to today.
       s = weekOf(s, sunday, k, { skip: ['pull', 'legsPost'], upTo: now.getDay() })

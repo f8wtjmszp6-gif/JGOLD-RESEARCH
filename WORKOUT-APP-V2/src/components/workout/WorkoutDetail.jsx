@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID } from '../../data/workout'
@@ -30,6 +30,11 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // The first set ticked (or warm-up, or last stretch) on a rest day asks whether it's
   // still a rest day, once. A plan already ticked when you open it doesn't ask.
   const stamps = store.stampsOf(workoutId)
+  // Ones you can do more than once a week, and how far the one under way got.
+  const repeatable = !!FULL_BODY_BY_ID[workoutId] || workoutId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[workoutId]
+  const current = repeatable ? store.currentSession(workoutId) : null
+  const started = !!current && ((current.done ?? 0) > 0 || current.stretched > 0)
+  const [ending, setEnding] = useState(false)
   const clash = [stamps.at, stamps.warmedAt, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
   const [answered, setAnswered] = useState(clash)
   const [toast, setToast] = useState(null)
@@ -303,7 +308,18 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
             {/* In a saved week, back goes to that week. */}
             <span className="text-sm font-medium">{store.past ? weekRange(store.weekStart) : 'Workouts'}</span>
           </button>
-          <DayPill stamps={stamps} today={store.today} past={store.past} onClick={() => setPickingDay(true)} />
+          {/* Full-body days, the Full Body Stretch and cool-downs go on the day
+              they're done (each moves from its line on the card); one you
+              can't finish is ended here and still logged. */}
+          {repeatable ? (
+            started && !current.finished && (
+              <button onClick={() => setEnding(true)} className="px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 text-sm font-medium active:bg-stone-200">
+                End
+              </button>
+            )
+          ) : (
+            <DayPill stamps={stamps} today={store.today} past={store.past} onClick={() => setPickingDay(true)} />
+          )}
         </div>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{FULL_BODY_BY_ID[workoutId] ? 'Full Body' : workout.short}</h1>
@@ -453,6 +469,17 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           </SettingsSheet>
         )
       })()}
+      {ending && (
+        <ConfirmSheet
+          title="End now?"
+          body={FULL_BODY_BY_ID[workoutId]
+            ? `It’s logged as it is: ${current.done}/${current.total} sets and ${current.stretched}/${current.stretches} stretches. It counts as a workout only when every set is done.`
+            : `It’s logged as it is: ${current.stretched}/${current.stretches} stretches. It counts as a stretch day only when every stretch is done.`}
+          confirmLabel="End"
+          onConfirm={() => { store.endEarly(workoutId); setEnding(false); onBack() }}
+          onClose={() => setEnding(false)}
+        />
+      )}
       {pickingDay && (
         <PlanDaySheet
           store={store}
@@ -528,41 +555,23 @@ function PlanDaySheet({ store, stamps, onPick, onClose }) {
   )
 }
 
-// Gym or home, as a segmented control with where each one is written over it
-// ("At home" spans the two home ones). Switch if you picked the wrong one;
-// each keeps its own list.
+// The three full-body days as a segmented control. Switch if you picked
+// the wrong one; each keeps its own list.
 function FullBodySwitch({ at, onSwitch }) {
-  const groups = [...new Set(FULL_BODY.map(p => p.where))].map(w => [w, FULL_BODY.filter(p => p.where === w)])
   return (
-    <div className="mt-3">
-      <div className="flex gap-2 px-1 mb-1">
-        {groups.map(([where, plans]) => (
-          <p key={where} style={{ flex: plans.length }} className="flex items-center gap-2 text-[10px] font-semibold tracking-widest uppercase text-stone-400">
-            <span className="flex-1 h-px bg-stone-200" />
-            {where}
-            <span className="flex-1 h-px bg-stone-200" />
-          </p>
-        ))}
-      </div>
-      <div className="bg-stone-100 rounded-xl p-1 flex" role="tablist" aria-label="Where you are">
-        {groups.map(([where, plans], i) => (
-          <Fragment key={where}>
-            {i > 0 && <span className="w-px my-1.5 mx-1 bg-stone-300" />}
-            {plans.map(p => (
-              <button
-                key={p.id}
-                role="tab"
-                aria-selected={p.id === at}
-                aria-label={`${p.chip}, ${where.toLowerCase()}`}
-                onClick={() => onSwitch(p.id)}
-                className={`flex-1 min-w-0 px-1 py-2 rounded-lg text-[13px] font-medium whitespace-nowrap transition-all ${p.id === at ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
-              >
-                {p.chip}
-              </button>
-            ))}
-          </Fragment>
-        ))}
-      </div>
+    <div className="mt-3 bg-stone-100 rounded-xl p-1 flex" role="tablist" aria-label="What you're working out with">
+      {FULL_BODY.map(p => (
+        <button
+          key={p.id}
+          role="tab"
+          aria-selected={p.id === at}
+          aria-label={p.label}
+          onClick={() => onSwitch(p.id)}
+          className={`flex-1 min-w-0 px-1 py-2 rounded-lg text-[13px] font-medium whitespace-nowrap transition-all ${p.id === at ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+        >
+          {p.chip}
+        </button>
+      ))}
     </div>
   )
 }

@@ -1,7 +1,8 @@
-import { STRETCH_ROUTINE, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
+import { STRETCH_ROUTINE } from '../../data/workout'
 import { TileIcon } from '../ui/Icons'
 import { inDayOrder } from '../../utils/days'
 import { ClassLine } from './lines'
+import { SessionLines } from './sessions'
 
 // ── Workout classes ──────────────────────────────────────────────────────────
 // + opens Log a class; the card lists each class this week with its answers.
@@ -26,47 +27,38 @@ export function ClassCard({ store, activity, onAdd, onEdit }) {
   )
 }
 
-export function RoutineCard({ store, onOpen }) {
+// The Full Body Stretch, which can be done more than once a week. The one
+// under way fills the ring; tapping opens it, or, once it's finished, files
+// it and opens a fresh one. Each finished one gets a line with its day; 30+
+// minutes counts as a workout (the dumbbell).
+export function RoutineCard({ store, onOpen, onEditSession }) {
   const list = store.getStretches(STRETCH_ROUTINE.id)
   const done = list.filter(x => store.getStretchDone(STRETCH_ROUTINE.id, x.id)).length
-  const complete = done === list.length
-  // 30+ minutes (longer holds, more sets) makes the routine a workout too.
-  const workout = store.routineMinutes >= STRETCH_WORKOUT_MINUTES
+  const under = done > 0 && done < list.length
   return (
-    <button onClick={onOpen} className="w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shrink-0">
-            <TileIcon id="stretch" />
+    <div className={CARD}>
+      <button onClick={() => { store.startAgain(STRETCH_ROUTINE.id); onOpen() }} aria-label={STRETCH_ROUTINE.name} className="w-full text-left transition-all active:scale-[0.98]">
+        <div className="flex items-center gap-3">
+          <CardIcon icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-stone-900 truncate">{STRETCH_ROUTINE.name}</p>
+            <p className="text-sm text-stone-400 truncate">{store.routineMinutes} min</p>
           </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-900">
-              {STRETCH_ROUTINE.name}
-              {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
-            </p>
-            {/* Like a plan card: what's in it until you start, then how far along. */}
-            <p className="text-sm text-stone-400 truncate">
-              {done > 0 ? `${done}/${list.length}` : list.length} stretches · {store.routineMinutes} min{workout && <span className="text-pink-700"> · workout</span>}
-            </p>
-          </div>
+          {/* Like a plan card: what's in it until you start, then how far along. */}
+          <Counts>
+            <p>{under ? <Of n={done} of={list.length} /> : list.length} stretches</p>
+          </Counts>
         </div>
-        {/* Progress only: a bar that fills as you tick stretches, no number. */}
-        <div className="shrink-0">
-          <div className="w-16 h-1 bg-stone-100 rounded-full">
-            <div
-              className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-teal-400'}`}
-              style={{ width: `${(done / list.length) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-    </button>
+      </button>
+      <SessionLines list={store.sessionsFor([STRETCH_ROUTINE.id])} onMenu={onEditSession} />
+    </div>
   )
 }
 
 // Days stretched this week: finishing a gym workout's stretches, the
 // full-body routine, or stretching on your own (+) each count once.
-// Under the name: what's in the plan until you start it, then how far along
+// A plan: a ring around its icon fills as you tick sets (green when done).
+// On the right: what's in the plan until you start it, then how far along
 // you are. Both counts follow the plan as you add or remove exercises and
 // stretches.
 // `upNext`: this is the plan to do next, marked over its name.
@@ -75,55 +67,88 @@ export function WorkoutCard({ workout, progress, stretches, stretchesDone, upNex
   const complete = total > 0 && done === total
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
   const started = done > 0 || stretchesDone > 0
-  const detail = started
-    ? `${done}/${total} sets · ${stretchesDone}/${stretches.length} ${stretches.length === 1 ? 'stretch' : 'stretches'}`
-    : `${plural(exercises, 'exercise', 'exercises')} · ${plural(stretches.length, 'stretch', 'stretches')}`
 
   return (
     <button
       onClick={onOpen}
-      className={`w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98] ${upNext ? 'ring-1 ring-red-200' : ''}`}
+      aria-label={`${workout.short}${complete ? ', done' : ''}`}
+      className={`${CARD} transition-all active:scale-[0.98] ${upNext ? 'ring-1 ring-red-200' : ''}`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center shrink-0">
-            <TileIcon id={workout.id} />
-          </div>
-          <div className="min-w-0">
+      <div className="flex items-center gap-3">
+        <CardIcon icon={workout.id} tile="from-red-50 to-red-100" value={total ? done / total : 0} done={complete} fill="stroke-red-400" />
+        <div className="min-w-0 flex-1">
           {upNext && (
             <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Up next</p>
           )}
-          <p className="font-semibold text-stone-900">
-            {workout.short}
-            {complete && <span className="text-emerald-600 ml-1.5">✓</span>}
-          </p>
-          <p className="text-sm text-stone-400 truncate">{detail}</p>
-          </div>
+          <p className="font-semibold text-stone-900 truncate">{workout.short}</p>
         </div>
-        {/* Progress only: a bar that fills as you tick sets, no number. */}
-        <div className="shrink-0">
-          <div className="w-16 h-1 bg-stone-100 rounded-full">
-            <div
-              className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-400' : 'bg-red-400'}`}
-              style={{ width: `${total ? (done / total) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
+        {/* What's in the plan until you start it, then how far along. */}
+        <Counts>
+          {started ? (
+            <>
+              <p><Of n={done} of={total} /> sets</p>
+              <p><Of n={stretchesDone} of={stretches.length} /> {stretches.length === 1 ? 'stretch' : 'stretches'}</p>
+            </>
+          ) : (
+            <>
+              <p>{plural(exercises, 'exercise', 'exercises')}</p>
+              <p>{plural(stretches.length, 'stretch', 'stretches')}</p>
+            </>
+          )}
+        </Counts>
       </div>
     </button>
   )
 }
 
+// A card's icon: round, on its tint (`tile`, gradient classes). Cards you
+// open (plans, routines) pass `value` 0–1 for a ring around it that fills
+// as you go in `fill` (a stroke class), green once `done`, empty until you
+// start. Cards you add to leave it out: no ring, same size.
+export function CardIcon({ icon, tile, value = null, done = false, fill }) {
+  const r = 21
+  const length = 2 * Math.PI * r
+  return (
+    <div className="relative w-[46px] h-[46px] shrink-0 flex items-center justify-center">
+      {value !== null && (
+        <svg width="46" height="46" viewBox="0 0 46 46" className="absolute inset-0 -rotate-90" aria-hidden="true">
+          <circle cx="23" cy="23" r={r} fill="none" strokeWidth="3" className="stroke-stone-100" />
+          {value > 0 && (
+            <circle
+              cx="23" cy="23" r={r} fill="none" strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={length}
+              strokeDashoffset={length * (1 - value)}
+              className={`transition-all ${done ? 'stroke-emerald-400' : fill}`}
+            />
+          )}
+        </svg>
+      )}
+      <div className={`w-[34px] h-[34px] rounded-full bg-gradient-to-br ${tile} flex items-center justify-center`}>
+        <TileIcon id={icon} size={22} />
+      </div>
+    </div>
+  )
+}
+
+// Two short lines on a card's right: how far along, or what's in it.
+export function Counts({ children }) {
+  return <div className="shrink-0 text-right text-[13px] leading-snug text-stone-400 tabular-nums">{children}</div>
+}
+
+// "5/12" with the numbers stronger.
+export const Of = ({ n, of }) => <span className="font-semibold text-stone-500">{n}/{of}</span>
+
+// Every card's shell: 46px icon, then the rest, ~66px tall.
+export const CARD = 'w-full text-left rounded-2xl px-3.5 py-2.5 bg-white shadow-sm'
+
 export function ActivityCard({ activity, icon, count, detail, onAdd, onRemove, children }) {
   const active = count > 0
 
   return (
-    <div className="w-full rounded-2xl px-4 py-3.5 bg-white shadow-sm">
+    <div className={CARD}>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className={`w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br ${activity.tile} flex items-center justify-center shrink-0`}>
-            <TileIcon id={icon} />
-          </div>
+        <div className="flex items-center gap-3 min-w-0">
+          <CardIcon icon={icon} tile={activity.tile} />
           <div className="min-w-0">
             <p className="font-semibold text-stone-900 truncate">{activity.name}</p>
             <p className="text-sm text-stone-400 truncate">

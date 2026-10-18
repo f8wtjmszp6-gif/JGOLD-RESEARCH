@@ -4,11 +4,12 @@ import WeekStrip from '../week/WeekStrip'
 import DayBar from '../week/DayBar'
 import { dayLabel, inDayOrder } from '../../utils/days'
 import { ClassCard, RoutineCard, WorkoutCard, ActivityCard } from './cards'
-import { LineButton, CardioLine, StretchLine } from './lines'
+import { LineButton, Part, CardioLine, StretchLine } from './lines'
 import { LogClassSheet, AddCardioSheet, RestSheet, AddStretchSheet } from './logSheets'
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { FullBodyCard, FullBodySheet } from './fullBody'
+import { LineMenu } from './lineMenu'
 import { upNextOf } from '../../utils/upNext'
 
 // The homepage shows one group at a time, picked by these tabs. The tab you
@@ -33,8 +34,13 @@ function savedTab() {
 export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, dayFocus }) {
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
-  // The day tapped on the strip, shown in the bar at the bottom.
-  const [picked, setPicked] = useState(dayFocus?.day ?? null)
+  // The day tapped on the strip, shown in the bar under it: today to start.
+  // Changing weeks keeps the weekday, but not past today.
+  const [picked, setPicked] = useState(dayFocus?.day ?? new Date().getDay())
+  const toWeek = i => {
+    onAt(i)
+    if (weeks[i].live) setPicked(p => Math.min(p, new Date().getDay()))
+  }
   const upNext = store && upNextOf(store)
   function setTab(t) {
     setTabState(t)
@@ -51,18 +57,19 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   const sheet = opened?.at === at ? opened : null
   const open = (type, edit) => setSheet({ type, edit, at })
   const close = () => setSheet(null)
+  // Tapping a logged line asks what to do first (see LineMenu).
+  const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
-  const bar = picked !== null && <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={onAt} />
   const strip = (
-    <div className="shrink-0 px-5 pb-3">
-      <WeekStrip weeks={weeks} at={at} onAt={onAt} picked={picked} onPick={setPicked} />
+    <div className="shrink-0 px-5 pb-3 space-y-3">
+      <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} />
+      <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} />
     </div>
   )
   if (!store) return (
     <div className="h-full flex flex-col">
       {strip}
-      {bar}
-      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 ${picked === null ? 'pb-6' : 'pb-28'}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
         <OldWeek entry={entry} />
       </div>
     </div>
@@ -77,7 +84,6 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
     <div className="h-full flex flex-col">
       {/* The tabs stay put; only what's under them scrolls. */}
       {strip}
-      {bar}
       <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
         <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
           {TABS.map(([id, label]) => (
@@ -101,9 +107,9 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
         </button>
       </div>
 
-      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 ${picked === null ? 'pb-6' : 'pb-28'}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
         {tab === 'gym' && <>
-          <Section title="Workout plans">
+          <Section title="Workout plans" note="Each plan can be completed once a week">
             {/* The plan to do next goes first, with why. */}
             {[...GYM_ORDER].sort((a, b) => (b === upNext?.id) - (a === upNext?.id)).map(id => (
               <WorkoutCard
@@ -120,11 +126,11 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
 
           {/* For weeks the four won't fit: asks gym or home first. */}
           <Section title="Full body">
-            <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
+            <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} onEditSession={item => open('menu', item)} />
           </Section>
 
           <Section title="Gym class">
-            <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={edit => open('class', edit)} />
+            <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={e => menu('class', e)} />
           </Section>
         </>}
 
@@ -141,7 +147,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             >
               {walks.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => open('walk', e)} />)}
+                  {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => menu('walk', e)} />)}
                 </div>
               )}
             </ActivityCard>
@@ -155,7 +161,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             >
               {other.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('other', e)} />)}
+                  {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => menu('other', e)} />)}
                 </div>
               )}
             </ActivityCard>
@@ -170,7 +176,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             >
               {sports.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(sports).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => open('sport', e)} />)}
+                  {inDayOrder(sports).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => menu('sport', e)} />)}
                 </div>
               )}
             </ActivityCard>
@@ -179,8 +185,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
 
         {tab === 'stretch' && (
           <Section title="Stretching">
-            <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
-            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} />
+            <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} onEditSession={item => open('menu', item)} />
+            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} onEditSession={item => open('menu', item)} />
             <ActivityCard
               activity={OWN_STRETCH}
               icon="stretch"
@@ -191,7 +197,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             >
               {store.ownStretches.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => open('stretch', e)} />)}
+                  {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => menu('stretch', e)} />)}
                 </div>
               )}
             </ActivityCard>
@@ -211,9 +217,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
               {store.restDays.length > 0 && (
                 <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
                   {inDayOrder(store.restDays.map(at => ({ at }))).map(e => (
-                    <LineButton key={e.index} label={`${dayLabel(e.entry.at)} rest day`} onEdit={() => open('rest', e)}>
-                      <span className="w-12 font-semibold text-stone-600">{dayLabel(e.entry.at)}</span>
-                      <span className="text-stone-500">Rest day</span>
+                    <LineButton key={e.index} label={`${dayLabel(e.entry.at)} rest day`} day={dayLabel(e.entry.at)} onEdit={() => menu('rest', e)}>
+                      <Part kind="rest">Rest day</Part>
                     </LineButton>
                   ))}
                 </div>
@@ -230,6 +235,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'full' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
+      {sheet?.type === 'menu' && <LineMenu store={store} item={sheet.edit} onEdit={item => open(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={onOpenWorkout} onClose={close} />}
       {sheet?.type === 'rest' && <RestSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'sport' && <AddCardioSheet kind="sport" store={store} edit={sheet.edit} onClose={close} />}
@@ -289,10 +295,12 @@ const OTHER_CARDIO = {
   tile: 'from-cyan-50 to-cyan-100',
 }
 
-function Section({ title, children }) {
+// `note`: a short grey line under the title.
+function Section({ title, note, children }) {
   return (
     <section className="mb-6">
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium mb-2 px-1">{title}</p>
+      <p className={`text-xs text-stone-400 uppercase tracking-wider font-medium px-1 ${note ? 'mb-0.5' : 'mb-2'}`}>{title}</p>
+      {note && <p className="text-xs text-stone-400 mb-2 px-1">{note}</p>}
       <div className="space-y-2.5">{children}</div>
     </section>
   )

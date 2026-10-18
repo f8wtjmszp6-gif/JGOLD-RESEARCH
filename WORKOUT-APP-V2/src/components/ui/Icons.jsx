@@ -79,35 +79,6 @@ const PATHS = {
       <path d="M18.7 32l-.9 11h3.6l2.6-9.5 2.6 9.5h3.6l-.9-11" />
     </>
   ),
-  // A gym: a building with a dumbbell sign on the roof
-  fullGym: (
-    <>
-      <path d="M17 10.5h14" />
-      <rect x="13" y="7" width="4" height="7" rx="1.5" />
-      <rect x="31" y="7" width="4" height="7" rx="1.5" />
-      <path d="M7 18h34v21H7zM5 18h38" />
-      <path d="M20 39V30h8v9" />
-      <path d="M11 23h6v4h-6zM31 23h6v4h-6z" />
-    </>
-  ),
-  // House, for a full-body day at home
-  fullHome: (
-    <>
-      <path d="M7 23L24 9l17 14" />
-      <path d="M12 19v20h24V19" />
-      <path d="M21 39v-9h6v9" />
-    </>
-  ),
-  // House with a dumbbell, for a full-body day at home with dumbbells
-  fullHomeDb: (
-    <>
-      <path d="M7 23L24 9l17 14" />
-      <path d="M12 19v20h24V19" />
-      <path d="M19 31h10" />
-      <rect x="15" y="27" width="4" height="8" rx="1.5" />
-      <rect x="29" y="27" width="4" height="8" rx="1.5" />
-    </>
-  ),
   // Mountain and sun, for sports and hikes
   sport: (
     <>
@@ -141,9 +112,6 @@ const COLORS = {
   pull: 'text-red-600',
   legsPost: 'text-red-600',
   fullBody: 'text-orange-600',
-  fullGym: 'text-orange-600',
-  fullHome: 'text-orange-600',
-  fullHomeDb: 'text-orange-600',
   gym: 'text-red-600',
   class: 'text-violet-600',
   walk: 'text-emerald-600',
@@ -198,6 +166,17 @@ export function TypeIcon({ name, size = 22 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
       {TYPE_PATHS[name] ?? TYPE_PATHS.Other}
+    </svg>
+  )
+}
+
+// A small red dumbbell at the end of a logged line: it counted toward your
+// workouts goal. Only on things that sometimes don't (classes, cardio,
+// sports, stretching).
+export function WorkoutMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="text-red-500 shrink-0" aria-hidden="true">
+      <path d="M7 8v8M4 10v4M17 8v8M20 10v4M7 12h10" />
     </svg>
   )
 }
