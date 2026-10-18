@@ -501,10 +501,11 @@ function makeStore(state, update) {
   }
 
   // kind: 'walk', 'other' or 'sport'
-  function editCardio(kind, index, patch) {
+  // `keep`: a sport you typed in joins your list (false: just this once).
+  function editCardio(kind, index, patch, keep = true) {
     update(s => {
       const next = writeSessions(s, kind, sessionsOfKind(s, kind).map((x, i) => (i === index ? { ...x, ...patch } : x)))
-      return kind === 'sport' && patch.type ? rememberSport(next, patch.type) : next
+      return kind === 'sport' && patch.type && keep ? rememberSport(next, patch.type) : next
     })
   }
 
@@ -632,17 +633,50 @@ function makeStore(state, update) {
   // Logged like other cardio, with what you played or where you went.
   const sports = (state.cardio ?? []).filter(x => x.kind === 'sport')
 
-  function addSport(minutes, hard, at = nowIso(), type) {
-    update(s => rememberSport({
-      ...s,
-      cardio: [...(s.cardio ?? []), { kind: 'sport', minutes, hard, at, type }],
-      cardioSettings: { ...s.cardioSettings, sport: { minutes, hard, type } },
-    }, type))
+  // `keep` false: a one-off (an adventure course, say) is logged with its
+  // name but stays off your list, and the next sport doesn't start from it.
+  function addSport(minutes, hard, at = nowIso(), type, keep = true) {
+    update(s => {
+      const next = {
+        ...s,
+        cardio: [...(s.cardio ?? []), { kind: 'sport', minutes, hard, at, type }],
+        cardioSettings: { ...s.cardioSettings, sport: { minutes, hard, type: keep ? type : cardioSettingOf(s, 'sport').type } },
+      }
+      return keep ? rememberSport(next, type) : next
+    })
+  }
+
+  // Puts a sport you typed in on your list (once; any capitals).
+  function saveSport(name) {
+    update(s => rememberSport(s, name))
+  }
+
+  // Takes a sport you typed in off your list. Sessions logged with it stay.
+  function forgetSport(name) {
+    update(s => ({ ...s, sportNames: (s.sportNames ?? []).filter(x => x !== name) }))
   }
 
   function removeSport() {
     update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'sport') }))
   }
+
+  // Sports you typed in, each once and none that's already built in, whatever
+  // the capitals (older saves or a restored backup could have repeats).
+  const ownSports = (state.sportNames ?? []).filter((x, i, list) =>
+    !SPORTS.some(b => b.toLowerCase() === x.toLowerCase()) && list.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i)
+
+  // Sports on your list, the last one you logged first (this week, then saved
+  // weeks), for the sports picker's quick tiles.
+  const recentSports = (() => {
+    const names = [...SPORTS, ...ownSports]
+    const logged = [state.cardio ?? [], ...(state.history ?? []).map(e => e.details?.cardio ?? [])]
+      .flat()
+      .filter(x => x.kind === 'sport' && x.type)
+      .sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''))
+      .map(x => names.find(n => n.toLowerCase() === x.type.toLowerCase()))
+      .filter(Boolean)
+    return [...new Set(logged)]
+  })()
 
   // This week, computed the same way it's saved to history on reset.
   const week = weekOf(state)
@@ -802,7 +836,11 @@ function makeStore(state, update) {
     sports,
     addSport,
     removeSport,
-    sportNames: [...SPORTS, ...(state.sportNames ?? [])],
+    sportNames: [...SPORTS, ...ownSports],
+    recentSports,
+    ownSports,
+    saveSport,
+    forgetSport,
     walks,
     addWalk,
     getCardioMinutes,

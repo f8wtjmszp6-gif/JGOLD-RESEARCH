@@ -6,6 +6,7 @@ import SettingsDrawer from './components/SettingsDrawer'
 import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
 import TrendsScreen from './components/trends/Trends'
+import CalendarSheet from './components/week/CalendarSheet'
 import WorkoutDetail from './components/workout/WorkoutDetail'
 import { useStore } from './store/useStore'
 import { calendarWeekOf } from './store/weeks'
@@ -17,6 +18,8 @@ export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
   const [view, setView] = useState(null) // 'trends' | null
   const [settings, setSettings] = useState(false)
+  const [calendar, setCalendar] = useState(false)
+  const [dayFocus, setDayFocus] = useState(null) // the day picked in the calendar
   const store = useStore()
 
   // The week showing, by its Sunday; null is this week. A saved week shows
@@ -77,13 +80,14 @@ export default function App() {
       ) : (
         <>
           {past ? (
-            <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onThisWeek={() => setWeekStart(null)} />
+            <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onThisWeek={() => setWeekStart(null)} onCalendar={() => setCalendar(true)} />
           ) : (
             <Header
               onSettings={() => setSettings(true)}
               onBell={openBell}
               unread={unread.length > 0}
               onTrends={() => setView('trends')}
+              onCalendar={() => setCalendar(true)}
               week={store.week}
               stretch={store.stretchWeek}
               cardio={store.cardioWeek}
@@ -92,24 +96,38 @@ export default function App() {
           )}
           <div className="flex-1 min-h-0 overflow-hidden">
             <Home
+              key={dayFocus?.n ?? 0}
               store={week}
               entry={entry}
               weeks={weeks}
               at={at}
               onAt={i => setWeekStart(weeks[i].live ? null : weeks[i].weekStart)}
               onOpenWorkout={setWorkoutId}
+              dayFocus={dayFocus}
             />
           </div>
         </>
       )}
 
+      {calendar && (
+        <CalendarSheet
+          weeks={weeks}
+          at={at}
+          onPick={(w, day) => {
+            setWeekStart(w.live ? null : w.weekStart)
+            setDayFocus(f => ({ day, n: (f?.n ?? 0) + 1 }))
+            setCalendar(false)
+          }}
+          onClose={() => setCalendar(false)}
+        />
+      )}
       {settings && <SettingsDrawer store={store} onClose={() => setSettings(false)} />}
       {bell && <NotificationsSheet notes={notes} fresh={bell.fresh} onAction={act} onDismiss={store.dismissNote} onClose={() => setBell(null)} />}
     </div>
   )
 }
 
-function Header({ onSettings, onBell, unread, onTrends, week, stretch, cardio, store }) {
+function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretch, cardio, store }) {
   const logged = { class: store.classes.length, cardio: store.otherCardio.length + store.sports.length }
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
@@ -123,6 +141,8 @@ function Header({ onSettings, onBell, unread, onTrends, week, stretch, cardio, s
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Pick any day to jump to its week. */}
+          <HeaderBtn onClick={onCalendar} label="Jump to a week"><CalendarIcon /></HeaderBtn>
           <HeaderBtn onClick={onTrends} label="Trends">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 19h16" />
@@ -156,7 +176,7 @@ function Header({ onSettings, onBell, unread, onTrends, week, stretch, cardio, s
 // A saved week: its dates, how long ago, and a way back to this week. Its card
 // shows the week as it ended, with what was left to go. Weeks saved before
 // their details were kept show their totals only.
-function PastHeader({ weekStart, entry, week, goals, onThisWeek }) {
+function PastHeader({ weekStart, entry, week, goals, onThisWeek, onCalendar }) {
   return (
     <div className="shrink-0 px-5 pt-6 pb-4">
       <div className="flex items-center justify-between gap-3">
@@ -164,9 +184,12 @@ function PastHeader({ weekStart, entry, week, goals, onThisWeek }) {
           <h1 className="text-[30px] leading-[1.1] font-bold text-stone-900 tracking-tight whitespace-nowrap">{weekRange(weekStart)}</h1>
           <p className="text-sm text-stone-500 mt-0.5">{weeksAgo(weekStart)}</p>
         </div>
-        <button onClick={onThisWeek} className="shrink-0 h-9 px-3.5 rounded-full bg-accent-50 text-accent-500 text-sm font-semibold active:bg-accent-100">
-          This week ›
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <HeaderBtn onClick={onCalendar} label="Jump to a week"><CalendarIcon /></HeaderBtn>
+          <button onClick={onThisWeek} className="h-9 px-3.5 rounded-full bg-accent-50 text-accent-500 text-sm font-semibold active:bg-accent-100">
+            This week ›
+          </button>
+        </div>
       </div>
       <div className="mt-4">
         {week ? (
@@ -176,6 +199,15 @@ function PastHeader({ weekStart, entry, week, goals, onThisWeek }) {
         )}
       </div>
     </div>
+  )
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </svg>
   )
 }
 

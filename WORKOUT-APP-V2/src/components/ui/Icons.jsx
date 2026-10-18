@@ -190,6 +190,7 @@ const TYPE_PATHS = {
   Soccer: <><circle cx="12" cy="12" r="9" /><path d="M12 8l3.5 2.5-1.3 4h-4.4l-1.3-4zM12 8V3.5M15.5 10.5l4.5-1.5M14.2 14.5l2.8 4M9.8 14.5L7 18.5M8.5 10.5L4 9" /></>,
   Golf: <><path d="M9 21V3l8 4-8 4" /><path d="M4 21h12" /></>,
   Ski: <><path d="M3 18l18-7M5 21l16-6" /><circle cx="14" cy="4" r="2" /><path d="M10 13l2-5 4 3" /></>,
+  Volleyball: <><circle cx="12" cy="12" r="9" /><path d="M12 3c-1.5 4-.5 7.5 3 9.5M3.6 15.5c3.8-1.6 7.5-1.4 10.4 1.5M12 12C9.5 9 6 8.2 3.2 9.6" /></>,
   Other: <><circle cx="12" cy="12" r="9" /><path d="M8 12h.01M12 12h.01M16 12h.01" strokeWidth="3" /></>,
 }
 

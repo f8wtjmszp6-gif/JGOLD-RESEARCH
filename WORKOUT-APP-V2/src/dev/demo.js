@@ -97,7 +97,7 @@ function weekOf(s, sunday, k, { skip = [], upTo = 6 } = {}) {
     restLog,
     stretchLog,
     stretchExtra: stretchLog.length,
-    sportNames: ['Tennis'],
+    sportNames: ['Spikeball', 'Climbing'],
     lastBackupAt: new Date().toISOString(),
   }
 }

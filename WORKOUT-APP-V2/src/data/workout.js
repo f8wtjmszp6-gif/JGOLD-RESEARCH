@@ -148,7 +148,7 @@ export const CARDIO_DEFAULTS = {
 // week strip and past weeks. Sessions logged before this have none.
 export const CARDIO_TYPES = ['Run', 'Bike', 'Swim', 'Row', 'Elliptical', 'Stairs', 'Other']
 // Sports and hikes; a name typed under Other joins this list for next time.
-export const SPORTS = ['Hike', 'Pickleball', 'Tennis', 'Basketball', 'Soccer', 'Golf', 'Ski']
+export const SPORTS = ['Hike', 'Pickleball', 'Tennis', 'Basketball', 'Soccer', 'Golf', 'Ski', 'Volleyball']
 
 // Which body regions each workout trains, per view, for the home screen's
 // Muscles this week figure. Pushing works the front of the upper body and

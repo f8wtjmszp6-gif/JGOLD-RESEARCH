@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE } from '../../data/workout'
 import WeekStrip from '../week/WeekStrip'
+import DayBar from '../week/DayBar'
 import { dayLabel, inDayOrder } from '../../utils/days'
 import { ClassCard, RoutineCard, WorkoutCard, ActivityCard } from './cards'
 import { LineButton, CardioLine, StretchLine } from './lines'
@@ -10,13 +11,15 @@ import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { FullBodyCard, FullBodySheet } from './fullBody'
 import { upNextOf } from '../../utils/upNext'
 
-// The homepage shows one group at a time, picked by these tabs. The last tab
-// you used is remembered on this device.
+// The homepage shows one group at a time, picked by these tabs. The tab you
+// pick holds while the app is open (in the background too); starting the app
+// fresh opens on Gym.
 const TABS = [['gym', 'Gym'], ['cardio', 'Cardio'], ['stretch', 'Stretch'], ['rest', 'Rest']]
 const TAB_KEY = 'workout-v2-home-tab'
 function savedTab() {
   try {
-    const t = localStorage.getItem(TAB_KEY)
+    localStorage.removeItem(TAB_KEY) // where older builds kept it for good
+    const t = sessionStorage.getItem(TAB_KEY)
     return TABS.some(([id]) => id === t) ? t : 'gym'
   } catch {
     return 'gym'
@@ -25,14 +28,18 @@ function savedTab() {
 
 // `store` is the week showing (this one or a saved one), or null for a week
 // saved before weeks kept their details: then `entry` has its totals only.
-export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
+// `dayFocus`: { day } from the calendar, to start with that day open (App
+// remounts Home for each pick).
+export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, dayFocus }) {
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
+  // The day tapped on the strip, shown in the bar at the bottom.
+  const [picked, setPicked] = useState(dayFocus?.day ?? null)
   const upNext = store && upNextOf(store)
   function setTab(t) {
     setTabState(t)
     try {
-      localStorage.setItem(TAB_KEY, t)
+      sessionStorage.setItem(TAB_KEY, t)
     } catch {
       // Private browsing: the tab just isn't remembered.
     }
@@ -45,15 +52,17 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
   const open = (type, edit) => setSheet({ type, edit, at })
   const close = () => setSheet(null)
   const byId = id => activities.find(a => a.id === id)
+  const bar = picked !== null && <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={onAt} />
   const strip = (
     <div className="shrink-0 px-5 pb-3">
-      <WeekStrip weeks={weeks} at={at} onAt={onAt} />
+      <WeekStrip weeks={weeks} at={at} onAt={onAt} picked={picked} onPick={setPicked} />
     </div>
   )
   if (!store) return (
     <div className="h-full flex flex-col">
       {strip}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6">
+      {bar}
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 ${picked === null ? 'pb-6' : 'pb-28'}`}>
         <OldWeek entry={entry} />
       </div>
     </div>
@@ -68,6 +77,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
     <div className="h-full flex flex-col">
       {/* The tabs stay put; only what's under them scrolls. */}
       {strip}
+      {bar}
       <div className="shrink-0 px-5 pb-3 flex items-center gap-2">
         <div className="flex-1 bg-stone-100 rounded-xl p-1 flex" role="tablist">
           {TABS.map(([id, label]) => (
@@ -91,7 +101,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6">
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 ${picked === null ? 'pb-6' : 'pb-28'}`}>
         {tab === 'gym' && <>
           <Section title="Workout plans">
             {/* The plan to do next goes first, with why. */}

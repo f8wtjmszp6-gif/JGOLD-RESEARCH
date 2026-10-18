@@ -1,10 +1,7 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import { TileIcon } from '../ui/Icons'
+import { useLayoutEffect, useRef } from 'react'
 import { weekDays, sameDay } from '../../utils/days'
-import { TABS, TAB_DOT, TILE, tabsOf } from '../../utils/dayKinds'
+import { TABS, TAB_DOT, tabsOf } from '../../utils/dayKinds'
 
-// A class's tags, colored like the ones on its card.
-const TAG = { cardio: 'bg-emerald-50 text-emerald-700', strength: 'bg-orange-50 text-orange-700', stretch: 'bg-teal-50 text-teal-700' }
 
 const firstDay = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
@@ -12,18 +9,15 @@ const firstDay = weekStart => {
 }
 
 // Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
-// Each date has a dot for everything done that day. Tap a day to list it;
-// tap it again or ✕ to close. `weeks` is oldest first, ending with this week;
-// `at` is the one showing.
-export default function WeekStrip({ weeks, at, onAt }) {
-  const [picked, setPicked] = useState(null)
+// Each date has a dot for everything done that day. Tap a day to show it in
+// the bar at the bottom (see DayBar); tap it again to close. `weeks` is
+// oldest first, ending with this week; `at` is the one showing; `picked` is
+// the day open (0 = Sunday) or null.
+export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
+  const setPicked = onPick
   const pager = useRef(null)
   const settle = useRef(null)
-  const now = new Date()
   const week = weeks[at]
-  const days = weekDays(firstDay(week.weekStart))
-  const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
-  const shown = picked === null ? null : days[picked]
 
   // Keeps the strip on the showing week when it's changed from outside (This
   // week ›, a new week starting); smooth unless it's the first time.
@@ -105,34 +99,6 @@ export default function WeekStrip({ weeks, at, onAt }) {
         </div>
       )}
 
-      {shown && (
-        <div className="bg-white rounded-2xl shadow-sm px-4 py-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-stone-500">{shown.toLocaleDateString('en-US', { weekday: 'long', month: week.live ? undefined : 'short', day: week.live ? undefined : 'numeric' })}</p>
-            <button onClick={() => setPicked(null)} aria-label="Close" className="w-7 h-7 -mr-1.5 rounded-lg text-stone-400 flex items-center justify-center active:bg-stone-100">✕</button>
-          </div>
-          {(week.dayLog?.[picked] ?? []).length === 0 ? (
-            <p className="text-sm text-stone-400">{!week.dayLog ? 'Not recorded' : picked > today ? 'Nothing yet' : 'Nothing logged'}</p>
-          ) : (
-            week.dayLog[picked].map((x, j) => (
-              <div key={j} className={`flex gap-2.5 text-sm text-stone-900 ${x.tags?.length ? 'items-start' : 'items-center'}`}>
-                <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TILE[x.kind]}`}>
-                  <TileIcon id={x.icon} size={18} />
-                </span>
-                {/* A class's tags go on their own line under its name. */}
-                <span className="min-w-0 flex-1">
-                  <span className="block">{x.label}</span>
-                  {x.tags?.length > 0 && (
-                    <span className="flex flex-wrap gap-1.5 mt-1">
-                      {x.tags.map(t => <span key={t.kind} className={`text-xs font-semibold px-2 py-0.5 rounded-md ${TAG[t.kind]}`}>{t.text}</span>)}
-                    </span>
-                  )}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
     </div>
   )
 }

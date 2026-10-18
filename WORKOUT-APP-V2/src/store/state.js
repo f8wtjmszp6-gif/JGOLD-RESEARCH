@@ -173,38 +173,57 @@ export function writeChecks(s, workoutId, fn) {
 // saved have no day, so they don't show.
 export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
   const items = []
-  const add = (at, kind, icon, label, tags) => at && items.push({ at: new Date(at), kind, icon, label, tags })
+  const add = (at, item) => at && items.push({ at: new Date(at), tags: [], ...item })
+  const effort = sets => (sets.every(x => x.hard) ? ' hard' : sets.every(x => !x.hard) ? ' easy' : '')
   for (const id of PLAN_IDS) {
-    add(s.checks?.[id]?.at, FULL_BODY_BY_ID[id] ? 'full' : 'plan', id, workouts[id].short)
-    add(s.checks?.[id]?.stretchedAt, 'stretch', 'stretch', `Stretched · ${workouts[id].short}`)
-    // A ticked warm-up is cardio; ones ticked before warm-ups kept their time
-    // go on the plan's day.
+    const c = s.checks?.[id]
+    let done = 0, total = 0
+    for (const ex of exercisesOf(s, id)) {
+      const sets = weekSetsOf(s, id, ex)
+      total += sets.length
+      done += sets.filter(x => x.done).length
+    }
+    add(c?.at, { kind: FULL_BODY_BY_ID[id] ? 'full' : 'plan', icon: id, label: workouts[id].short, detail: `${done}/${total} sets${total && done >= total ? ' · finished' : ''}` })
+    // Its stretches and warm-up go under it on its day (see below). A warm-up
+    // ticked before warm-ups kept their time goes on the plan's day.
+    const n = stretchesOf(s, id).length
+    add(c?.stretchedAt, { kind: 'stretch', icon: 'stretch', label: 'Stretches', detail: workouts[id].short, of: id, tag: { kind: 'stretch', text: `Stretches · ${n}/${n}` } })
     const warmup = warmupOf(s, id)
-    if (warmup.on && s.checks?.[id]?.warmup) {
-      const minutes = warmup.sets.reduce((n, x) => n + x.minutes, 0)
-      add(s.checks[id].warmedAt ?? s.checks[id].at, 'cardio', 'cardio', `Warm-up · ${workouts[id].short} · ${minutes} min`)
+    if (warmup.on && c?.warmup) {
+      const minutes = warmup.sets.reduce((m, x) => m + x.minutes, 0)
+      add(c.warmedAt ?? c.at, { kind: 'cardio', icon: 'cardio', label: 'Warm-up', detail: `${minutes} min · ${workouts[id].short}`, of: id, tag: { kind: 'cardio', text: `Warm-up · ${minutes} min${effort(warmup.sets)}` } })
     }
   }
-  add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, 'stretch', 'stretch', STRETCH_ROUTINE.name)
-  for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, 'stretch', 'stretch', `Cool Down · ${COOL_DOWN_BY_ID[c.id].label}`)
+  add(s.checks?.[STRETCH_ROUTINE.id]?.stretchedAt, { kind: 'stretch', icon: 'stretch', label: STRETCH_ROUTINE.name, detail: `${stretchesOf(s, STRETCH_ROUTINE.id).length} stretches` })
+  for (const c of COOL_DOWNS) add(s.checks?.[c.id]?.stretchedAt, { kind: 'stretch', icon: 'stretch', label: `Cool Down · ${COOL_DOWN_BY_ID[c.id].label}`, detail: `${stretchesOf(s, c.id).length} stretches` })
+  // A class lists what it was, a short line for each part.
   for (const c of classesOf(s)) {
     const areas = c.strength ? c.areas ?? [] : []
-    add(c.at, 'class', 'class', 'Class', [
-      c.cardio && { kind: 'cardio', text: `${c.minutes} min ${c.hard ? 'hard' : 'easy'} cardio` },
-      areas.length > 0 && { kind: 'strength', text: areas.length === CLASS_AREAS.length ? 'Full body' : CLASS_AREAS.filter(a => areas.includes(a.id)).map(a => a.label).join(' · ') },
-      c.stretch && { kind: 'stretch', text: `Stretch${c.stretchMinutes ? ` ${c.stretchMinutes} min` : ''}` },
-    ].filter(Boolean))
+    add(c.at, { kind: 'class', icon: 'class', label: 'Class', tags: [
+      c.cardio && { kind: 'cardio', text: `Cardio · ${c.minutes} min ${c.hard ? 'hard' : 'easy'}` },
+      areas.length > 0 && { kind: 'strength', text: `Strength · ${areas.length === CLASS_AREAS.length ? 'full body' : CLASS_AREAS.filter(a => areas.includes(a.id)).map(a => (a.id === 'core' ? 'core' : `${a.label.toLowerCase()} body`)).join(' & ')}` },
+      c.stretch && { kind: 'stretch', text: `Stretch${c.stretchMinutes ? ` · ${c.stretchMinutes} min` : ''}` },
+    ].filter(Boolean) })
   }
   for (const x of s.cardio ?? []) {
     const length = `${x.minutes} min${x.hard ? ' hard' : ''}`
-    if (x.kind === 'walk') add(x.at, 'walk', 'walk', `Walk · ${x.minutes} min`)
-    else if (x.kind === 'sport') add(x.at, 'sport', 'sport', `${x.type ?? 'Sport'} · ${length}`)
-    else add(x.at, 'cardio', 'cardio', `${x.type && x.type !== 'Other' ? x.type : 'Cardio'} · ${length}`)
+    if (x.kind === 'walk') add(x.at, { kind: 'walk', icon: 'walk', label: 'Walk', detail: length })
+    else if (x.kind === 'sport') add(x.at, { kind: 'sport', icon: 'sport', label: x.type ?? 'Sport', detail: length })
+    else add(x.at, { kind: 'cardio', icon: 'cardio', label: x.type && x.type !== 'Other' ? x.type : 'Cardio', detail: length })
   }
-  for (const x of ownStretchesOf(s)) add(x.at, 'stretch', 'stretch', x.minutes ? `Stretched · ${x.minutes} min` : 'Stretched')
-  for (const at of restDaysOf(s)) add(at, 'rest', 'rest', 'Rest day')
+  for (const x of ownStretchesOf(s)) add(x.at, { kind: 'stretch', icon: 'stretch', label: 'Stretching', detail: x.minutes ? `${x.minutes} min` : undefined })
+  for (const at of restDaysOf(s)) add(at, { kind: 'rest', icon: 'rest', label: 'Rest day' })
   items.sort((a, b) => a.at - b.at)
-  return weekDays(now).map(day => items.filter(x => sameDay(x.at, day)).map(({ kind, icon, label, tags }) => ({ kind, icon, label, tags })))
+  return weekDays(now).map(day => {
+    const list = items.filter(x => sameDay(x.at, day))
+    // A plan's warm-up and stretches sit under it when it's the same day.
+    const kept = list.filter(x => {
+      const plan = x.of && list.find(p => p.icon === x.of && !p.of)
+      if (plan) plan.tags = [...plan.tags, x.tag]
+      return !plan
+    })
+    return kept.map(({ kind, icon, label, detail, tags }) => ({ kind, icon, label, detail, tags }))
+  })
 }
 
 export function writeTicks(s, workoutId, exercise, fn) {
