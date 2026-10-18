@@ -69,7 +69,8 @@ export function RoutineCard({ store, onOpen }) {
 // Under the name: what's in the plan until you start it, then how far along
 // you are. Both counts follow the plan as you add or remove exercises and
 // stretches.
-export function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpen }) {
+// `upNext`: this is the plan to do next, marked over its name.
+export function WorkoutCard({ workout, progress, stretches, stretchesDone, upNext, onOpen }) {
   const { done, total, exercises } = progress
   const complete = total > 0 && done === total
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
@@ -81,7 +82,7 @@ export function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpe
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98]"
+      className={`w-full text-left rounded-2xl px-4 py-3.5 bg-white shadow-sm transition-all active:scale-[0.98] ${upNext ? 'ring-1 ring-red-200' : ''}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
@@ -89,6 +90,9 @@ export function WorkoutCard({ workout, progress, stretches, stretchesDone, onOpe
             <TileIcon id={workout.id} />
           </div>
           <div className="min-w-0">
+          {upNext && (
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Up next</p>
+          )}
           <p className="font-semibold text-stone-900">
             {workout.short}
             {complete && <span className="text-emerald-600 ml-1.5">✓</span>}

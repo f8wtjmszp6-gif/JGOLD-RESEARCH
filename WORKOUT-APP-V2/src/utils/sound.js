@@ -11,6 +11,13 @@ export function setSoundMode(m) {
   mode = m
 }
 
+// How loud the beeps are, 0–1 (Settings → Timers → Volume), on top of the
+// phone's own volume.
+let level = 1
+export function setVolume(v) {
+  level = v
+}
+
 export function unlockAudio() {
   try {
     // Safari 17+; ignored elsewhere.
@@ -22,15 +29,22 @@ export function unlockAudio() {
   }
 }
 
+// A beep can't go past full scale, so loudness comes from the sound itself:
+// a square wave (brighter, so it carries over music and gym noise) with its
+// harshest top end filtered off, peaking near full scale at 100%.
 function tone(freq, start, length, volume) {
   const osc = ctx.createOscillator()
+  const soften = ctx.createBiquadFilter()
   const gain = ctx.createGain()
-  osc.connect(gain)
+  osc.connect(soften)
+  soften.connect(gain)
   gain.connect(ctx.destination)
-  osc.type = 'sine'
+  osc.type = 'square'
+  soften.type = 'lowpass'
+  soften.frequency.setValueAtTime(4000, start)
   osc.frequency.setValueAtTime(freq, start)
   gain.gain.setValueAtTime(0.0001, start)
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.02)
+  gain.gain.exponentialRampToValueAtTime(Math.max(volume * level, 0.0001), start + 0.02)
   gain.gain.exponentialRampToValueAtTime(0.0001, start + length)
   osc.start(start)
   osc.stop(start + length)
@@ -40,7 +54,7 @@ function tone(freq, start, length, volume) {
 export function playTick() {
   try {
     unlockAudio()
-    tone(660, ctx.currentTime, 0.12, 0.35)
+    tone(660, ctx.currentTime, 0.12, 0.5)
   } catch {
     // audio not supported
   }
@@ -50,7 +64,7 @@ export function playTick() {
 export function playGo() {
   try {
     unlockAudio()
-    tone(988, ctx.currentTime, 0.35, 0.6)
+    tone(988, ctx.currentTime, 0.35, 0.8)
   } catch {
     // audio not supported
   }
@@ -61,9 +75,9 @@ export function playBeep() {
   try {
     unlockAudio()
     const t = ctx.currentTime
-    tone(784, t, 0.25, 0.7)
-    tone(988, t + 0.18, 0.25, 0.7)
-    tone(1319, t + 0.36, 0.5, 0.7)
+    tone(784, t, 0.25, 0.9)
+    tone(988, t + 0.18, 0.25, 0.9)
+    tone(1319, t + 0.36, 0.5, 0.9)
   } catch {
     // audio not supported
   }

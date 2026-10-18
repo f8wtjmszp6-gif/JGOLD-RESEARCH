@@ -5,13 +5,13 @@ import WeekCard from './components/week/WeekCard'
 import SettingsDrawer from './components/SettingsDrawer'
 import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
-import TrendsScreen from './components/Trends'
+import TrendsScreen from './components/trends/Trends'
 import WorkoutDetail from './components/workout/WorkoutDetail'
 import { useStore } from './store/useStore'
 import { calendarWeekOf } from './store/weeks'
 import { weekDay } from './utils/goal'
 import { weekRange, weeksAgo } from './utils/days'
-import { setSoundMode } from './utils/sound'
+import { setSoundMode, setVolume } from './utils/sound'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
@@ -43,10 +43,12 @@ export default function App() {
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings(true)
     if (n.run === 'trends') setView('trends')
+    if (n.run === 'plan') { setWeekStart(null); setWorkoutId(n.plan) }
   }
 
   // Timer beeps follow the Sound setting.
   useEffect(() => setSoundMode(store.timer.sound), [store.timer.sound])
+  useEffect(() => setVolume(store.timer.volume / 100), [store.timer.volume])
 
   // Coming back to the app goes back to this week, unless a workout is open.
   useEffect(() => {

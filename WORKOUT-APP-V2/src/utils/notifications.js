@@ -3,6 +3,8 @@ import { weekDays, weekRange } from './days'
 import { backupAge } from './backup'
 import { metric } from './lifts'
 import { EXERCISE_BY_ID } from '../data/exercises'
+import { workouts } from '../data/workout'
+import { upNextOf } from './upNext'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
@@ -88,6 +90,20 @@ export function notificationsOf(store, now = new Date()) {
       action: 'View last week',
       run: 'week',
       weekStart: dayKey(lastSunday),
+    })
+  }
+  // The plan last week missed, until you start it.
+  const next = upNextOf(store, now)
+  if (next?.missed) {
+    const name = workouts[next.id].short
+    notes.push({
+      id: `next:${week}:${next.id}`,
+      icon: 'next',
+      title: `Start with ${name}`,
+      body: `You ${next.reason === 'Skipped last week' ? 'skipped it' : 'didn’t finish it'} last week, so it’s up next.`,
+      action: `Open ${name}`,
+      run: 'plan',
+      plan: next.id,
     })
   }
   if (backupDue(store.lastBackupAt)) {

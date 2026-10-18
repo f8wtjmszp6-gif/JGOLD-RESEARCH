@@ -3,6 +3,7 @@ import { useDragToClose } from '../hooks/useDragToClose'
 import { GOAL_SETTINGS } from '../data/workout'
 import { Segmented, StepperRow } from './ui/controls'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
+import { playBeep, setVolume } from '../utils/sound'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend), timers,
@@ -75,6 +76,32 @@ function TimerSettings({ timer, onChange }) {
         onChange={sound => onChange({ sound })}
       />
       <p className="text-xs text-stone-500 leading-relaxed">{SOUND_NOTES[timer.sound]}</p>
+      {/* How loud the beeps are; Test plays the finish beep at that level. */}
+      <div className="pt-3 border-t border-stone-200/70 space-y-2">
+        <div className="flex items-center justify-between">
+          <label htmlFor="timer-volume" className="text-base text-stone-600">Volume</label>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-stone-900 tabular-nums w-11 text-right">{timer.volume === 0 ? 'Off' : `${timer.volume}%`}</span>
+            <button
+              onClick={() => { setVolume(timer.volume / 100); playBeep() }}
+              className="px-3 py-1.5 rounded-lg bg-white text-sm font-medium text-accent-500 shadow-sm active:bg-stone-100"
+            >
+              Test
+            </button>
+          </div>
+        </div>
+        <input
+          id="timer-volume"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value={timer.volume}
+          onChange={e => onChange({ volume: Number(e.target.value) })}
+          className="w-full accent-accent-500"
+        />
+        <p className="text-xs text-stone-500 leading-relaxed">On top of your phone’s volume, so turn the phone up too if it’s quiet.</p>
+      </div>
       <div className="pt-3 border-t border-stone-200/70 space-y-2">
         <StepperRow
           label="Get-ready time"

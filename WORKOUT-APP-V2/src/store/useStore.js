@@ -559,6 +559,13 @@ function makeStore(state, update) {
     })
   }
 
+  // A week's cardio sessions ({ kind, minutes, hard, type? }) for Trends:
+  // this week's, or a saved week's when it kept its details (else null).
+  function cardioLogOf(entry) {
+    if (entry.live) return cardioSessionsOf(state)
+    return entry.details ? cardioSessionsOf(weekStateOf(state, entry)) : null
+  }
+
   // Which rest day falls on the day of `at`, or -1 if none does.
   function restIndexOn(at) {
     const day = new Date(at)
@@ -770,6 +777,7 @@ function makeStore(state, update) {
     editRest,
     deleteRest,
     restIndexOn,
+    cardioLogOf,
     setPlanDay,
     stampsOf,
     dayLog: dayLogOf(state),

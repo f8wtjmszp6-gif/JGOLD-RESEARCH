@@ -1,12 +1,20 @@
-import { useRef, useState } from 'react'
-import { useDragToClose } from '../hooks/useDragToClose'
-import { workouts, GYM_ORDER, PLAN_IDS, MUSCLE_GROUPS } from '../data/workout'
-import { calendarWeekOf } from '../store/weeks'
-import { goalLevel } from '../utils/goal'
-import { EXERCISE_BANK } from '../data/exercises'
-import { metric } from '../utils/lifts'
+import { Fragment, useRef, useState } from 'react'
+import { useDragToClose } from '../../hooks/useDragToClose'
+import { workouts, GYM_ORDER } from '../../data/workout'
+import { calendarWeekOf } from '../../store/weeks'
+import { goalLevel } from '../../utils/goal'
+import { EXERCISE_BANK, EXERCISE_BY_ID } from '../../data/exercises'
+import { metric } from '../../utils/lifts'
+import CardioTrends from './CardioTrends'
 
 const WEEKS = 12
+
+// Strength tabs: each body area and the bank's muscle groups in it.
+const AREAS = [
+  ['upper', 'Upper', ['chest', 'back', 'shoulders', 'arms']],
+  ['legs', 'Legs', ['legs']],
+  ['core', 'Core', ['core']],
+]
 
 const DAY = 86400000
 
@@ -15,16 +23,17 @@ const toDate = key => { const [y, m, d] = key.split('-').map(Number); return new
 const toKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-// The last 12 calendar weeks up to this one (so far), oldest first. A week
-// with nothing saved is a gap (null), so the grid keeps real time.
-function lastWeeks(history, current) {
+// The last 12 calendar weeks up to this one (so far), oldest first, or `count`
+// of them. A week with nothing saved is a gap (null), so the grid keeps real
+// time; weeks from before anything was saved are left off unless `all`.
+function lastWeeks(history, current, count = WEEKS, all = false) {
   const byWeek = Object.fromEntries([...history, current].map(w => [calendarWeekOf(w), w]))
   const newest = toDate(current.weekStart)
-  return Array.from({ length: WEEKS }, (_, i) => {
-    const d = new Date(newest.getTime() - (WEEKS - 1 - i) * 7 * DAY)
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(newest.getTime() - (count - 1 - i) * 7 * DAY)
     d.setHours(12)
     return { start: d, entry: byWeek[toKey(d)] ?? null }
-  }).filter((w, i, all) => w.entry || all.slice(0, i).some(x => x.entry))
+  }).filter((w, i, list) => all || w.entry || list.slice(0, i).some(x => x.entry))
 }
 
 
@@ -42,65 +51,96 @@ export default function TrendsScreen({ store, onBack }) {
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Trends</h1>
         <p className="text-stone-400 text-sm mt-1">Updates as you go, this week included</p>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 pb-6">
-        <Trends store={store} />
-      </div>
+      <Trends store={store} />
     </div>
   )
 }
 
 function Trends({ store }) {
   const weeks = lastWeeks(store.history, store.current)
-  const [group, setGroup] = useState(MUSCLE_GROUPS[0])
+  const [view, setView] = useState('strength')
+  const [tabId, setTabId] = useState('upper')
   const [open, setOpen] = useState(null) // exercise shown in the detail sheet
-  // A group's charts: exercises from the bank that are in one of your
-  // workouts now, or that you've done in any week.
-  const inWorkouts = new Set(PLAN_IDS.flatMap(id => store.getExercises(id).map(x => x.id)))
+  // Lifts by body area: upper body (chest, back, shoulders, arms), legs and
+  // core. Only lifts with sets saved show, in the bank's order.
   const done = new Set([store.current, ...store.history].flatMap(w => Object.keys(w.lifts ?? {})))
-  const shown = EXERCISE_BANK.filter(x => x.group === group.id && (inWorkouts.has(x.id) || done.has(x.id)))
+  const tabs = AREAS.map(([id, label, groups]) => ({
+    id,
+    label,
+    name: label,
+    ids: EXERCISE_BANK.filter(x => done.has(x.id) && groups.includes(x.group)).map(x => x.id),
+  }))
+  const tab = tabs.find(t => t.id === tabId) ?? tabs[0]
+  const shown = tab.ids.map(id => EXERCISE_BY_ID[id])
 
   return (
     <>
-      <WeekGrid weeks={weeks} goals={store.goals} />
+      {/* The goal grid and the switch stay put; what's under them scrolls. */}
+      <div className="px-5 shrink-0 bg-stone-50">
+      <WeekGrid weeks={lastWeeks(store.history, store.current, WEEKS + 1, true)} goals={store.goals} />
 
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium mt-5 mb-2 px-1">Strength</p>
-      <div className="bg-stone-100 rounded-xl p-1 grid grid-cols-6 mb-2.5">
-        {MUSCLE_GROUPS.map(g => (
+      {/* Strength or cardio, one at a time. */}
+      <div className="bg-stone-100 rounded-xl p-1 flex mt-4 mb-3" role="tablist" aria-label="Trends for">
+        {[['strength', 'Strength'], ['cardio', 'Cardio']].map(([id, label]) => (
           <button
-            key={g.id}
-            onClick={() => setGroup(g)}
-            className={`py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-              group.id === g.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'
-            }`}
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${view === id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}
           >
-            {g.label}
+            {label}
           </button>
         ))}
       </div>
-      {/* Fill the space: one or two exercises stack full width; an odd one
-          out at the end of a longer list spans both columns. */}
-      {shown.length === 0 && (
-        <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">None of your workouts has a {group.label.toLowerCase()} exercise right now.</p>
-      )}
-      <div className={`grid gap-2 ${shown.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-        {shown.map((ex, i, list) => {
-          const wide = list.length <= 2 || (list.length % 2 === 1 && i === list.length - 1)
-          return (
-            <ExerciseTrend
-              key={ex.id}
-              exercise={ex}
-              weeks={weeks}
-              wide={wide}
-              onOpen={() => setOpen(ex)}
-            />
-          )
-        })}
+      {/* On Strength, the plan tiles and the area tabs stay put too. */}
+      {view === 'strength' && <>
+        <Balance weeks={weeks} />
+        <div className="bg-stone-100 rounded-xl p-1 grid mb-3" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTabId(t.id)}
+              aria-label={t.name}
+              className={`py-1.5 rounded-lg text-[11px] font-semibold truncate transition-colors ${
+                tab.id === t.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </>}
       </div>
 
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium mt-5 mb-2 px-1">Balance</p>
-      <Balance weeks={weeks} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
+      {view === 'strength' ? <>
+        {/* Fill the space: one or two exercises stack full width; an odd one
+            out at the end of a longer list spans both columns. */}
+        {shown.length === 0 && (
+          <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you tick them.</p>
+        )}
+        <div className={`grid gap-2 ${shown.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {shown.map((ex, i, list) => {
+            const wide = list.length <= 2 || (list.length % 2 === 1 && i === list.length - 1)
+            return (
+              <ExerciseTrend
+                key={ex.id}
+                exercise={ex}
+                weeks={weeks}
+                wide={wide}
+                onOpen={() => setOpen(ex)}
+              />
+            )
+          })}
+        </div>
 
-      {open && <ExerciseDetail exercise={open} group={group} weeks={weeks} onClose={() => setOpen(null)} />}
+      </> : (
+        <CardioTrends weeks={lastWeeks(store.history, store.current, WEEKS + 1, true)} goal={store.goals.cardio} logOf={store.cardioLogOf} />
+      )}
+      </div>
+
+      {open && <ExerciseDetail exercise={open} group={{ label: tab.name }} weeks={weeks} onClose={() => setOpen(null)} />}
     </>
   )
 }
@@ -122,36 +162,60 @@ function WeekGrid({ weeks, goals }) {
     ['Stretching', w => goalLevel(w.stretch.total, goals.stretch), w => w.stretch.total],
     ['Cardio', w => (w.cardio ? goalLevel(w.cardio.total, goals.cardio) : 0), w => (w.cardio ? `${w.cardio.total} min` : 'not tracked')],
   ]
+  // Equal week columns, with a little room before this week's so its dashed
+  // outline clears the week before.
+  const COLUMNS = `repeat(${weeks.length - 1}, minmax(0, 1fr)) 4px minmax(0, 1fr)`
+  const spacer = <span aria-hidden="true" />
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5">
       <div className="flex items-center justify-between mb-2.5">
-        <p className="text-sm font-medium text-stone-500">Last {weeks.length} {weeks.length === 1 ? 'week' : 'weeks'}</p>
+        <p className="text-sm font-medium text-stone-500">Last {weeks.length - 1} weeks + this week</p>
         <p className="text-xs text-stone-400">✓ = goal met</p>
       </div>
-      {rows.map(([label, value, text = value]) => (
-        <div key={label} className="flex items-center gap-2 mb-1.5">
-          <span className="w-[68px] text-xs font-semibold text-stone-500 shrink-0">{label}</span>
-          <div className="flex-1 grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`, maxWidth: `${weeks.length * 26}px` }}>
-            {weeks.map(({ start, entry }) => {
-              const v = entry ? value(entry) : 0
-              // This week is still filling in: outlined until its goal is met.
-              const live = entry?.live && v < 3
-              return (
-                <div
-                  key={start.getTime()}
-                  title={`${entry?.live ? 'This week so far' : `Week of ${short(start)}`}: ${entry ? text(entry) : 'not saved'}`}
-                  className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]} ${live ? 'ring-1 ring-inset ring-stone-300' : ''}`}
-                >
-                  {v >= 3 ? '✓' : ''}
-                </div>
-              )
-            })}
-          </div>
+      {/* Laid out by week: the labels, then a column of three boxes per week.
+          This week is still going, so its column has one dashed outline, like
+          the cardio chart. */}
+      <div className="flex gap-2">
+        <div className="w-[68px] shrink-0 flex flex-col gap-1.5">
+          {rows.map(([label]) => <span key={label} className="h-[22px] flex items-center text-xs font-semibold text-stone-500">{label}</span>)}
         </div>
-      ))}
-      <div className="flex justify-between text-[10px] text-stone-400 pl-[76px] mt-1">
-        <span>{short(weeks[0].start)}</span>
-        <span>This week</span>
+        <div className="flex-1 grid gap-[3px]" style={{ gridTemplateColumns: COLUMNS }}>
+          {weeks.map(({ start, entry }) => (
+            <Fragment key={start.getTime()}>
+            {entry?.live && spacer}
+            <div
+              className={`flex flex-col gap-1.5 rounded-md ${entry?.live ? 'outline-[1.5px] outline-dashed outline-offset-2 outline-stone-400' : ''}`}
+            >
+              {rows.map(([label, value, text = value]) => {
+                const v = entry ? value(entry) : 0
+                return (
+                  <div
+                    key={label}
+                    title={`${label}, ${entry?.live ? 'this week so far' : `week of ${short(start)}`}: ${entry ? text(entry) : 'not saved'}`}
+                    className={`h-[22px] rounded-[4px] flex items-center justify-center text-[9px] font-bold text-white ${LEVELS[Math.min(v, 4)]}`}
+                  >
+                    {v >= 3 ? '✓' : ''}
+                  </div>
+                )
+              })}
+            </div>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+      {/* Every third week dated under its column, counting back from this one. */}
+      <div className="flex gap-2 mt-2">
+        <span className="w-[68px] shrink-0" />
+        <div className="flex-1 grid gap-[3px] text-[10px] text-stone-400" style={{ gridTemplateColumns: COLUMNS }}>
+          {weeks.map(({ start, entry }, i) => (
+            <Fragment key={start.getTime()}>
+              {entry?.live && spacer}
+              <span className="flex justify-center whitespace-nowrap">
+                {(weeks.length - 1 - i) % 3 === 0 ? (entry?.live ? 'Now' : short(start)) : ''}
+              </span>
+            </Fragment>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -382,29 +446,27 @@ function Balance({ weeks }) {
   const most = Math.max(...counts.map(c => c.done))
   const behind = saved.length >= 4 ? counts.filter(c => c.done <= most / 2 && most > 0) : []
 
+  // A tile per plan, like the cardio numbers: how many of the weeks it was
+  // finished, red when it's falling well behind the others.
   return (
-    <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-stone-500">Plans finished</p>
-        <p className="text-xs text-stone-400">last {saved.length} {saved.length === 1 ? 'week' : 'weeks'}</p>
+    <div className="mb-2.5">
+      <div className="grid grid-cols-4 gap-2">
+        {counts.map(({ id, done }) => {
+          const late = behind.some(b => b.id === id)
+          return (
+            <div key={id} className="bg-white shadow-sm rounded-2xl px-2.5 py-2.5 min-w-0">
+              <p className={`text-xl font-bold tracking-tight tabular-nums ${late ? 'text-red-600' : 'text-stone-900'}`}>
+                {done}<span className="text-xs font-medium text-stone-400">/{saved.length}</span>
+              </p>
+              <p className="text-[11px] leading-tight text-stone-400">{workouts[id].short}</p>
+            </div>
+          )
+        })}
       </div>
-      {counts.map(({ id, done }) => (
-        <div key={id} className="flex items-center gap-2.5 my-2">
-          <span className="w-[128px] shrink-0 text-xs font-semibold text-stone-700 truncate">{workouts[id].short}</span>
-          <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${behind.some(b => b.id === id) ? 'bg-red-300' : 'bg-red-600'}`}
-              style={{ width: `${saved.length ? (done / saved.length) * 100 : 0}%` }}
-            />
-          </div>
-          <span className="w-9 text-right text-xs font-bold text-stone-900">{done}/{saved.length}</span>
-        </div>
-      ))}
-      {behind.length > 0 && (
-        <p className="text-xs text-stone-500 mt-2">
-          {behind.map(b => workouts[b.id].short).join(' and ')} {behind.length === 1 ? 'is' : 'are'} falling behind.
-        </p>
-      )}
+      <p className="text-xs text-stone-400 mt-1.5 px-1">
+        Plans finished in the last {saved.length} {saved.length === 1 ? 'week' : 'weeks'}
+        {behind.length > 0 && `. ${behind.map(b => workouts[b.id].short).join(' and ')} ${behind.length === 1 ? 'is' : 'are'} falling behind.`}
+      </p>
     </div>
   )
 }

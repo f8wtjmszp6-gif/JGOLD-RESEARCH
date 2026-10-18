@@ -30,7 +30,7 @@ import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, def
 //     lastResetAt       ISO time of the last reset (the start of the current week)
 //     goals             { workouts | stretch | cardio: { min, max } }  (your weekly goals; defaults in GOAL_DEFAULTS)
 //     newWeek           { weekStart } while the "new week" note is showing
-//     timer             { sound: 'music' | 'silent', prep: seconds }  (see timerOf)
+//     timer             { sound: 'music' | 'silent', prep: seconds, volume: 0–100 }  (see timerOf)
 //     seenNotes         [id, …]  (notifications you've seen; the bell's dot is for the rest)
 //     dismissedNotes    [id, …]  (ones you cleared with ✕; they don't show again)
 //
@@ -458,7 +458,7 @@ export function stretchWeekOf(s) {
 // audio (but the ringer switch mutes them on the speaker); 'silent' plays
 // through the ringer switch but can't play over music. `prep`: seconds to get
 // into position before a hold or stretch starts (0: none).
-const TIMER_DEFAULTS = { sound: 'music', prep: 3 }
+const TIMER_DEFAULTS = { sound: 'music', prep: 3, volume: 100 }
 
 export function timerOf(s) {
   return { ...TIMER_DEFAULTS, ...s.timer }

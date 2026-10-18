@@ -4,6 +4,7 @@ const ICONS = {
   week: <><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
   goals: <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.8 2.8L16.5 9.5" /></>,
   pr: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7l-.8-3h-5.4z" /></>,
+  next: <><path d="M5 12h12M13 7l5 5-5 5" /></>,
   backup: <><path d="M7 18a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5A4 4 0 0 1 17.5 18" /><path d="M12 12v8M9 15l3-3 3 3" /></>,
 }
 

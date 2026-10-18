@@ -8,6 +8,7 @@ import { LogClassSheet, AddCardioSheet, RestSheet, AddStretchSheet } from './log
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { FullBodyCard, FullBodySheet } from './fullBody'
+import { upNextOf } from '../../utils/upNext'
 
 // The homepage shows one group at a time, picked by these tabs. The last tab
 // you used is remembered on this device.
@@ -27,6 +28,7 @@ function savedTab() {
 export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
+  const upNext = store && upNextOf(store)
   function setTab(t) {
     setTabState(t)
     try {
@@ -92,10 +94,12 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout }) {
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6">
         {tab === 'gym' && <>
           <Section title="Workout plans">
-            {GYM_ORDER.map(id => (
+            {/* The plan to do next goes first, with why. */}
+            {[...GYM_ORDER].sort((a, b) => (b === upNext?.id) - (a === upNext?.id)).map(id => (
               <WorkoutCard
                 key={id}
                 workout={workouts[id]}
+                upNext={id === upNext?.id}
                 progress={store.workoutProgress(id)}
                 stretches={store.getStretches(id)}
                 stretchesDone={store.getStretches(id).filter(x => store.getStretchDone(id, x.id)).length}

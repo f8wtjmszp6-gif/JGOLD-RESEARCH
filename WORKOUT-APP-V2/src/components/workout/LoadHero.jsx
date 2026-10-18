@@ -59,7 +59,7 @@ export function LoadHero({ equipment, weight, bar, onChange }) {
     dumbbell: 'The weight of one dumbbell',
     cable: 'The number on the stack',
     machine: 'The number on the stack or plates loaded',
-    bodyweight: weight > 0 ? 'Added with a belt, vest or plate' : 'Your bodyweight. Add weight once it gets easy.',
+    bodyweight: weight > 0 ? 'Added with a belt, vest, plate or kettlebell' : 'Your bodyweight. Add weight once it gets easy.',
     assisted: 'Help from the machine or band. Lower = harder.',
   }[equipment]
 
