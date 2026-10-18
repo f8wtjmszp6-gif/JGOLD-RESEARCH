@@ -14,7 +14,7 @@ export function ClassCard({ store, activity, onAdd, onEdit }) {
       activity={activity}
       icon="class"
       count={n}
-      detail={n ? `${n} ${n === 1 ? activity.one : activity.many} · ${store.getCardioMinutes('class')} min` : undefined}
+      detail={n ? `${n} ${n === 1 ? activity.one : activity.many} · ${store.cardioLabel('class')}` : undefined}
       onAdd={onAdd}
       onRemove={() => store.removeActivity('class')}
     >

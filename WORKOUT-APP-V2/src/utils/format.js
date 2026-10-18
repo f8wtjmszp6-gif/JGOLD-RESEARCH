@@ -6,6 +6,14 @@ export const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n *
 // − / + move to the next round number: 5s on a barbell, 2.5s otherwise.
 export const stepTo = (v, step, dir) => Math.max(0, (dir > 0 ? Math.floor(v / step + 1e-9) + 1 : Math.ceil(v / step - 1e-9) - 1) * step)
 
+// Cardio's time, and when any of it was hard (which counts double) what it
+// counts as too: "10 min", or 5 easy + 5 hard as "10/15 min".
+export function cardioMinutes(list) {
+  const real = list.reduce((n, x) => n + x.minutes, 0)
+  const counted = list.reduce((n, x) => n + x.minutes * (x.hard ? 2 : 1), 0)
+  return counted > real ? `${real}/${counted} min` : `${real} min`
+}
+
 // One warm-up set, as "5 min easy".
 export const warmupSetLabel = x => `${x.minutes} min ${x.hard ? 'hard' : 'easy'}`
 

@@ -180,3 +180,31 @@ export function WorkoutMark() {
     </svg>
   )
 }
+
+// A small amber stop sign: ended before it was finished.
+export function EarlyMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" className="text-amber-500 shrink-0" aria-hidden="true">
+      <path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7z" />
+      <path d="M9 12h6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// A small green tick: done.
+export function DoneMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 shrink-0" aria-hidden="true">
+      <path d="M5 12l5 5 9-10" />
+    </svg>
+  )
+}
+
+// A small grey ring: started, not finished.
+export function OpenMark() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-stone-300 shrink-0" aria-hidden="true">
+      <circle cx="12" cy="12" r="7.5" />
+    </svg>
+  )
+}

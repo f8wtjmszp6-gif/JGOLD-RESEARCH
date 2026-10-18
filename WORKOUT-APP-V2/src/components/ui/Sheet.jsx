@@ -27,8 +27,9 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) 
 // Sheets come in two sizes. `tall` ones (pickers, how-tos, settings with
 // rows that come and go) always open to the same height and scroll inside,
 // so nothing jumps while you use them. The rest (short questions and quick
-// logs that never change while open) fit what's in them.
-export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClose, children }) {
+// logs that never change while open) fit what's in them. `split` ones are
+// tall with a fixed top: only the part marked data-scroll scrolls.
+export function SettingsSheet({ title, closeLabel = 'Done', tall = false, split = false, onClose, children }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose)
   // React still passes events up to the component that opened the sheet (a
@@ -46,7 +47,7 @@ export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClos
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}
+        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${split ? 'h-[88dvh] flex flex-col overflow-hidden' : `${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain`} touch-pan-y`}
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,
@@ -64,7 +65,9 @@ export function SettingsSheet({ title, closeLabel = 'Done', tall = false, onClos
             </button>
           </div>
         </div>
-        <div className="space-y-6">{children}</div>
+        {/* `split`: what's in it stays put but for the part marked
+            data-scroll, which fills the rest and scrolls. */}
+        <div className={split ? 'flex-1 min-h-0 flex flex-col gap-4' : 'space-y-6'}>{children}</div>
       </div>
     </div>,
     document.body,

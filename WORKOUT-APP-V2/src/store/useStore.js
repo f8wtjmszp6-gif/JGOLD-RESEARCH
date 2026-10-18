@@ -6,6 +6,7 @@ import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
+import { cardioMinutes } from '../utils/format'
 
 // The store every screen reads and changes: this week's state plus the
 // functions that change it (see makeStore), saved on every change.
@@ -648,10 +649,12 @@ function makeStore(state, update) {
   // its own minutes and effort.
   const otherCardio = (state.cardio ?? []).filter(x => x.kind === 'other')
 
-  // Clock minutes logged this week for a kind (class, walk or other).
+  // Clock minutes logged this week for a kind (class, walk or other), and
+  // as a label with what they count as (see cardioMinutes).
   function getCardioMinutes(kind) {
     return cardioSessionsOf(state).filter(x => x.kind === kind).reduce((n, x) => n + x.minutes, 0)
   }
+  const cardioLabel = kind => cardioMinutes(cardioSessionsOf(state).filter(x => x.kind === kind))
 
   // A walk with its own length and effort; the next walk starts from these.
   function addWalk(minutes, hard, at = nowIso()) {
@@ -908,6 +911,7 @@ function makeStore(state, update) {
     walks,
     addWalk,
     getCardioMinutes,
+    cardioLabel,
     addOtherCardio,
     removeOtherCardio,
     addOwnStretch,

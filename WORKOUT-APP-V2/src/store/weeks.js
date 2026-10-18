@@ -1,6 +1,6 @@
 import { PLAN_IDS } from '../data/workout'
 import { weekDays } from '../utils/days'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, dayLogOf, classesOf, cardioWeekOf, sessionsOfKind, exercisesOf, weekOf, restDaysOf, ownStretchesOf, stretchWeekOf } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, dayLogOf, classesOf, cardioWeekOf, sessionsOfKind, exercisesOf, weekOf, restDaysOf, ownStretchesOf, stretchWeekOf, dayLinesOf } from './state'
 
 // Past weeks: summing up a week for history, keeping each saved week's
 // details so it can be opened and edited, and filing weeks under their Sunday.
@@ -41,13 +41,14 @@ export function writeWeek(s, weekStart, fn) {
 }
 
 // Every week to swipe through, oldest first, ending with this one:
-// { weekStart, dayLog } — dayLog is null for weeks saved before days were.
+// { weekStart, dayLog, dayLines } — both null for weeks saved before days
+// were (dayLines: each day by tab, for the day pop-up).
 export function weeksOf(s) {
-  const saved = [...(s.history ?? [])].reverse().map(e => ({
-    weekStart: calendarWeekOf(e),
-    dayLog: e.details ? dayLogOf(weekStateOf(s, e)) : null,
-  }))
-  return [...saved, { weekStart: weekKeyOf(new Date()), dayLog: dayLogOf(s), live: true }]
+  const saved = [...(s.history ?? [])].reverse().map(e => {
+    const w = e.details ? weekStateOf(s, e) : null
+    return { weekStart: calendarWeekOf(e), dayLog: w && dayLogOf(w), dayLines: w && dayLinesOf(w) }
+  })
+  return [...saved, { weekStart: weekKeyOf(new Date()), dayLog: dayLogOf(s), dayLines: dayLinesOf(s), live: true }]
 }
 
 // Two saves in the same calendar week as one: ticks from either, everything

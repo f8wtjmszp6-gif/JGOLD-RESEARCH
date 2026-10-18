@@ -85,7 +85,6 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   const walk = byId('walk')
   const walks = store.walks
   const other = store.otherCardio
-  const otherMinutes = store.getCardioMinutes('other')
   const sports = store.sports
 
   return (
@@ -149,7 +148,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
               activity={walk}
               icon="walk"
               count={walks.length}
-              detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.getCardioMinutes('walk')} min` : undefined}
+              detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.cardioLabel('walk')}` : undefined}
               onAdd={() => open('walk')}
               onRemove={() => store.removeActivity('walk')}
             >
@@ -163,7 +162,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
               activity={OTHER_CARDIO}
               icon="cardio"
               count={other.length}
-              detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${otherMinutes} min` : undefined}
+              detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${store.cardioLabel('other')}` : undefined}
               onAdd={() => open('other')}
               onRemove={store.removeOtherCardio}
             >
@@ -178,7 +177,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
               activity={SPORTS_CARD}
               icon="sport"
               count={sports.length}
-              detail={sports.length ? `${sports.length} ${sports.length === 1 ? 'session' : 'sessions'} · ${store.getCardioMinutes('sport')} min` : undefined}
+              detail={sports.length ? `${sports.length} ${sports.length === 1 ? 'session' : 'sessions'} · ${store.cardioLabel('sport')}` : undefined}
               onAdd={() => open('sport')}
               onRemove={store.removeSport}
             >

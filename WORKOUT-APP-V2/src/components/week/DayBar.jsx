@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { TileIcon } from '../ui/Icons'
+import { TileIcon, WorkoutMark, EarlyMark, DoneMark, OpenMark } from '../ui/Icons'
 import { SettingsSheet } from '../ui/Sheet'
 import { MonthGrid } from './CalendarSheet'
 import { weekDays, sameDay } from '../../utils/days'
-import { TAB_DOT, TILE, tabsOf } from '../../utils/dayKinds'
+import { TABS, TAB_DOT, TILE, tabsOf } from '../../utils/dayKinds'
 
 const firstDay = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
@@ -51,20 +51,21 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
         <SettingsSheet
           title={day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           closeLabel="Done"
-          tall
+          split
           onClose={() => setOpen(false)}
         >
           <MonthGrid
             weeks={weeks}
             at={at}
             picked={picked}
+            compact
             onPick={(w, d) => {
               onAt(weeks.indexOf(w))
               onPick(d)
             }}
           />
-          <div className="border-t border-stone-100 pt-3">
-            <DayList items={items} empty={title} />
+          <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 pt-3">
+            <DayList lines={week.dayLines?.[picked]} empty={title} />
           </div>
         </SettingsSheet>
       )}
@@ -105,32 +106,46 @@ function Names({ names }) {
   )
 }
 
-// A row per session: its name, grey detail, and what it included (a plan's
-// warm-up and stretches, a class's parts) as short lines, each with its
-// tab's dot.
-function DayList({ items, empty }) {
-  if (!items.length) return <p className="text-sm text-stone-400">{empty}</p>
+// The day by tab, in the tabs' colors: each tab's lines with what the day
+// added up to, a tick (or the stop sign if ended early, a ring if not
+// finished) by each name, its count on the right, and the dumbbell after
+// it where it counted as a workout.
+const MARK = { done: DoneMark, early: EarlyMark, open: OpenMark }
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+const totalOf = (tab, list) => {
+  if (tab === 'gym') { const n = list.filter(x => x.workout).length; return n ? plural(n, 'workout', 'workouts') : '' }
+  if (tab === 'stretch') { const n = list.filter(x => x.status === 'done').length; return n ? plural(n, 'stretch', 'stretches') : '' }
+  if (tab === 'cardio') {
+    const real = list.reduce((m, x) => m + x.minutes, 0), counted = list.reduce((m, x) => m + x.counted, 0)
+    return counted > real ? `${real}/${counted} min` : `${real} min`
+  }
+  return ''
+}
+function DayList({ lines, empty }) {
+  const tabs = TABS.filter(([k]) => lines?.[k]?.length)
+  if (!tabs.length) return <p className="text-sm text-stone-400">{empty}</p>
   return (
     <div className="divide-y divide-stone-100">
-      {items.map((x, j) => (
-        <div key={j} className={`flex gap-3 py-2.5 first:pt-0 last:pb-0 ${x.detail || x.tags?.length ? 'items-start' : 'items-center'}`}>
-          <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${TILE[x.kind]}`}>
-            <TileIcon id={x.icon} size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-semibold text-stone-900">{x.label}</span>
-            {x.detail && <span className="block text-sm text-stone-500">{x.detail}</span>}
-            {x.tags?.length > 0 && (
-              <span className="block mt-1 pl-2.5 border-l-2 border-stone-100 space-y-0.5">
-                {x.tags.map(t => (
-                  <span key={t.text} className="flex items-center gap-2 text-sm text-stone-600">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TAB_DOT[t.kind === 'strength' ? 'gym' : t.kind]}`} />
-                    {t.text}
-                  </span>
-                ))}
-              </span>
-            )}
-          </span>
+      {tabs.map(([k, label, dot]) => (
+        <div key={k} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+            {label}
+            <span className="ml-auto normal-case tracking-normal font-medium text-stone-400">{totalOf(k, lines[k])}</span>
+          </p>
+          <div className="pl-3 divide-y divide-stone-100">
+            {lines[k].map((x, j) => {
+              const Mark = MARK[x.status]
+              return (
+                <div key={j} className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0 text-[15px] leading-snug">
+                  <Mark />
+                  <span className="min-w-0 font-medium text-stone-900">{x.name}</span>
+                  <span className="ml-auto shrink-0 whitespace-nowrap text-sm text-stone-500">{x.right}</span>
+                  {x.workout && <WorkoutMark />}
+                </div>
+              )
+            })}
+          </div>
         </div>
       ))}
     </div>

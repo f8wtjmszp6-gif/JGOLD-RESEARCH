@@ -1,6 +1,7 @@
 import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { weekDays, sameDay } from '../utils/days'
+import { cardioMinutes } from '../utils/format'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
 
 // The app's state, and small functions that read or change it. useStore.js
@@ -239,6 +240,82 @@ export function dayLogOf(s, now = new Date(s.clockAt ?? Date.now())) {
     })
     return kept.map(({ kind, icon, label, detail, tags }) => ({ kind, icon, label, detail, tags }))
   })
+}
+
+// A day by tab, for the day pop-up: { gym, stretch, cardio, rest }, each a
+// list of lines { name, right, status, workout, at }. `status` is 'done',
+// 'early' (ended before it was finished) or 'open' (started, not finished);
+// `workout` marks what counted toward your workouts goal (a class's goes on
+// its strength line, or else its cardio or stretch). A plan's or a session's
+// stretches and warm-up go in their own tabs, named after it.
+export function dayLinesOf(s, now = new Date(s.clockAt ?? Date.now())) {
+  const lines = { gym: [], stretch: [], cardio: [], rest: [] }
+  const add = (tab, at, line) => at && lines[tab].push({ at: new Date(at), workout: false, ...line })
+  // Cardio gives its time, and what it counts as when any was hard.
+  const cardio = (at, name, list, workout = false) => {
+    const minutes = list.reduce((m, x) => m + x.minutes, 0)
+    const counted = list.reduce((m, x) => m + x.minutes * (x.hard ? 2 : 1), 0)
+    if (minutes > 0) add('cardio', at, { name, right: cardioMinutes(list), status: 'done', minutes, counted, workout })
+  }
+  const warmup = (at, name, sets) => cardio(at, `${name} · Warm-up`, sets)
+  const FULL = 'Full Body Workout'
+  for (const id of PLAN_IDS) {
+    const c = s.checks?.[id]
+    const name = FULL_BODY_BY_ID[id] ? FULL : workouts[id].short
+    let done = 0, total = 0
+    for (const ex of exercisesOf(s, id)) {
+      const sets = weekSetsOf(s, id, ex)
+      total += sets.length
+      done += sets.filter(x => x.done).length
+    }
+    const complete = total > 0 && done >= total
+    add('gym', c?.at, { name, right: `${done}/${total} sets`, status: complete ? 'done' : 'open', workout: complete })
+    const n = stretchesOf(s, id).length
+    add('stretch', c?.stretchedAt, { name: `${name} · Stretches`, right: `${n}/${n}`, status: 'done' })
+    const w = warmupOf(s, id)
+    if (w.on && c?.warmup) warmup(c.warmedAt ?? c.at, name, w.sets)
+  }
+  // The Full Body Stretch counts as a workout at 30+ minutes; a cool-down never.
+  const r = s.checks?.[STRETCH_ROUTINE.id]
+  const routineN = stretchesOf(s, STRETCH_ROUTINE.id).length
+  add('stretch', r?.stretchedAt, { name: STRETCH_ROUTINE.name, right: `${routineN}/${routineN}`, status: 'done', workout: longEnough(Math.round(routineSecondsOf(s) / 60)) })
+  for (const c of COOL_DOWNS) {
+    const n = stretchesOf(s, c.id).length
+    add('stretch', s.checks?.[c.id]?.stretchedAt, { name: `Cool Down · ${c.label}`, right: `${n}/${n}`, status: 'done' })
+  }
+  // Filed sessions: finished, or ended early.
+  for (const x of sessionsOf(s)) {
+    const counts = sessionCounts(x)
+    const all = x.stretched === x.stretches
+    if (stretchList(x.id)) {
+      add('stretch', x.at, { name: COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : STRETCH_ROUTINE.name, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : 'early', workout: counts })
+      continue
+    }
+    const finished = x.total > 0 && x.done >= x.total
+    add('gym', x.at, { name: FULL, right: `${x.done}/${x.total} sets`, status: finished ? 'done' : 'early', workout: counts })
+    if (x.stretched > 0) add('stretch', x.at, { name: `${FULL} · Stretches`, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : finished ? 'open' : 'early' })
+    warmup(x.at, FULL, x.warmup ?? [])
+  }
+  for (const c of classesOf(s)) {
+    const areas = c.strength ? c.areas ?? [] : []
+    const counts = classIsWorkout(c)
+    const where = areas.length > 0 ? 'gym' : c.cardio ? 'cardio' : 'stretch'
+    if (areas.length > 0) {
+      const body = ['upper', 'lower'].filter(a => areas.includes(a))
+      const what = areas.length === CLASS_AREAS.length ? 'Full Body'
+        : [body.length && `${body.map(a => CLASS_AREAS.find(x => x.id === a).label).join(' & ')} Body`, areas.includes('core') && 'Core'].filter(Boolean).join(' & ')
+      add('gym', c.at, { name: `Class · ${what}`, right: '', status: 'done', workout: counts })
+    }
+    if (c.cardio) cardio(c.at, 'Class · Cardio', [c], counts && where === 'cardio')
+    if (c.stretch) add('stretch', c.at, { name: 'Class · Stretch', right: '', status: 'done', workout: counts && where === 'stretch' })
+  }
+  for (const x of s.cardio ?? []) {
+    const name = x.kind === 'walk' ? 'Walk' : x.kind === 'sport' ? x.type ?? 'Sport' : x.type && x.type !== 'Other' ? x.type : 'Cardio'
+    cardio(x.at, name, [x], x.kind !== 'walk' && cardioIsWorkout(x))
+  }
+  for (const x of ownStretchesOf(s)) add('stretch', x.at, { name: 'Stretch', right: '', status: 'done', workout: x.minutes !== null && longEnough(x.minutes) })
+  for (const at of restDaysOf(s)) add('rest', at, { name: 'Rest day', right: '', status: 'done' })
+  return weekDays(now).map(day => Object.fromEntries(Object.entries(lines).map(([k, list]) => [k, list.filter(x => sameDay(x.at, day)).sort((a, b) => a.at - b.at)])))
 }
 
 export function writeTicks(s, workoutId, exercise, fn) {

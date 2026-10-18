@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { CLASS_AREAS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
 import { dayLabel } from '../../utils/days'
 import { TAB_DOT } from '../../utils/dayKinds'
-import { WorkoutMark } from '../ui/Icons'
+import { cardioMinutes } from '../../utils/format'
+import { WorkoutMark, EarlyMark } from '../ui/Icons'
 
 // "Upper · Core", or "Full body" when all three were worked.
 function areasLabel(areas) {
@@ -67,16 +68,6 @@ function Badge({ label, text, tint, children }) {
   )
 }
 
-// A small amber stop sign: ended before it was finished.
-function EarlyMark() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" className="text-amber-500 shrink-0" aria-hidden="true">
-      <path d="M8.5 3h7L21 8.5v7L15.5 21h-7L3 15.5v-7z" />
-      <path d="M9 12h6" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 // One part of a line, with its tab's dot: gym, cardio, stretch or rest.
 export function Part({ kind, children }) {
   return (
@@ -93,7 +84,7 @@ export function ClassLine({ entry, onEdit }) {
   const strength = entry.strength && entry.areas.length > 0
   return (
     <LineButton label={`${day} class`} day={day} workout={classIsWorkout(entry)} onEdit={onEdit}>
-      {entry.cardio && <Part kind="cardio">{entry.minutes} min {entry.hard ? 'hard' : 'easy'}</Part>}
+      {entry.cardio && <Part kind="cardio">{cardioMinutes([entry])}</Part>}
       {strength && <Part kind="gym">{areasLabel(entry.areas)}</Part>}
       {entry.stretch && <Part kind="stretch">Stretch{entry.stretchMinutes ? ` ${entry.stretchMinutes} min` : ''}</Part>}
     </LineButton>
@@ -113,7 +104,7 @@ export function CardioLine({ session, showWorkout = true, onEdit }) {
       end={session.type && session.type !== 'Other' ? session.type : undefined}
       onEdit={onEdit}
     >
-      <Part kind="cardio">{session.minutes} min {session.hard ? 'hard' : 'easy'}</Part>
+      <Part kind="cardio">{cardioMinutes([session])}</Part>
     </LineButton>
   )
 }

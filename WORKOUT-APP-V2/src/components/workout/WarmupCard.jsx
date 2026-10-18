@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { warmupSetLabel } from '../../utils/format'
+import { cardioMinutes } from '../../utils/format'
 import { Chevron, CloseButton } from '../ui/glyphs'
 
 // The warm-up at the top of a plan. Until it's added, a dashed "Add a
@@ -23,11 +23,7 @@ export function WarmupCard({ workoutId, store, onStart }) {
     )
   }
 
-  const minutes = sets.reduce((n, x) => n + x.minutes, 0)
-  const cardio = sets.reduce((n, x) => n + x.minutes * (x.hard ? 2 : 1), 0)
-  const summary = sets.length === 1
-    ? warmupSetLabel(sets[0])
-    : `${minutes} min · ${sets.map(x => `${x.minutes} ${x.hard ? 'hard' : 'easy'}`).join(' + ')}`
+  const summary = cardioMinutes(sets)
   const toggle = () => {
     store.setWarmupDone(workoutId, !done)
     setReopened(false)
@@ -69,7 +65,7 @@ export function WarmupCard({ workoutId, store, onStart }) {
         </button>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-accent-600">{done ? 'Warm-up done' : 'Warm-up'}</p>
-          <p className="text-sm text-stone-500">{summary} · {cardio} cardio min</p>
+          <p className="text-sm text-stone-500">{summary}</p>
         </div>
         {!done && (
           <button onClick={onStart} className="px-4 h-9 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 shrink-0">

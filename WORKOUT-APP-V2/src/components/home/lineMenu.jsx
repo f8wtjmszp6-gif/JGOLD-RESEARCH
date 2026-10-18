@@ -5,8 +5,8 @@ import { DayPicker } from '../ui/DayPicker'
 import { LogButton } from '../ui/LogButton'
 import { WorkoutMark } from '../ui/Icons'
 import { weekdayOf } from '../../utils/days'
+import { cardioMinutes } from '../../utils/format'
 
-const effort = hard => (hard ? 'hard' : 'easy')
 const areasOf = areas => (areas.length === CLASS_AREAS.length ? 'Full body' : CLASS_AREAS.filter(a => areas.includes(a.id)).map(a => a.label).join(' & '))
 // A session's short name for the title; which one it was goes underneath.
 const nameOf = id => (COOL_DOWN_BY_ID[id] ? 'Cool Down' : FULL_BODY_BY_ID[id] ? 'Full Body' : STRETCH_ROUTINE.name)
@@ -24,7 +24,7 @@ function describe(store, item) {
     const areas = entry.strength ? entry.areas ?? [] : []
     return {
       name: 'Class', what: 'class', at: entry.at, workout: classIsWorkout(entry),
-      sub: [entry.cardio && `${entry.minutes} min ${effort(entry.hard)} cardio`, areas.length > 0 && areasOf(areas), entry.stretch && `Stretch${entry.stretchMinutes ? ` ${entry.stretchMinutes} min` : ''}`].filter(Boolean).join(' · '),
+      sub: [entry.cardio && `${cardioMinutes([entry])} cardio`, areas.length > 0 && areasOf(areas), entry.stretch && `Stretch${entry.stretchMinutes ? ` ${entry.stretchMinutes} min` : ''}`].filter(Boolean).join(' · '),
       edit: 'sheet', move: at => store.editClass(index, { at }), remove: () => store.deleteClass(index),
     }
   }
@@ -33,7 +33,7 @@ function describe(store, item) {
     return {
       name: kind === 'walk' ? 'Walk' : type ?? 'Cardio', what: kind === 'walk' ? 'walk' : 'session', at: entry.at,
       workout: kind === 'walk' ? undefined : cardioIsWorkout(entry),
-      sub: `${entry.minutes} min ${effort(entry.hard)}`,
+      sub: cardioMinutes([entry]),
       edit: 'sheet', move: at => store.editCardio(kind, index, { at }), remove: () => store.deleteCardio(kind, index),
     }
   }

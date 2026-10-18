@@ -30,7 +30,7 @@ export function useDragToClose(ref, onClose, axis = 'y') {
       if (e.type === 'mousedown' && e.button !== 0) return
       if (e.target.closest('input, textarea, select, [data-grip]')) return
       const p = point(e)
-      g = { x: p.clientX, y: p.clientY, last: along(p), lastT: e.timeStamp, v: 0, d: 0, on: false }
+      g = { x: p.clientX, y: p.clientY, last: along(p), lastT: e.timeStamp, v: 0, d: 0, on: false, inner: e.target.closest('[data-scroll]') }
     }
     function move(e) {
       if (!g) return
@@ -41,7 +41,8 @@ export function useDragToClose(ref, onClose, axis = 'y') {
         if (Math.abs(d) < 8 && Math.abs(across) < 8) return
         // Only a pull toward closing starts it, and for a sheet only from
         // the top of its list.
-        const atTop = axis === 'x' || el.scrollTop <= 0
+        // (or of the part that scrolls, in a sheet with a fixed top).
+        const atTop = axis === 'x' || (el.scrollTop <= 0 && !(g.inner?.scrollTop > 0))
         if (d <= 0 || Math.abs(across) > Math.abs(d) || !atTop) {
           g = null
           return
