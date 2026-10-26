@@ -29,7 +29,7 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) 
 // so nothing jumps while you use them. The rest (short questions and quick
 // logs that never change while open) fit what's in them. `split` ones are
 // tall with a fixed top: only the part marked data-scroll scrolls.
-export function SettingsSheet({ title, closeLabel = 'Done', tall = false, split = false, onClose, children }) {
+export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = false, split = false, onClose, children }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose)
   // React still passes events up to the component that opened the sheet (a
@@ -59,7 +59,10 @@ export function SettingsSheet({ title, closeLabel = 'Done', tall = false, split 
         <div className="sticky top-0 z-10 bg-white rounded-t-3xl -mx-5 px-5 pt-3 pb-5">
           <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
           <div className="flex items-center justify-between">
-            <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
+            <div>
+              <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
+              {subtitle && <p className="text-sm text-stone-500">{subtitle}</p>}
+            </div>
             <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
               {closeLabel}
             </button>

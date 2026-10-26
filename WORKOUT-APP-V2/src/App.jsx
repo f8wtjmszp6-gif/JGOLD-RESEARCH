@@ -55,11 +55,18 @@ export default function App() {
   useEffect(() => setSoundMode(store.timer.sound), [store.timer.sound])
   useEffect(() => setVolume(store.timer.volume / 100), [store.timer.volume])
 
-  // Coming back to the app goes back to this week, unless a workout is open.
+  // Coming back after a while (10+ minutes away) goes back to today, all of
+  // it, as Return to today does, unless a workout is open. A quick trip to
+  // another app leaves everything where it was.
   useEffect(() => {
     if (workoutId) return
+    let hiddenAt = null
     const back = () => {
-      if (document.visibilityState === 'hidden') setWeekStart(null)
+      if (document.visibilityState === 'hidden') hiddenAt = Date.now()
+      else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) {
+        setWeekStart(null)
+        setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
+      }
     }
     document.addEventListener('visibilitychange', back)
     return () => document.removeEventListener('visibilitychange', back)

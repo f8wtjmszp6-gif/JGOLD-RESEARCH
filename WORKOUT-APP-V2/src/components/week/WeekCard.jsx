@@ -2,11 +2,11 @@ import { activities } from '../../data/workout'
 import { GoalRow, CardioRow } from './Goal'
 import { TileIcon } from '../ui/Icons'
 import { goalFill, goalLevel } from '../../utils/goal'
+import { WORKOUT_KINDS } from '../../store/weeks'
 
-// What counts toward the weekly workout goal: gym workouts, classes, and
-// cardio or stretching long enough to count. The bar is one color, like the
-// others; the chips below say how many of each kind you did.
-const WORKOUT_KINDS = ['gym', 'class', 'cardio', 'stretchWork']
+// The workout bar (gym workouts, classes, and cardio or stretching long
+// enough to count) is one color, like the others; the chips below say how
+// many of each kind you did.
 
 // One figure chip per kind of thing you did, in the colors of its Home card,
 // faded at zero. Counts are everything logged — a class or run counts here

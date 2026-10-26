@@ -9,15 +9,24 @@ const firstDay = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
   return new Date(y, m - 1, d, 12)
 }
+const weekOf = days => `Week of ${days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+const rangeOf = days => {
+  const [a, b] = [days[0], days[6]]
+  const md = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return a.getMonth() === b.getMonth() ? `${md(a)} – ${b.getDate()}` : `${md(a)} – ${md(b)}`
+}
 const short = d => `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
 const dotsOf = items => tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)
 
 // The day tapped on the week strip, as a slim bar under it: the date and how
 // many things were done, then what they were. Tap it for the whole
 // day, with the month on top to move around (always the same height, so
-// switching days doesn't make it jump).
-export default function DayBar({ weeks, at, picked, onPick, onAt }) {
+// switching days doesn't make it jump), then the whole week with the day
+// shaded and the rest faded. Tap the day again for the week with nothing
+// faded. `goals`: the weekly goals, for the week's totals.
+export default function DayBar({ weeks, at, picked, onPick, onAt, goals }) {
   const [open, setOpen] = useState(false)
+  const [whole, setWhole] = useState(false)
   const week = weeks[at]
   const days = weekDays(firstDay(week.weekStart))
   const day = days[picked]
@@ -31,7 +40,10 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setWhole(false)
+          setOpen(true)
+        }}
         aria-label={`${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}: ${title}. Open the day`}
         className="w-full flex items-center gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-left shadow-sm active:bg-stone-50"
       >
@@ -49,7 +61,8 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
       </button>
       {open && (
         <SettingsSheet
-          title={day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          title={whole ? weekOf(days) : day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          subtitle={whole ? rangeOf(days) : weekOf(days)}
           closeLabel="Done"
           split
           onClose={() => setOpen(false)}
@@ -60,12 +73,22 @@ export default function DayBar({ weeks, at, picked, onPick, onAt }) {
             picked={picked}
             compact
             onPick={(w, d) => {
+              setWhole(!whole && w.weekStart === week.weekStart && d === picked)
               onAt(weeks.indexOf(w))
               onPick(d)
             }}
           />
-          <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 pt-3">
-            <DayList lines={week.dayLines?.[picked]} empty={title} />
+          <p className="-mt-2 text-center text-xs text-stone-400">
+            {whole ? 'Tap a day to shade it' : `Tap ${short(day).split(' ')[0]} again for the whole week`}
+          </p>
+          <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 -mx-2 px-2">
+            <DayList
+              lines={weekLinesOf(week.dayLines, days)}
+              focus={whole ? null : picked}
+              empty={week.dayLines ? (week.live ? 'Nothing yet' : 'Nothing logged') : 'Not recorded'}
+              totals={week.totals}
+              goals={goals}
+            />
           </div>
         </SettingsSheet>
       )}
@@ -106,8 +129,12 @@ function Names({ names }) {
   )
 }
 
-// The day by tab, in the tabs' colors: each tab's lines with what the day
-// added up to, a tick (or the stop sign if ended early, a ring if not
+// The whole week by tab: every day's lines in order, each with its day.
+const weekLinesOf = (dayLines, days) => dayLines && Object.fromEntries(TABS.map(([k]) => [k,
+  dayLines.flatMap((d, i) => (d[k] ?? []).map(x => ({ ...x, i, day: days[i].toLocaleDateString('en-US', { weekday: 'short' }) })))]))
+
+// The day (or week) by tab, in the tabs' colors: each tab's lines with what
+// it added up to (for the week, how far along its goal is), a tick (or the stop sign if ended early, a ring if not
 // finished) by each name, its count on the right, and the dumbbell after
 // it where it counted as a workout.
 const MARK = { done: DoneMark, early: EarlyMark, open: OpenMark }
@@ -121,24 +148,40 @@ const totalOf = (tab, list) => {
   }
   return ''
 }
-function DayList({ lines, empty }) {
+// The week's count toward a goal: "2/3" until it's reached, then just "4".
+const towards = (n, goal) => <><b className="font-semibold text-stone-700">{n}</b>{goal && n < goal.min ? `/${goal.min}` : ''}</>
+const weekTotalOf = (tab, list, totals, goals) => {
+  if (tab === 'gym') return <>{towards(totals.workouts, goals?.workouts)} {totals.workouts === 1 && !(goals?.workouts.min > 1) ? 'workout' : 'workouts'}</>
+  if (tab === 'stretch') return <>{towards(totals.stretch, goals?.stretch)} {totals.stretch === 1 && !(goals?.stretch.min > 1) ? 'day' : 'days'}</>
+  if (tab === 'cardio' && totals.cardio != null) return <>{towards(totals.cardio, goals?.cardio)} min</>
+  if (tab === 'rest') return plural(list.length, 'day', 'days')
+  return totalOf(tab, list)
+}
+// `focus`: the day to shade, the rest faded (null: nothing faded).
+function DayList({ lines, empty, totals, goals, focus }) {
   const tabs = TABS.filter(([k]) => lines?.[k]?.length)
-  if (!tabs.length) return <p className="text-sm text-stone-400">{empty}</p>
+  if (!tabs.length) return <p className="pt-3 text-sm text-stone-400">{empty}</p>
   return (
-    <div className="divide-y divide-stone-100">
+    <div className="divide-y divide-stone-100 pt-3">
       {tabs.map(([k, label, dot]) => (
         <div key={k} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
             <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
             {label}
-            <span className="ml-auto normal-case tracking-normal font-medium text-stone-400">{totalOf(k, lines[k])}</span>
+            <span className="ml-auto normal-case tracking-normal font-medium text-stone-400">{totals ? weekTotalOf(k, lines[k], totals, goals) : totalOf(k, lines[k])}</span>
           </p>
           <div className="pl-3 divide-y divide-stone-100">
             {lines[k].map((x, j) => {
               const Mark = MARK[x.status]
               return (
-                <div key={j} className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0 text-[15px] leading-snug">
+                <div
+                  key={j}
+                  className={`flex items-center gap-2 py-1.5 text-[15px] leading-snug transition-opacity ${
+                    focus == null ? 'first:pt-0 last:pb-0' : x.i === focus ? 'bg-accent-50 rounded-lg -mx-2 px-2 border-transparent' : 'opacity-30 first:pt-0 last:pb-0'
+                  }`}
+                >
                   <Mark />
+                  {x.day && <span className="w-8 shrink-0 text-[13px] font-semibold text-stone-500">{x.day}</span>}
                   <span className="min-w-0 font-medium text-stone-900">{x.name}</span>
                   <span className="ml-auto shrink-0 whitespace-nowrap text-sm text-stone-500">{x.right}</span>
                   {x.workout && <WorkoutMark />}

@@ -40,15 +40,25 @@ export function writeWeek(s, weekStart, fn) {
   return { ...s, sportNames: after.sportNames, history: history.map((e, j) => (j === i ? entry : e)) }
 }
 
+// What counts toward the weekly workout goal: gym workouts, classes, and
+// cardio or stretching long enough to count.
+export const WORKOUT_KINDS = ['gym', 'class', 'cardio', 'stretchWork']
+const totalsOf = (week, stretch, cardio) => ({
+  workouts: WORKOUT_KINDS.reduce((n, id) => n + (week[id] ?? 0), 0),
+  stretch: stretch.total,
+  cardio: cardio ? cardio.total : null,
+})
+
 // Every week to swipe through, oldest first, ending with this one:
-// { weekStart, dayLog, dayLines } — both null for weeks saved before days
-// were (dayLines: each day by tab, for the day pop-up).
+// { weekStart, dayLog, dayLines, totals } — dayLog and dayLines are null for
+// weeks saved before days were (dayLines: each day by tab, for the day
+// pop-up); totals are the week's goal counts.
 export function weeksOf(s) {
   const saved = [...(s.history ?? [])].reverse().map(e => {
     const w = e.details ? weekStateOf(s, e) : null
-    return { weekStart: calendarWeekOf(e), dayLog: w && dayLogOf(w), dayLines: w && dayLinesOf(w) }
+    return { weekStart: calendarWeekOf(e), dayLog: w && dayLogOf(w), dayLines: w && dayLinesOf(w), totals: totalsOf(e.week ?? {}, e.stretch ?? { total: 0 }, e.cardio) }
   })
-  return [...saved, { weekStart: weekKeyOf(new Date()), dayLog: dayLogOf(s), dayLines: dayLinesOf(s), live: true }]
+  return [...saved, { weekStart: weekKeyOf(new Date()), dayLog: dayLogOf(s), dayLines: dayLinesOf(s), totals: totalsOf(weekOf(s), stretchWeekOf(s), cardioWeekOf(s)), live: true }]
 }
 
 // Two saves in the same calendar week as one: ticks from either, everything

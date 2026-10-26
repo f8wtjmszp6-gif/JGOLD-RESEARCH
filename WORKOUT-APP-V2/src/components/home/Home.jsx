@@ -71,7 +71,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   const strip = (
     <div className="shrink-0 px-5 pb-2.5 space-y-2.5">
       <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} />
-      <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} />
+      <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} goals={store?.goals} />
     </div>
   )
   if (!store) return (
