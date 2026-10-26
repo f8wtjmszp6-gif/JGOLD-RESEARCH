@@ -28,7 +28,9 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) 
 // rows that come and go) always open to the same height and scroll inside,
 // so nothing jumps while you use them. The rest (short questions and quick
 // logs that never change while open) fit what's in them. `split` ones are
-// tall with a fixed top: only the part marked data-scroll scrolls.
+// tall with a fixed top: only the part marked data-scroll scrolls, and
+// the top takes no scrolling at all (touch-none), so a pull there only
+// moves the sheet.
 export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = false, split = false, onClose, children }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose)
@@ -47,7 +49,7 @@ export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = fal
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${split ? 'h-[88dvh] flex flex-col overflow-hidden' : `${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain`} touch-pan-y`}
+        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${split ? 'h-[88dvh] flex flex-col overflow-hidden touch-none' : `${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}`}
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,

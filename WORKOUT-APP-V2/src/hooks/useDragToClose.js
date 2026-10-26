@@ -30,10 +30,17 @@ export function useDragToClose(ref, onClose, axis = 'y') {
       if (e.type === 'mousedown' && e.button !== 0) return
       if (e.target.closest('input, textarea, select, [data-grip]')) return
       const p = point(e)
-      g = { x: p.clientX, y: p.clientY, last: along(p), lastT: e.timeStamp, v: 0, d: 0, on: false, inner: e.target.closest('[data-scroll]') }
+      const inner = e.target.closest('[data-scroll]')
+      // Touching a part that can't scroll (a sheet's fixed top, or a list too
+      // short to scroll), the phone would scroll the page behind instead, so
+      // every move there is ours.
+      const box = inner ?? el
+      const still = axis === 'y' && box.scrollHeight <= box.clientHeight + 1
+      g = { x: p.clientX, y: p.clientY, last: along(p), lastT: e.timeStamp, v: 0, d: 0, on: false, inner, still }
     }
     function move(e) {
       if (!g) return
+      if (g.still && e.cancelable) e.preventDefault()
       const p = point(e)
       const d = axis === 'y' ? p.clientY - g.y : p.clientX - g.x
       const across = axis === 'y' ? p.clientX - g.x : p.clientY - g.y
@@ -44,7 +51,7 @@ export function useDragToClose(ref, onClose, axis = 'y') {
         // (or of the part that scrolls, in a sheet with a fixed top).
         const atTop = axis === 'x' || (el.scrollTop <= 0 && !(g.inner?.scrollTop > 0))
         if (d <= 0 || Math.abs(across) > Math.abs(d) || !atTop) {
-          g = null
+          if (!g.still) g = null
           return
         }
         g.on = true
