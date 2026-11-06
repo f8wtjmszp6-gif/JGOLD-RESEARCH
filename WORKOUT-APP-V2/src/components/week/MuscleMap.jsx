@@ -1,5 +1,6 @@
 import { useId } from 'react'
-import { workouts, PLAN_IDS, MUSCLE_MAP, CLASS_AREAS } from '../../data/workout'
+import { workouts, PLAN_IDS, MUSCLE_MAP, CLASS_AREAS, TARGETED } from '../../data/workout'
+import { TARGET_AREAS } from '../../data/targeted'
 
 // Same silhouette as the workout body maps; regions are bands clipped to it.
 const SILHOUETTE = (
@@ -26,7 +27,7 @@ const REGIONS = {
 // How hard each region was worked this week: a finished workout that trains
 // it adds 1, a started one ½, and a class adds 1 to the areas its strength
 // work covered (upper, lower, core).
-function regionScores(status, classes, view) {
+function regionScores(status, classes, view, map) {
   const scores = {}
   for (const r of Object.keys(REGIONS)) scores[r] = 0
   for (const c of classes) {
@@ -34,7 +35,7 @@ function regionScores(status, classes, view) {
     for (const a of CLASS_AREAS) if (c.areas.includes(a.id)) for (const r of a[view]) scores[r] += 1
   }
   for (const id of PLAN_IDS) {
-    for (const r of MUSCLE_MAP[id][view]) scores[r] += status[id] === 2 ? 1 : status[id] === 1 ? 0.5 : 0
+    for (const r of map[id][view]) scores[r] += status[id] === 2 ? 1 : status[id] === 1 ? 0.5 : 0
   }
   return scores
 }
@@ -48,23 +49,30 @@ function fillFor(score) {
   return RAMP[Math.min(Math.floor(score), RAMP.length - 1)]
 }
 
-function Figure({ status, classes, view }) {
+function Figure({ status, classes, view, map }) {
+  const scores = regionScores(status, classes, view, map)
+  return <BodyFigure view={view} fills={Object.fromEntries(Object.keys(REGIONS).map(r => [r, fillFor(scores[r])]))} className="w-[30px] h-[38px]" />
+}
+
+// The body figure, front or back, with regions filled in: `fills` maps a
+// region to its color (none: left plain). Also the tiles' icons when
+// building a workout.
+export function BodyFigure({ view, fills, className }) {
   // Keep the id safe inside an SVG url(#…) reference.
   const clip = 'body' + useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const scores = regionScores(status, classes, view)
   // Back view: the back panel replaces chest + core, and gets a spine line.
   const shown = view === 'back'
     ? ['shoulders', 'arms', 'back', 'hips', 'thighs', 'calves']
     : ['shoulders', 'arms', 'chest', 'core', 'hips', 'thighs', 'calves']
   return (
-    <svg viewBox="0 0 64 80" className="w-[30px] h-[38px]">
+    <svg viewBox="0 0 64 80" className={className} aria-hidden="true">
       <defs>
         <clipPath id={clip}>{SILHOUETTE}</clipPath>
       </defs>
       <g fill="var(--color-stone-200)">{SILHOUETTE}</g>
       <g clipPath={`url(#${clip})`}>
-        {shown.filter(r => fillFor(scores[r])).map(r => REGIONS[r].map(([x, y, w, h], i) => (
-          <rect key={r + i} x={x} y={y} width={w} height={h} fill={fillFor(scores[r])} stroke={fillFor(scores[r])} strokeWidth="0.8" />
+        {shown.filter(r => fills[r]).map(r => REGIONS[r].map(([x, y, w, h], i) => (
+          <rect key={r + i} x={x} y={y} width={w} height={h} fill={fills[r]} stroke={fills[r]} strokeWidth="0.8" />
         )))}
       </g>
       <g fill="none" stroke="var(--surface)" strokeWidth="1.2" strokeLinecap="round" opacity=".85">
@@ -85,7 +93,10 @@ export default function MuscleMap({ store }) {
     status[id] = total > 0 && done === total ? 2 : done > 0 ? 1 : 0
   }
   const classes = store.classes
-  const done = PLAN_IDS.filter(id => status[id] === 2).map(id => workouts[id].short)
+  // A targeted workout lights up whatever areas it was for.
+  const areas = TARGET_AREAS.filter(a => store.targeted?.areas.includes(a.id))
+  const map = { ...MUSCLE_MAP, [TARGETED.id]: { front: areas.filter(a => a.view === 'front').flatMap(a => a.regions), back: areas.filter(a => a.view === 'back').flatMap(a => a.regions) } }
+  const done = PLAN_IDS.filter(id => status[id] === 2).map(id => (id === TARGETED.id ? store.planName(id) : workouts[id].short))
 
   return (
     <div
@@ -93,8 +104,8 @@ export default function MuscleMap({ store }) {
       role="img"
       aria-label={`Muscles this week: ${done.length ? done.join(', ') + ' done' : 'no plans finished yet'}${classes.length ? `, ${classes.length} ${classes.length === 1 ? 'class' : 'classes'}` : ''}`}
     >
-      <Figure status={status} classes={classes} view="front" />
-      <Figure status={status} classes={classes} view="back" />
+      <Figure status={status} classes={classes} view="front" map={map} />
+      <Figure status={status} classes={classes} view="back" map={map} />
     </div>
   )
 }

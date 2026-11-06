@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 import { STRETCH_ROUTINE, MUSCLE_GROUPS } from '../../data/workout'
 import { EXERCISE_BANK, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf } from '../../data/exercises'
-import { HowToBody } from './HowTo'
+import { openDemo } from '../../data/howto'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchFits, stretchRating } from '../../data/stretches'
 import { InfoIcon } from '../ui/glyphs'
 import { SettingsSheet } from '../ui/Sheet'
@@ -78,7 +78,6 @@ const SEARCH_TIERS = { 3: 'Recommended', 2: 'Also works', 1: 'Less direct' }
 
 function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, fills, banner, onPick, onClose }) {
   const [query, setQuery] = useState('')
-  const [info, setInfo] = useState(null) // the item whose how-to is open
   const [more, setMore] = useState(false)
   const skip = new Set(exclude)
   const q = query.trim().toLowerCase()
@@ -97,10 +96,9 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
   function pickTab(id) {
     setTab(id)
     setMore(false)
-    setInfo(null)
   }
 
-  // One row: name (with "Fills"), ✓ if it's already in, ⓘ.
+  // One row: name (with "Fills"), ✓ if it's already in, ⓘ for a video demo.
   function row(x, have) {
     const name = (
       <span className="min-w-0">
@@ -122,27 +120,13 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
             </button>
           )}
           <button
-            onClick={() => setInfo(info === x.id ? null : x.id)}
+            onClick={() => openDemo(x.name, kind)}
             aria-label={`How to do ${x.name}`}
-            aria-expanded={info === x.id}
-            className={`w-10 h-10 mr-1 rounded-lg flex items-center justify-center shrink-0 active:bg-stone-100 ${info === x.id ? 'text-accent-500' : 'text-stone-400'}`}
+            className="w-10 h-10 mr-1 rounded-lg flex items-center justify-center shrink-0 text-stone-400 active:bg-stone-100"
           >
             <InfoIcon />
           </button>
         </div>
-        {info === x.id && (
-          <div className="px-3.5 pb-3.5">
-            <HowToBody item={x} kind={kind} />
-            {!have && (
-              <button
-                onClick={() => onPick(x.id)}
-                className="mt-3 w-full py-2.5 rounded-xl bg-accent-500 text-white text-sm font-semibold active:bg-accent-600 transition-colors"
-              >
-                Add this
-              </button>
-            )}
-          </div>
-        )}
       </div>
     )
   }

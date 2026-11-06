@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE } from '../../data/workout'
 import WeekStrip from '../week/WeekStrip'
-import DayBar from '../week/DayBar'
+import DaySheet from '../week/DaySheet'
 import { dayLabel, inDayOrder } from '../../utils/days'
 import { ClassCard, RoutineCard, WorkoutCard, ActivityCard } from './cards'
 import { LineButton, Part, CardioLine, StretchLine } from './lines'
 import { LogClassSheet, AddCardioSheet, RestSheet, AddStretchSheet } from './logSheets'
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
-import { FullBodyCard, FullBodySheet } from './fullBody'
+import { BuildCard, BuildSheet } from './buildWorkout'
 import { LineMenu } from './lineMenu'
 import { upNextOf } from '../../utils/upNext'
 
@@ -68,10 +68,12 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   // Tapping a logged line asks what to do first (see LineMenu).
   const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
+  // The picked day's pop-up, opened from ACTIVITIES on the strip.
+  const [dayOpen, setDayOpen] = useState(false)
   const strip = (
-    <div className="shrink-0 px-5 pb-2.5 space-y-2.5">
-      <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} />
-      <DayBar weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} goals={store?.goals} />
+    <div className="shrink-0 px-5 pb-2.5">
+      <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} onActivities={() => setDayOpen(true)} />
+      {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} goals={store?.goals} onClose={() => setDayOpen(false)} />}
     </div>
   )
   if (!store) return (
@@ -131,9 +133,10 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             ))}
           </Section>
 
-          {/* For weeks the four won't fit: asks gym or home first. */}
-          <Section title="Full body">
-            <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} onEditSession={item => open('menu', item)} />
+          {/* Any day, as often as you like: full body, or just the areas you
+              pick, at the gym or at home. */}
+          <Section title="Custom workout">
+            <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} onEditSession={item => open('menu', item)} />
           </Section>
 
           <Section title="Gym class">
@@ -241,7 +244,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
-      {sheet?.type === 'full' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
+      {sheet?.type === 'full' && <BuildSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'menu' && <LineMenu store={store} item={sheet.edit} onEdit={item => open(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={onOpenWorkout} onClose={close} />}
       {sheet?.type === 'rest' && <RestSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}

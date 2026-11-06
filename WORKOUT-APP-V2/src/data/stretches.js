@@ -1,4 +1,5 @@
-import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY_BY_ID } from './workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY_BY_ID, TARGETED } from './workout'
+import { MORE_STRETCHES } from './moreStretches'
 
 const S = (id, name, duration, perSide, area) => ({ id, name, duration, perSide, area })
 
@@ -94,7 +95,7 @@ const MORE = [
   { id: 'sun-salutation', name: 'Sun Salutation', duration: 60, perSide: false, area: 'full' },
 ]
 
-export const STRETCH_BANK = [...ORIGINAL, ...MORE]
+export const STRETCH_BANK = [...ORIGINAL, ...MORE, ...MORE_STRETCHES]
 export const STRETCH_BY_ID = Object.fromEntries(STRETCH_BANK.map(x => [x.id, x]))
 
 // A list's starting stretches: each gym workout's own, a cool-down's, or the
@@ -124,25 +125,29 @@ export const SUGGESTED_AREAS = {
 // Full Body Stretch, the cool-downs and the full-body days take any stretch.
 const STRETCH_FITS = {
   // Chest, front and side shoulders, triceps, upper traps and neck
-  push: ['doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'puppy-pose', 'sleeper-stretch',
+  push: ['chin-to-chest', 'scalene-stretch', 'neck-extension', 'shoulder-rolls', 'floor-pec', 'reverse-prayer',
+    'wall-angels', 'cow-face-arms', 'overhead-reach', 'tricep-wall', 'doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'puppy-pose', 'sleeper-stretch',
     'overhead-tricep-stretch', 'upper-trap', 'levator-scapulae', 'lateral-neck-tilts', 'neck-rotations', 'chin-tucks'],
   // Hip flexors, quads, glutes, inner and outer thighs
-  legsQuad: ['hip-flexor', 'couch-stretch', 'lunge-hip-flexor', 'quad-stretch', 'kneeling-quad', 'side-lying-quad',
+  legsQuad: ['standing-figure-4', 'adductor-rock-back', 'low-lunge-twist', 'cow-face-legs', 'outer-hip-cross',
+    'heel-sit', 'spiderman-lunge', 'hip-flexor', 'couch-stretch', 'lunge-hip-flexor', 'quad-stretch', 'kneeling-quad', 'side-lying-quad',
     'figure-4', 'pigeon-pose', '90-90', 'seated-glute', 'lizard-pose', 'butterfly', 'frog-stretch', 'side-lunge',
     'happy-baby', 'deep-squat-hold', 'worlds-greatest'],
   // Lats, upper and mid back, traps, rear shoulders, biceps, forearms
-  pull: ['lat-stretch', 'childs-pose', 'puppy-pose', 'thread-the-needle', 'cross-body-shoulder', 'cat-cow',
+  pull: ['open-book', 'upper-back-hug', 'side-childs-pose', 'doorway-lat', 'eagle-arms', 'finger-stretch',
+    'thumb-stretch', 'forearm-wall', 'shoulder-rolls', 'lat-stretch', 'childs-pose', 'puppy-pose', 'thread-the-needle', 'cross-body-shoulder', 'cat-cow',
     'spinal-twist', 'seated-twist', 'bicep-wall', 'wrist-flexor', 'wrist-extensor', 'prayer-wrist',
     'levator-scapulae', 'upper-trap', 'downward-dog'],
   // Hamstrings, glutes, lower back, calves and feet
-  legsPost: ['hamstring-stretch', 'standing-hamstring', 'seated-forward-fold', 'standing-forward-fold', 'pyramid-pose',
+  legsPost: ['half-split', 'doorway-hamstring', 'ragdoll', 'knee-drops', 'standing-figure-4', 'kneeling-shin',
+    'walking-dog', 'towel-calf', 'hamstring-stretch', 'standing-hamstring', 'seated-forward-fold', 'standing-forward-fold', 'pyramid-pose',
     'wide-leg-fold', 'pigeon-pose', 'figure-4', 'seated-glute', 'happy-baby', 'knees-to-chest', 'childs-pose',
     'cat-cow', 'spinal-twist', 'wall-calf-stretch', 'bent-knee-calf', 'step-calf-drop', 'downward-dog',
     'plantar-fascia', 'ankle-circles'],
 }
 
 export function stretchFits(stretch, listId) {
-  return listId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[listId] || !!FULL_BODY_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
+  return listId === STRETCH_ROUTINE.id || listId === TARGETED.id || !!COOL_DOWN_BY_ID[listId] || !!FULL_BODY_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
 }
 
 // How well a stretch suits a list: 3 best, 2 good (anything not listed), 1

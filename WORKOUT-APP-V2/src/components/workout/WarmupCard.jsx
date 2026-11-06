@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cardioMinutes } from '../../utils/format'
 import { Chevron, CloseButton } from '../ui/glyphs'
 
-// The warm-up at the top of a plan. Until it's added, a dashed "Add a
+// The warm-up at the top of a plan, added week by week. Until it's added, a dashed "Add a
 // warm-up" row. Added, a card of sets, each with its length and effort,
 // run back to back by Start. Once ticked it folds to one line; tap to reopen.
 export function WarmupCard({ workoutId, store, onStart }) {

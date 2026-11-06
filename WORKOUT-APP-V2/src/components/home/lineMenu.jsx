@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { CLASS_AREAS, FULL_BODY_BY_ID, STRETCH_ROUTINE, COOL_DOWN_BY_ID, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
+import { CLASS_AREAS, FULL_BODY_BY_ID, TARGETED, STRETCH_ROUTINE, COOL_DOWN_BY_ID, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
 import { SettingsSheet } from '../ui/Sheet'
 import { DayPicker } from '../ui/DayPicker'
 import { LogButton } from '../ui/LogButton'
 import { WorkoutMark } from '../ui/Icons'
 import { weekdayOf } from '../../utils/days'
 import { cardioMinutes } from '../../utils/format'
+import { targetName, equipmentName } from '../../data/targeted'
 
 const areasOf = areas => (areas.length === CLASS_AREAS.length ? 'Full body' : CLASS_AREAS.filter(a => areas.includes(a.id)).map(a => a.label).join(' & '))
 // A session's short name for the title; which one it was goes underneath.
-const nameOf = id => (COOL_DOWN_BY_ID[id] ? 'Cool Down' : FULL_BODY_BY_ID[id] ? 'Full Body' : STRETCH_ROUTINE.name)
-const kindOf = id => (COOL_DOWN_BY_ID[id] ? `After a ${COOL_DOWN_BY_ID[id].label.toLowerCase()}` : FULL_BODY_BY_ID[id]?.label)
+const nameOf = x => (x.id === TARGETED.id ? targetName(x.targeted?.areas ?? []) : COOL_DOWN_BY_ID[x.id] ? 'Cool Down' : FULL_BODY_BY_ID[x.id] ? 'Full Body' : STRETCH_ROUTINE.name)
+const kindOf = x => (x.id === TARGETED.id ? equipmentName(x.targeted?.eq) : COOL_DOWN_BY_ID[x.id] ? `After a ${COOL_DOWN_BY_ID[x.id].label.toLowerCase()}` : FULL_BODY_BY_ID[x.id]?.label)
 
 // What a logged line is, for the screens below: its name, a short line of
 // what it was, its day, whether it counted as a workout (only for things
@@ -50,12 +51,12 @@ function describe(store, item) {
   // Sessions of the full-body days, the Full Body Stretch and the cool-downs.
   const x = kind === 'session' ? store.sessions.find(y => y.index === index) : store.currentSession(item.id)
   if (!x) return null
-  const full = !!FULL_BODY_BY_ID[x.id]
+  const full = !!FULL_BODY_BY_ID[x.id] || x.id === TARGETED.id
   const reopen = kind === 'session' ? store.canReopen(index) : 'ok'
   return {
-    name: nameOf(x.id), what: 'session', at: x.at, id: x.id,
+    name: nameOf(x), what: 'session', at: x.at, id: x.id,
     workout: x.id === STRETCH_ROUTINE.id ? x.counts : undefined,
-    sub: [kindOf(x.id), full ? `${x.done}/${x.total} sets · ${x.stretched}/${x.stretches} stretches` : `${x.stretched}/${x.stretches} stretches · ${x.minutes} min`].filter(Boolean).join(' · '),
+    sub: [kindOf(x), full ? `${x.done}/${x.total} sets · ${x.stretched}/${x.stretches} stretches` : `${x.stretched}/${x.stretches} stretches · ${x.minutes} min`].filter(Boolean).join(' · '),
     edit: 'session', busy: reopen === 'busy',
     open: () => { if (kind === 'session') store.reopen(index) },
     move: at => (kind === 'session' ? store.moveSession(index, at) : store.setPlanDay(x.id, at)),

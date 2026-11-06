@@ -92,9 +92,12 @@ export function notificationsOf(store, now = new Date()) {
       weekStart: dayKey(lastSunday),
     })
   }
-  // The plan last week missed, until you start it.
+  // The plan last week missed, until you start your first plan of the week.
+  // After that the Up next label on Today is enough; without this, finishing
+  // one missed plan would bring up the next missed one.
   const next = upNextOf(store, now)
-  if (next?.missed) {
+  const startedThisWeek = (store.current.plans ?? []).some(p => p.done > 0)
+  if (next?.missed && !startedThisWeek) {
     const name = workouts[next.id].short
     notes.push({
       id: `next:${week}:${next.id}`,

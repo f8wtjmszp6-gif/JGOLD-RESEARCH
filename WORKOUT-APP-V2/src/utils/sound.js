@@ -18,12 +18,25 @@ export function setVolume(v) {
   level = v
 }
 
+// Coming back to the app, and any tap after, wakes the audio again, so a
+// timer that ends on its own still beeps.
+if (typeof document !== 'undefined') {
+  const wake = () => { if (ctx) unlockAudio() }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake() })
+  // iOS counts touchend and click as a tap that may start audio, not pointerdown.
+  document.addEventListener('touchend', wake, true)
+  document.addEventListener('click', wake, true)
+}
+
 export function unlockAudio() {
   try {
     // Safari 17+; ignored elsewhere.
     if (navigator.audioSession) navigator.audioSession.type = mode === 'silent' ? 'playback' : 'ambient'
-    ctx ??= new (window.AudioContext || window.webkitAudioContext)()
-    if (ctx.state === 'suspended') ctx.resume()
+    if (!ctx || ctx.state === 'closed') ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // iOS also has 'interrupted' (the phone locked, another app took the
+    // audio, a call came in); anything but running needs waking, or every
+    // beep after it stays silent.
+    if (ctx.state !== 'running') ctx.resume().catch(() => {})
   } catch {
     // audio not supported
   }

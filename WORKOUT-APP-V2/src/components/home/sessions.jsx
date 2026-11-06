@@ -1,11 +1,13 @@
-import { FULL_BODY_BY_ID, STRETCH_ROUTINE, COOL_DOWN_BY_ID } from '../../data/workout'
+import { FULL_BODY_BY_ID, STRETCH_ROUTINE, COOL_DOWN_BY_ID, TARGETED } from '../../data/workout'
+import { targetName, equipmentName } from '../../data/targeted'
 import { dayLabel } from '../../utils/days'
 import { LineButton, Part } from './lines'
 
-// What shows at a line's right end: a full-body day's equipment ("Gym
-// Equipment", "Dumbbells", "No Equipment"), or what a cool-down was after.
-const endOf = id => (COOL_DOWN_BY_ID[id] ? COOL_DOWN_BY_ID[id].label : FULL_BODY_BY_ID[id]?.label.replace(/^With /, ''))
-const nameOf = id => (COOL_DOWN_BY_ID[id] ? `Cool Down · ${COOL_DOWN_BY_ID[id].label}` : FULL_BODY_BY_ID[id] ? `Full Body · ${FULL_BODY_BY_ID[id].label}` : STRETCH_ROUTINE.name)
+// What shows at a line's right end: what a Build a Workout session was
+// ("Full Body", "Chest & Glutes"; tap it for the equipment), or what a
+// cool-down was after.
+const endOf = x => (x.id === TARGETED.id ? targetName(x.targeted?.areas ?? []) : COOL_DOWN_BY_ID[x.id] ? COOL_DOWN_BY_ID[x.id].label : FULL_BODY_BY_ID[x.id] ? 'Full Body' : undefined)
+const nameOf = x => (x.id === TARGETED.id ? `${targetName(x.targeted?.areas ?? [])} · ${equipmentName(x.targeted?.eq)}` : COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : FULL_BODY_BY_ID[x.id] ? `Full Body · ${FULL_BODY_BY_ID[x.id].label}` : STRETCH_ROUTINE.name)
 
 // A card's sessions on their own lines (see store.sessionsFor). Tapping one
 // asks what to do with it (see LineMenu). One ended before it was finished
@@ -23,11 +25,11 @@ export function SessionLines({ list, onMenu }) {
         return (
           <LineButton
             key={x.filed ? `filed-${x.index}` : x.id}
-            label={`${day} ${nameOf(x.id)}`}
+            label={`${day} ${nameOf(x)}`}
             day={day}
             workout={routine ? x.counts : false}
             early={stretch ? x.stretched < x.stretches : x.done < x.total}
-            end={endOf(x.id)}
+            end={endOf(x)}
             onEdit={() => onMenu(x.filed ? { kind: 'session', index: x.index } : { kind: 'open', id: x.id })}
           >
             {stretch ? (

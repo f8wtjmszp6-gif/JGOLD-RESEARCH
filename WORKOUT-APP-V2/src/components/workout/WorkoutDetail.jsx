@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
-import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID } from '../../data/workout'
-import { gapsAfter } from '../../data/exercises'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID, TARGETED } from '../../data/workout'
+import { equipmentName } from '../../data/targeted'
+import { gapsAfter, EXERCISE_BY_ID } from '../../data/exercises'
 import { weekRange, sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab } from './StretchesTab'
@@ -13,6 +14,7 @@ import { LogButton } from '../ui/LogButton'
 import { CoveragePill, GapRows, AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
+import { useScope } from '../../hooks/useScope'
 import { warmupSetLabel } from '../../utils/format'
 import { WarmupCard } from './WarmupCard'
 import { ExerciseCard } from './ExerciseCard'
@@ -24,14 +26,16 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // just their stretches.
   const cool = COOL_DOWN_BY_ID[workoutId]
   const workout = workouts[workoutId] ?? cool ?? STRETCH_ROUTINE
-  const isRoutine = workout.exercises.length === 0
+  // The Full Body Stretch and the cool-downs: stretches only.
+  const isRoutine = !workouts[workoutId]
+  const targeted = workoutId === TARGETED.id
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
   // The first set ticked (or warm-up, or last stretch) on a rest day asks whether it's
   // still a rest day, once. A plan already ticked when you open it doesn't ask.
   const stamps = store.stampsOf(workoutId)
   // Ones you can do more than once a week, and how far the one under way got.
-  const repeatable = !!FULL_BODY_BY_ID[workoutId] || workoutId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[workoutId]
+  const repeatable = !!FULL_BODY_BY_ID[workoutId] || targeted || workoutId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[workoutId]
   const current = repeatable ? store.currentSession(workoutId) : null
   const started = !!current && ((current.done ?? 0) > 0 || current.stretched > 0)
   const [ending, setEnding] = useState(false)
@@ -67,15 +71,22 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
     (id, to) => store.moveExerciseTo(workoutId, id, to),
   )
 
-  // Swiping an exercise away: removing the only exercise for an area asks first.
-  const [removing, setRemoving] = useState(null) // { ex, gaps } waiting on "remove anyway"
+  // Adding or removing an exercise, or adding Core, asks: just this week, or
+  // every week after?
+  // A targeted workout is made fresh each time, so there's nothing to ask.
+  const [ask, scopeSheet] = useScope(store, targeted)
+
+  // Swiping an exercise away, saying so if it's the only one for an area.
   function removeExercise(ex) {
     const { main, core } = store.getExerciseSections(workoutId)
     const inCore = core.some(x => x.id === ex.id)
     const list = inCore ? core : main
     const gaps = gapsAfter(list, list.filter(x => x.id !== ex.id), inCore ? 'core' : workoutId)
-    if (gaps.length) setRemoving({ ex, gaps })
-    else store.removeExercise(workoutId, ex.id)
+    ask(
+      `Remove ${ex.name}?`,
+      scope => store.removeExercise(workoutId, ex.id, scope),
+      gaps.length ? `It’s the only exercise here for ${gaps.join(' and ')}, so that will be left uncovered.` : null,
+    )
   }
 
   // The one timer on screen, shown in the bar at the bottom.
@@ -135,6 +146,8 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
       }
       const left = all.filter(x => !x.done && x !== set).length
       if (startRest(a.exercise, left)) return // rolls straight into rest
+      // The last hold done: fold its card, as ticking the last set does.
+      if (left === 0) setOpenId(id => (id === a.exercise.id ? null : id))
     }
     if (a.kind === 'warmup') store.setWarmupDone(workoutId, true)
     if (a.kind === 'stretch' && !store.getStretchDone(workoutId, a.stretchId)) {
@@ -256,7 +269,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const sections = store.getExerciseSections(workoutId)
   const finished = x => store.getLog(workoutId, x).all.every(set => set.done)
   const partDone = list => list.length > 0 && list.every(finished)
-  const partProgress = list => `${list.filter(finished).length} of ${list.length}`
+  const partProgress = list => `${list.filter(finished).length} of ${list.length} Completed`
   const exerciseCard = exercise => {
     const open = exercise.id === openExercise
     const card = (
@@ -322,7 +335,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           )}
         </div>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{FULL_BODY_BY_ID[workoutId] ? 'Full Body' : workout.short}</h1>
+          <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{FULL_BODY_BY_ID[workoutId] ? 'Full Body' : targeted ? store.planName(workoutId) : workout.short}</h1>
         </div>
         {FULL_BODY_BY_ID[workoutId] ? (
           <FullBodySwitch at={workoutId} onSwitch={onSwitch} />
@@ -342,7 +355,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
             ))}
           </div>
         ) : (
-          <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : workout.name}</p>
+          <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : targeted ? `Targeted · ${equipmentName(store.targeted.eq)}` : workout.name}</p>
         )}
       </div>
 
@@ -418,9 +431,10 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
                   label="Add core"
                   note="abs & obliques"
                   onClick={() => {
-                    store.setCoreOn(workoutId, true)
-                    // No core exercises yet (Chest & Shoulders starts with none): pick one.
+                    // No core exercises yet (Chest & Shoulders starts with
+                    // none): pick one, and adding it turns Core on.
                     if (sections.core.length === 0) setAdding('core')
+                    else ask('Add Core?', scope => store.setCoreOn(workoutId, true, scope))
                   }}
                 />
               </>
@@ -438,23 +452,14 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           workoutId={workoutId}
           store={store}
           section={adding}
-          onPick={id => { store.addExercise(workoutId, id); setAdding(null) }}
-          onClose={() => {
-            // Backing out of "Add core" before picking anything leaves Core off.
-            if (adding === 'core' && sections.core.length === 0) store.setCoreOn(workoutId, false)
+          onPick={id => {
             setAdding(null)
+            ask(`Add ${EXERCISE_BY_ID[id].name}?`, scope => store.addExercise(workoutId, id, scope))
           }}
+          onClose={() => setAdding(null)}
         />
       )}
-      {removing && (
-        <ConfirmSheet
-          title={`Leave ${removing.gaps.join(' and ')} uncovered?`}
-          body={`${removing.ex.name} is the only exercise here for ${removing.gaps.join(' and ')}.`}
-          confirmLabel="Remove anyway"
-          onConfirm={() => { store.removeExercise(workoutId, removing.ex.id); setRemoving(null) }}
-          onClose={() => setRemoving(null)}
-        />
-      )}
+      {scopeSheet}
       {clash && clash !== answered && (() => {
         const day = sameDay(new Date(clash), store.today) ? 'Today' : new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
         const weekday = new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
@@ -472,7 +477,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
       {ending && (
         <ConfirmSheet
           title="End now?"
-          body={FULL_BODY_BY_ID[workoutId]
+          body={FULL_BODY_BY_ID[workoutId] || targeted
             ? `It’s logged as it is: ${current.done}/${current.total} sets and ${current.stretched}/${current.stretches} stretches. It counts as a workout only when every set is done.`
             : `It’s logged as it is: ${current.stretched}/${current.stretches} stretches. It counts as a stretch day only when every stretch is done.`}
           confirmLabel="End"
@@ -503,11 +508,11 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 function PartHead({ title, pill, right, done }) {
   return (
     <div className="flex items-baseline justify-between gap-3 px-1 pt-3 first:pt-0">
-      <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">{title}</p>
       <span className="flex items-baseline gap-2">
+        <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">{title}</p>
         {pill}
-        {right && <span className={`text-xs font-semibold ${done ? 'text-accent-500' : 'text-stone-400'}`}>{right}</span>}
       </span>
+      {right && <span className={`text-xs font-semibold ${done ? 'text-accent-500' : 'text-stone-400'}`}>{right}</span>}
     </div>
   )
 }

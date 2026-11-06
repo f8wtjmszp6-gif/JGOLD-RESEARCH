@@ -9,11 +9,23 @@ const firstDay = weekStart => {
   return new Date(y, m - 1, d, 12)
 }
 
+// "NOV 2026", or "OCT – NOV 2026" for a week across two months and
+// "DEC 2026 – JAN 2027" across two years.
+const MON = d => d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+function monthsOf(weekStart) {
+  const days = weekDays(firstDay(weekStart))
+  const [a, b] = [days[0], days[6]]
+  if (a.getFullYear() !== b.getFullYear()) return `${MON(a)} ${a.getFullYear()} – ${MON(b)} ${b.getFullYear()}`
+  return a.getMonth() === b.getMonth() ? `${MON(a)} ${a.getFullYear()}` : `${MON(a)} – ${MON(b)} ${b.getFullYear()}`
+}
+
 // Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
-// Each date has a dot for everything done that day. Tap a day to show it in
-// the bar under the strip (see DayBar). `weeks` is oldest first, ending with
-// this week; `at` is the one showing; `picked` is the day shown (0 = Sunday).
-export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
+// It sits under the This week card as the bottom of the same card: the
+// month on top, then each date with a dot for everything done that day, then
+// the key and ACTIVITIES, which opens the picked day (see DaySheet). Tap a day
+// to pick it. `weeks` is oldest first, ending with this week; `at` is the
+// one showing; `picked` is the day picked (0 = Sunday).
+export default function WeekStrip({ weeks, at, onAt, picked, onPick, onActivities }) {
   const pager = useRef(null)
   const settle = useRef(null)
   const week = weeks[at]
@@ -51,7 +63,8 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm">
+    <div className="bg-white rounded-b-2xl shadow-sm border-t border-stone-100 pt-2">
+      <p className="text-center text-xs font-bold tracking-wider text-stone-500 mb-1">{monthsOf(week.weekStart)}</p>
       {/* Arrows either side show the days slide, and step a week at a time;
           each fades out at the end it can't go past. */}
       <div className="flex items-stretch">
@@ -75,10 +88,15 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick }) {
         </div>
         <Arrow label="Next week" right disabled={at === weeks.length - 1} onClick={() => onAt(at + 1)} />
       </div>
-      {/* The key along the bottom. Weeks saved before days were kept have
-          their totals only; a note takes its place. */}
-      <div className="border-t border-stone-100 py-1.5">
-        {!week.dayLog ? <p className="text-center text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend />}
+      {/* Along the bottom, the key, then ACTIVITIES, with a line halfway
+          between. Weeks saved before days were kept have their totals only;
+          a note takes the key's place. */}
+      <div className="border-t border-stone-100 px-4 py-1.5 flex items-center justify-between gap-2">
+        {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="gap-x-2.5" />}
+        <span className="w-px self-stretch bg-stone-200" />
+        <button onClick={onActivities} className="text-xs font-bold tracking-wider text-accent-500 whitespace-nowrap active:opacity-70">
+          ACTIVITIES ›
+        </button>
       </div>
     </div>
   )

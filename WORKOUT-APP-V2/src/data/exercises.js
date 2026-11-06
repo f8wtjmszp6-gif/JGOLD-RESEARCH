@@ -1,4 +1,5 @@
 import { workouts, GYM_ORDER, MUSCLE_GROUPS } from './workout'
+import { MORE_EXERCISES } from './moreExercises'
 
 // Every exercise you can swap into a workout, by the muscle group Trends
 // files it under. The ones the workouts start with keep their ids and
@@ -178,7 +179,7 @@ const groupOf = id => MUSCLE_GROUPS.find(g => g.exercises.includes(id))?.id ?? '
 // The four plans' own exercises (the full-body days only list bank ids).
 const starting = GYM_ORDER.flatMap(id => workouts[id].exercises).map(x => ({ ...x, group: groupOf(x.id) }))
 
-export const EXERCISE_BANK = [...starting, ...MORE, ...EVEN_MORE]
+export const EXERCISE_BANK = [...starting, ...MORE, ...EVEN_MORE, ...MORE_EXERCISES]
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISE_BANK.map(x => [x.id, x]))
 
 // Which plans each exercise fits — what the plan is for, nothing else. An
@@ -237,11 +238,20 @@ const FITS = {
 // equipment (or, with dumbbells, a pair of those).
 FITS.fullGym = [...new Set([PUSH, QUAD, PULL, POST].flatMap(k => FITS[k]))]
 
+// The second bank (moreExercises.js) isn't listed above: those fit a plan
+// when what they mainly work is one of the plan's areas.
+const fitsByArea = (exercise, planId) => !!exercise.covers?.length && (PLAN_AREAS[planId] ?? []).some(([id]) => id === exercise.covers[0])
+const inPlans = exercise => FITS.fullGym.includes(exercise.id) || (!isCore(exercise) && !!exercise.covers)
+
 // Whether an exercise belongs in a plan's main list, or in its Core section.
+// A targeted workout takes anything but core work (that goes in its Core
+// section, like a plan's).
 export function fitsPlan(exercise, planId) {
-  if (planId === 'fullHome') return FITS.fullGym.includes(exercise.id) && defaultEquipment(exercise) === 'bodyweight'
-  if (planId === 'fullHomeDb') return FITS.fullGym.includes(exercise.id) && ['bodyweight', 'dumbbell'].includes(defaultEquipment(exercise))
-  return !!FITS[planId]?.includes(exercise.id)
+  if (planId === 'targeted') return !isCore(exercise)
+  if (planId === 'fullGym') return inPlans(exercise)
+  if (planId === 'fullHome') return inPlans(exercise) && defaultEquipment(exercise) === 'bodyweight' && !exercise.gear
+  if (planId === 'fullHomeDb') return inPlans(exercise) && ['bodyweight', 'dumbbell'].includes(defaultEquipment(exercise)) && !exercise.gear
+  return !!FITS[planId]?.includes(exercise.id) || fitsByArea(exercise, planId)
 }
 export function isCore(exercise) {
   return exercise.group === 'core'
@@ -374,7 +384,7 @@ const COVERS = {
 }
 
 export function coversOf(exercise) {
-  return COVERS[exercise.id] ?? []
+  return COVERS[exercise.id] ?? exercise.covers ?? []
 }
 
 // Each of a list's areas, and whether one of its exercises covers it.
@@ -423,6 +433,7 @@ const MACHINE = [
 const WEIGHTED_BODY = ['back-extensions', 'weighted-dips']
 
 export function defaultEquipment(exercise) {
+  if (exercise.equipment) return exercise.equipment
   const { bar, value, assist } = exercise.weight
   if (assist) return value > 0 ? 'assisted' : 'bodyweight'
   if (bar > 0) return 'barbell'

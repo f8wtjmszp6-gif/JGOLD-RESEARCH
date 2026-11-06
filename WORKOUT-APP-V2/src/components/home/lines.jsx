@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
 import { CLASS_AREAS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
 import { dayLabel } from '../../utils/days'
 import { TAB_DOT } from '../../utils/dayKinds'
 import { cardioMinutes } from '../../utils/format'
-import { WorkoutMark, EarlyMark } from '../ui/Icons'
+import { InfoMark } from '../ui/InfoMark'
 
 // "Upper · Core", or "Full body" when all three were worked.
 function areasLabel(areas) {
@@ -14,7 +13,7 @@ function areasLabel(areas) {
 
 // A logged item's row, kept to one line: its day, then each part with its
 // tab's dot (as on the week strip). Tap it to edit it or change its day.
-// At the right end, a mark you can tap for what it means:
+// At the right end, a mark you can tap for what it means (InfoMark):
 //   `workout` – a dumbbell, for things that only sometimes count toward your
 //     workouts: this one did. False keeps its place empty, so names line up;
 //     leave it out for things that never count (walks, rest).
@@ -34,37 +33,10 @@ export function LineButton({ label, day, workout, early = false, end, onEdit, ch
         <span className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">{children}</span>
         {end && <span className="shrink-0 text-stone-400">{end}</span>}
       </button>
-      {early ? <Badge label="Ended early" text="Ended early, so it doesn’t count" tint="active:bg-amber-50"><EarlyMark /></Badge>
-        : workout ? <Badge label="Qualifies as a workout" text="This qualifies as a workout" tint="active:bg-red-50"><WorkoutMark /></Badge>
+      {early ? <InfoMark kind="early" className="-my-1" />
+        : workout ? <InfoMark kind="workout" className="-my-1" />
         : workout === false && <span className="w-7 shrink-0" />}
     </div>
-  )
-}
-
-// A mark at a line's end: tap it and a bubble says what it means.
-function Badge({ label, text, tint, children }) {
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    if (!shown) return
-    const t = setTimeout(() => setShown(false), 2500)
-    return () => clearTimeout(t)
-  }, [shown])
-  return (
-    <span className="relative shrink-0">
-      <button
-        onClick={() => setShown(v => !v)}
-        aria-label={label}
-        aria-expanded={shown}
-        className={`w-7 h-7 -my-1 rounded-lg flex items-center justify-center ${tint}`}
-      >
-        {children}
-      </button>
-      {shown && (
-        <span role="status" className="absolute right-0 bottom-full mb-1.5 z-20 whitespace-nowrap rounded-lg bg-stone-800 text-white text-xs font-medium px-2.5 py-1.5 shadow-lg">
-          {text}
-        </span>
-      )}
-    </span>
   )
 }
 

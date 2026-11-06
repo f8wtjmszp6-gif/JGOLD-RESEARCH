@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { fmtClock } from '../../hooks/timing'
-import { HOWTO } from '../../data/howto'
-import { HowToBody } from './HowTo'
+import { openDemo } from '../../data/howto'
 import { StretchPicker } from './pickers'
 import { AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
@@ -11,6 +10,8 @@ import { MoreMenu } from '../ui/MoreMenu'
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
+import { useScope } from '../../hooks/useScope'
+import { STRETCH_BY_ID } from '../../data/stretches'
 
 // Seconds → "6m 30s" / "6m" / "45s"
 function fmtDuration(totalSeconds) {
@@ -26,6 +27,8 @@ function fmtDuration(totalSeconds) {
 export function StretchesTab({ workout, store, onTimer }) {
   const list = store.getStretches(workout.id)
   const [adding, setAdding] = useState(false)
+  // Adding or removing one asks: just this week, or every week after?
+  const [ask, scopeSheet] = useScope(store, workout.id === 'targeted')
   const listRef = useRef(null)
   const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
   const totalStretchSeconds = list.reduce(
@@ -50,7 +53,7 @@ export function StretchesTab({ workout, store, onTimer }) {
       <div ref={listRef} className="space-y-2">
       {list.map(stretch => (
         <div key={stretch.id} data-row={stretch.id} style={drag.style(stretch.id)} className={drag.dragging === stretch.id ? 'rounded-2xl shadow-lg' : ''}>
-        <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => store.removeStretch(workout.id, stretch.id) : null}>
+        <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => ask(`Remove ${stretch.name}?`, scope => store.removeStretch(workout.id, stretch.id, scope)) : null}>
         <StretchCard
           stretch={stretch}
           grip={drag.handlers(stretch.id)}
@@ -83,12 +86,13 @@ export function StretchesTab({ workout, store, onTimer }) {
           listId={workout.id}
           store={store}
           onPick={id => {
-            store.addStretch(workout.id, id)
             setAdding(false)
+            ask(`Add ${STRETCH_BY_ID[id].name}?`, scope => store.addStretch(workout.id, id, scope))
           }}
           onClose={() => setAdding(false)}
         />
       )}
+      {scopeSheet}
     </>
   )
 }
@@ -99,7 +103,6 @@ export function StretchesTab({ workout, store, onTimer }) {
 // Removing is a swipe.
 function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
-  const [showHow, setShowHow] = useState(false)
   const runs = (perSide ? 2 : 1) * sets
 
   return (
@@ -133,17 +136,12 @@ function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration
         <MoreMenu
           label={stretch.name}
           items={[
-            HOWTO[stretch.id] && { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => setShowHow(true) },
+            { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => openDemo(stretch.name, 'stretch') },
             { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
           ].filter(Boolean)}
         />
       </div>
 
-      {showHow && (
-        <SettingsSheet title={stretch.name} tall onClose={() => setShowHow(false)}>
-          <HowToBody item={stretch} kind="stretch" />
-        </SettingsSheet>
-      )}
       {showSettings && (
         <SettingsSheet title={stretch.name} tall onClose={() => setShowSettings(false)}>
           <StepperRow

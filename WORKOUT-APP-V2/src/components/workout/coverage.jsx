@@ -1,18 +1,49 @@
+import { useState } from 'react'
+import { InfoSheet } from '../ui/InfoMark'
 import { coverage } from '../../data/exercises'
 
-// How many of a list's areas it covers, as a pill on its heading: green
-// "All 4 areas ✓", or orange "3 of 4 areas" while one is missing.
+// How many of a list's areas it covers, as a pill on its heading: a green
+// ✓ once all are covered, or orange "3 of 4 areas" while one is missing.
+// Tap it for which areas count.
 export function CoveragePill({ list, area }) {
+  const [open, setOpen] = useState(false)
   const areas = coverage(list, area)
   if (!areas.length) return null
   const covered = areas.filter(a => a.covered).length
   const all = covered === areas.length
-  return (
+  const missing = areas.filter(a => !a.covered).map(a => a.label)
+  const pill = (
     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${all ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
-      {all ? `All ${areas.length} areas ✓` : `${covered} of ${areas.length} areas`}
+      {all ? '✓' : `${covered} of ${areas.length} areas`}
     </span>
   )
+  return (
+    <>
+      <button onClick={() => setOpen(true)} aria-label={all ? 'All areas covered' : undefined} className="active:opacity-70">
+        {pill}
+      </button>
+      {open && (
+        <InfoSheet
+          icon={all && pill}
+          title={all ? 'All areas covered' : `${covered} of ${areas.length} areas covered`}
+          text={all ? 'Every area this part should hit has an exercise.' : `Missing ${listOf(missing)}. Add an exercise to fill the gap.`}
+          onClose={() => setOpen(false)}
+        >
+          <ul className="space-y-2 text-sm">
+            {areas.map(a => (
+              <li key={a.id} className="flex items-center gap-3">
+                <span className={`w-4 text-center font-bold ${a.covered ? 'text-emerald-600' : 'text-orange-500'}`}>{a.covered ? '✓' : '–'}</span>
+                <span className={a.covered ? 'text-stone-700' : 'text-stone-400'}>{a.label}</span>
+              </li>
+            ))}
+          </ul>
+        </InfoSheet>
+      )}
+    </>
+  )
 }
+
+const listOf = xs => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`).toLowerCase()
 
 // An orange row for each area the list is missing; tapping it opens the bank,
 // where exercises that fill the gap come first.

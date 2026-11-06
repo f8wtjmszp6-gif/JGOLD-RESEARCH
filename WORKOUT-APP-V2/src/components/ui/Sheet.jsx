@@ -17,6 +17,24 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onClose }) 
   )
 }
 
+// A change to what's in a plan: for just this week, or this week and every
+// week after. `note`: anything to know first (an area it leaves uncovered).
+export function ScopeSheet({ title, note, onPick, onClose }) {
+  return (
+    <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
+      {note && <p className="text-sm text-stone-600 leading-relaxed">{note}</p>}
+      <div className="space-y-2">
+        <button onClick={() => onPick('week')} className="w-full py-3.5 rounded-2xl bg-stone-100 text-stone-800 font-semibold active:bg-stone-200 transition-colors">
+          Just this week
+        </button>
+        <button onClick={() => onPick('always')} className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors">
+          This week and all future weeks
+        </button>
+      </div>
+    </SettingsSheet>
+  )
+}
+
 // Bottom sheet for an exercise's or stretch's settings — the list underneath
 // never moves, and the controls are big enough to hit mid-set.
 // A sheet that slides up over the page; pull it down to close it. Dragging

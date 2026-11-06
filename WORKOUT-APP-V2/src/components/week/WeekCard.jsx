@@ -1,5 +1,5 @@
 import { activities } from '../../data/workout'
-import { GoalRow, CardioRow } from './Goal'
+import { GoalTile, CardioTile } from './Goal'
 import { TileIcon } from '../ui/Icons'
 import { goalFill, goalLevel } from '../../utils/goal'
 import { WORKOUT_KINDS } from '../../store/weeks'
@@ -28,8 +28,9 @@ const CHIPS = [
 // `figure` (the live week's body map) goes at the right of the title line;
 // `live` titles it with what's left to do (`ended`: what it fell short by). `logged` gives
 // classes and cardio sessions logged (the live week knows; saved weeks fall
-// back to the ones that counted as workouts).
-export default function WeekCard({ week, stretch, cardio, goals, figure, live, ended, logged, title = 'This week', children }) {
+// back to the ones that counted as workouts). `joined`: the week strip sits
+// right under it, so the two read as one card (see WeekStrip).
+export default function WeekCard({ week, stretch, cardio, goals, figure, live, ended, logged, joined, title = 'This week', children }) {
   // Weeks saved before cardio counted have no cardio key.
   const count = id => week[id] ?? 0
   const workouts = WORKOUT_KINDS.reduce((n, id) => n + count(id), 0)
@@ -43,7 +44,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
   }
 
   return (
-    <div className="bg-white shadow-sm rounded-2xl px-4 py-2.5">
+    <div className={`bg-white shadow-sm px-4 pt-2.5 ${joined ? 'rounded-t-2xl pb-3' : 'rounded-2xl pb-2.5'}`}>
       {/* The live week's title is what's still to go; a saved week's is its
           dates. */}
       <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
@@ -54,10 +55,10 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
         ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
         {figure}
       </div>
-      <div className="space-y-1.5">
-        <GoalRow label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
-        <GoalRow label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
-        {cardio && <CardioRow minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
+      <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
+        <GoalTile label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
+        {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
 
       {/* A count per activity on saved weeks; the live week has the day strip

@@ -4,7 +4,7 @@ import { STRETCH_BY_ID, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, startTargeted, targetedOf, planName } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 import { cardioMinutes } from '../utils/format'
 
@@ -333,32 +333,34 @@ function makeStore(state, update) {
     return { main: ex('main'), core: ex('core'), coreOn: coreOnOf(state, workoutId) }
   }
 
-  function setCoreOn(workoutId, on) {
-    update(s => ({ ...s, coreOn: { ...s.coreOn, [workoutId]: on } }))
+  // Changes to what's in a plan take a scope: 'week' for just this week,
+  // 'always' for this week and after (see writePlan in state.js).
+  function setCoreOn(workoutId, on, scope) {
+    update(s => writeCoreOn(s, workoutId, on, scope))
   }
 
-  // Adds to the main list or, for a core exercise, the Core section.
-  function addExercise(workoutId, id) {
+  // Adds to the main list or, for a core exercise, the Core section (and
+  // turns Core on, for the same weeks).
+  function addExercise(workoutId, id, scope) {
     update(s => {
       const ex = EXERCISE_BY_ID[id]
       const section = sectionOf(ex)
       if (section === 'main' && !fitsPlan(ex, workoutId)) return s
-      const ids = listIds(s, workoutId, section)
-      return ids.includes(id) ? s : writeList(s, workoutId, section, [...ids, id])
+      if (listIds(s, workoutId, section).includes(id)) return s
+      const next = writeList(s, workoutId, section, ids => (ids.includes(id) ? ids : [...ids, id]), scope)
+      return section === 'core' ? writeCoreOn(next, workoutId, true, scope) : next
     })
   }
 
   // The main list always keeps at least one exercise; Core can be emptied.
-  function removeExercise(workoutId, id) {
+  function removeExercise(workoutId, id, scope) {
     update(s => {
       const section = sectionOf(EXERCISE_BY_ID[id])
       const ids = listIds(s, workoutId, section)
       if (section === 'main' && ids.length <= 1) return s
-      const next = writeList(s, workoutId, section, ids.filter(x => x !== id))
+      const next = writeList(s, workoutId, section, list => (section === 'main' && list.length <= 1 ? list : list.filter(x => x !== id)), scope)
       // Taking away the last core exercise turns the Core section off.
-      return section === 'core' && ids.length === 1 && ids[0] === id
-        ? { ...next, coreOn: { ...next.coreOn, [workoutId]: false } }
-        : next
+      return section === 'core' && ids.length === 1 && ids[0] === id ? writeCoreOn(next, workoutId, false, scope) : next
     })
   }
 
@@ -370,7 +372,7 @@ function makeStore(state, update) {
       const ids = listIds(s, workoutId, section).filter(id => id !== exerciseId)
       if (ids.length === listIds(s, workoutId, section).length) return s
       ids.splice(Math.max(0, Math.min(to, ids.length)), 0, exerciseId)
-      return writeList(s, workoutId, section, ids)
+      return writeList(s, workoutId, section, () => ids, 'auto')
     })
   }
 
@@ -388,6 +390,7 @@ function makeStore(state, update) {
     })
   }
 
+  // Just for this week: each new week starts without one (see clearWeek).
   function addWarmup(workoutId) {
     writeWarmup(workoutId, w => ({ ...w, on: true }))
   }
@@ -429,19 +432,19 @@ function makeStore(state, update) {
     return stretchesOf(state, listId)
   }
 
-  function addStretch(listId, id) {
+  function addStretch(listId, id, scope) {
     update(s => {
       const ids = stretchesOf(s, listId).map(x => x.id)
       if (ids.includes(id) || !STRETCH_BY_ID[id] || !stretchFits(STRETCH_BY_ID[id], listId)) return s
-      return writeStretchList(s, listId, [...ids, id])
+      return writeStretchList(s, listId, list => (list.includes(id) ? list : [...list, id]), scope)
     })
   }
 
   // A list always keeps at least one stretch.
-  function removeStretch(listId, id) {
+  function removeStretch(listId, id, scope) {
     update(s => {
       const ids = stretchesOf(s, listId).map(x => x.id)
-      return ids.length <= 1 ? s : writeStretchList(s, listId, ids.filter(x => x !== id))
+      return ids.length <= 1 ? s : writeStretchList(s, listId, list => (list.length <= 1 ? list : list.filter(x => x !== id)), scope)
     })
   }
 
@@ -450,7 +453,7 @@ function makeStore(state, update) {
     update(s => {
       const ids = stretchesOf(s, listId).map(x => x.id).filter(x => x !== id)
       ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id)
-      return writeStretchList(s, listId, ids)
+      return writeStretchList(s, listId, () => ids, 'auto')
     })
   }
 
@@ -585,6 +588,12 @@ function makeStore(state, update) {
 
   function startAgain(id) {
     update(s => fileSession(s, id))
+  }
+
+  // A targeted workout for these areas, with this equipment (see
+  // startTargeted).
+  function startTargetedWorkout(areas, eq) {
+    update(s => startTargeted(s, areas, eq))
   }
 
   // Opening a filed one again: see reopenOf and reopenSession.
@@ -875,6 +884,9 @@ function makeStore(state, update) {
     currentSession,
     sessionsFor,
     startAgain,
+    targeted: targetedOf(state),
+    startTargeted: startTargetedWorkout,
+    planName: (id, session) => planName(state, id, session),
     canReopen,
     reopen,
     moveSession,

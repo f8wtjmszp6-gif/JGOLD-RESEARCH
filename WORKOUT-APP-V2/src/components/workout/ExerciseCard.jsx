@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { fmtClock } from '../../hooks/timing'
 import { BAR_MIN, BAR_MAX, BAR_STEP } from '../../data/workout'
-import { HOWTO } from '../../data/howto'
-import { HowToBody } from './HowTo'
+import { openDemo } from '../../data/howto'
 import { fmt, stepTo, loadSummary } from '../../utils/format'
 import { GearIcon, InfoIcon, CheckIcon, ClockIcon, Chevron, CloseButton } from '../ui/glyphs'
 import { MoreMenu } from '../ui/MoreMenu'
@@ -93,7 +92,6 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
 // with a dot per set. Tap to open.
 export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone }) {
   const [showSettings, setShowSettings] = useState(false)
-  const [showHow, setShowHow] = useState(false)
 
   const log = store.getLog(workoutId, exercise)
   const equipment = store.getEquipment(exercise)
@@ -193,7 +191,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
             label={exercise.name}
             size="w-10 h-10 rounded-xl"
             items={[
-              HOWTO[exercise.id] && { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => setShowHow(true) },
+              { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => openDemo(exercise.name, 'exercise') },
               { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
               allDone
                 ? { label: 'Untick all sets', icon: <CheckIcon />, onClick: () => store.toggleExercise(workoutId, exercise) }
@@ -249,12 +247,6 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           </span>
         )}
       </div>
-
-      {showHow && (
-        <SettingsSheet title={exercise.name} tall onClose={() => setShowHow(false)}>
-          <HowToBody item={exercise} kind="exercise" />
-        </SettingsSheet>
-      )}
 
       {showSettings && (
         <SettingsSheet title={exercise.name} tall onClose={() => setShowSettings(false)}>

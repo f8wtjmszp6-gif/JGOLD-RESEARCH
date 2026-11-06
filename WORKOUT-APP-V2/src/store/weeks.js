@@ -9,9 +9,9 @@ import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, dayLogOf, classe
 // Each saved week keeps everything you ticked and logged, and how your plans
 // were set up that week (lists, weights, timers), so it can be opened and
 // changed later without touching this week's numbers.
-const WEEK_KEYS = ['checks', 'activities', 'stretchExtra', 'stretchLog', 'cardio', 'classLog', 'restLog', 'sessionLog']
-const SETUP_KEYS = ['exerciseSettings', 'setup', 'warmups', 'order', 'coreLists', 'coreOn', 'stretchLists', 'equipment', 'assist', 'customDurations', 'perSide', 'stretchSets', 'stretchRest']
-const EMPTY_WEEK = { checks: {}, activities: {}, stretchExtra: 0, stretchLog: [], cardio: [], classLog: [], restLog: [], sessionLog: [] }
+const WEEK_KEYS = ['checks', 'activities', 'stretchExtra', 'stretchLog', 'cardio', 'classLog', 'restLog', 'sessionLog', 'weekOnly']
+const SETUP_KEYS = ['exerciseSettings', 'setup', 'warmups', 'order', 'coreLists', 'coreOn', 'stretchLists', 'targeted', 'equipment', 'assist', 'customDurations', 'perSide', 'stretchSets', 'stretchRest']
+const EMPTY_WEEK = { checks: {}, activities: {}, stretchExtra: 0, stretchLog: [], cardio: [], classLog: [], restLog: [], sessionLog: [], weekOnly: {} }
 
 export function detailsOf(s) {
   return Object.fromEntries([...WEEK_KEYS, ...SETUP_KEYS].filter(k => s[k] !== undefined).map(k => [k, s[k]]))
@@ -117,19 +117,48 @@ export function clearWeek(s, now, weekStart) {
     stretchLog: [],
     restLog: [],
     sessionLog: [],
+    weekOnly: {},
+    // Warm-ups are added week by week, sets and all.
+    warmups: {},
   }
 }
 
 // The week resets itself: the first time the app runs in a new calendar week
 // (Sunday–Saturday), the last week is filed under the week it started in and a
 // note says so. A first run just starts the clock.
+// Days that went by with nothing logged become rest days, the last week's
+// before it's filed and this week's up to yesterday.
 export function rollWeek(s, date = new Date()) {
   if (!s.lastResetAt) return { ...s, lastResetAt: date.toISOString() }
   const thisWeek = weekKeyOf(date)
-  if (weekKeyOf(s.lastResetAt) === thisWeek) return s
+  if (weekKeyOf(s.lastResetAt) === thisWeek) return fillRestDays(s, date)
   const weekStart = weekKeyOf(s.lastResetAt)
   const sunday = new Date(`${thisWeek}T00:00:00`).toISOString()
-  return { ...clearWeek(s, sunday, weekStart), newWeek: { weekStart } }
+  return fillRestDays({ ...clearWeek(fillRestDays(s, date), sunday, weekStart), newWeek: { weekStart } }, date)
+}
+
+// Each day of the week being kept, from the day it started up to the day
+// before `date`, with nothing logged gets a rest day. `restFilledTo` (the
+// last day looked at) means a day is only looked at once, so a rest day you
+// remove stays removed.
+const dayKeyOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function fillRestDays(s, date) {
+  const from = new Date(s.lastResetAt)
+  from.setHours(0, 0, 0, 0)
+  const today = new Date(date)
+  today.setHours(0, 0, 0, 0)
+  const log = dayLogOf(s, new Date(s.lastResetAt))
+  const added = weekDays(new Date(s.lastResetAt))
+    .map((day, i) => ({ day, empty: !log[i].length }))
+    .filter(({ day }) => day >= from && day < today && !(s.restFilledTo && dayKeyOf(day) <= s.restFilledTo))
+  if (!added.length) return s
+  const rest = added.filter(x => x.empty).map(x => x.day.toISOString())
+  const list = [...restDaysOf(s), ...rest]
+  return {
+    ...s,
+    restFilledTo: dayKeyOf(added.at(-1).day),
+    ...(rest.length > 0 && { restLog: list, activities: { ...s.activities, rest: list.length } }),
+  }
 }
 
 // ── Calendar weeks for history ─────────────────────────────────────────────

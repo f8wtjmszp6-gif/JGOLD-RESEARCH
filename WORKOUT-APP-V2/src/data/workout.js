@@ -34,7 +34,7 @@ export const workouts = {
     exercises: [
       { id: 'cable-squat', name: 'Cable-Assisted Squat', sets: 3, reps: '6–8', weight: { bar: 0, value: 170 } },
       { id: 'hip-thrust', name: 'Hip Thrust', sets: 3, reps: '6–8', weight: { bar: 25, value: 145 } },
-      { id: 'hip-abduction', name: 'Hip Abduction Machine', sets: 3, reps: '12–14', weight: { bar: 0, value: 130 } },
+      { id: 'hip-abduction', name: 'Hip Abduction', sets: 3, reps: '12–14', weight: { bar: 0, value: 130 } },
       { id: 'hip-adduction', name: 'Hip Adduction', sets: 3, reps: '12–14', weight: { bar: 0, value: 185 } },
       { id: 'plank', name: 'Plank', sets: 3, reps: '45s', isTime: true, durationSeconds: 45, weight: { bar: 0, value: 0, assist: true } },
       { id: 'dead-bugs', name: 'Dead Bugs', sets: 3, reps: '12–14', perSide: true, weight: { bar: 0, value: 0, assist: true } },
@@ -162,6 +162,8 @@ export const MUSCLE_MAP = {
   fullGym: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
   fullHomeDb: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
   fullHome: { front: ['shoulders', 'chest', 'thighs', 'core'], back: ['back', 'hips', 'thighs'] },
+  // Whatever its areas are (see MuscleMap).
+  targeted: { front: [], back: [] },
 }
 
 // Trends groups exercises by the muscles they mainly work — not by which
@@ -255,8 +257,18 @@ export const FULL_BODY = [
 ]
 export const FULL_BODY_BY_ID = Object.fromEntries(FULL_BODY.map(p => [p.id, p]))
 for (const p of FULL_BODY) workouts[p.id] = p
-// Every plan you tick sets in: the four, then the full-body days.
-export const PLAN_IDS = [...GYM_ORDER, ...FULL_BODY.map(p => p.id)]
+
+// A targeted workout: the areas you pick, with what you have to work with,
+// built from the banks each time you start one (see data/targeted.js). Like
+// a full-body day it can be done any day, as often as you like, and counts
+// as a gym workout once every set is done. Its name comes from what you
+// picked ("Chest & Glutes · Dumbbells"); `short` is for when there's none.
+export const TARGETED = { id: 'targeted', name: 'Targeted workout', short: 'Targeted Workout', exercises: [], stretches: [] }
+workouts[TARGETED.id] = TARGETED
+
+// Every plan you tick sets in: the four, the full-body days, then the
+// targeted workout.
+export const PLAN_IDS = [...GYM_ORDER, ...FULL_BODY.map(p => p.id), TARGETED.id]
 
 // Days you didn't make it to the gym — counted, so three walks read as 3.
 //   note        – what its card says before you log one.

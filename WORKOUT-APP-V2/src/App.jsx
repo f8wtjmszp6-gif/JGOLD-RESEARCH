@@ -142,7 +142,7 @@ export default function App() {
 function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretch, cardio, store }) {
   const logged = { class: store.classes.length, cardio: store.otherCardio.length + store.sports.length }
   return (
-    <div className="shrink-0 px-5 pt-5 pb-2.5">
+    <div className="shrink-0 px-5 pt-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight">Today</h1>
@@ -179,7 +179,7 @@ function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretc
       </div>
       <div className="mt-3">
         {/* This week's body map sits in the card's title line. */}
-        <WeekCard week={week} stretch={stretch} cardio={cardio} goals={store.goals} figure={<MuscleMap store={store} />} live logged={logged} />
+        <WeekCard week={week} stretch={stretch} cardio={cardio} goals={store.goals} figure={<MuscleMap store={store} />} live logged={logged} joined />
       </div>
     </div>
   )
@@ -190,7 +190,7 @@ function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretc
 // their details were kept show their totals only.
 function PastHeader({ weekStart, entry, week, goals, onToday, onCalendar }) {
   return (
-    <div className="shrink-0 px-5 pt-5 pb-2.5">
+    <div className="shrink-0 px-5 pt-5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           {/* A week across two months has a longer name: smaller, so it fits beside the buttons. */}
@@ -206,9 +206,9 @@ function PastHeader({ weekStart, entry, week, goals, onToday, onCalendar }) {
       </div>
       <div className="mt-3">
         {week ? (
-          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} figure={<MuscleMap store={week} />} live ended logged={{ class: week.classes.length, cardio: week.otherCardio.length + week.sports.length }} />
+          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} figure={<MuscleMap store={week} />} live ended logged={{ class: week.classes.length, cardio: week.otherCardio.length + week.sports.length }} joined />
         ) : (
-          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} logged={entry.classes ? { class: entry.classes.length } : undefined} title="Totals" />
+          <WeekCard week={entry.week} stretch={entry.stretch} cardio={entry.cardio} goals={goals} logged={entry.classes ? { class: entry.classes.length } : undefined} title="Totals" joined />
         )}
       </div>
     </div>
