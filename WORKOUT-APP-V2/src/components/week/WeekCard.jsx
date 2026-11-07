@@ -57,7 +57,7 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
       </div>
       <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
-        <GoalTile label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
+        <GoalTile label="Stretch days" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
 

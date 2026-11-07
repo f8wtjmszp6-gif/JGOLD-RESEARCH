@@ -22,7 +22,7 @@ function monthsOf(weekStart) {
 // Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
 // It sits under the This week card as the bottom of the same card: the
 // month on top, then each date with a dot for everything done that day, then
-// the key and ACTIVITIES, which opens the picked day (see DaySheet). Tap a day
+// the key and Activities, which opens the picked day (see DaySheet). Tap a day
 // to pick it. `weeks` is oldest first, ending with this week; `at` is the
 // one showing; `picked` is the day picked (0 = Sunday).
 export default function WeekStrip({ weeks, at, onAt, picked, onPick, onActivities }) {
@@ -88,14 +88,16 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick, onActivitie
         </div>
         <Arrow label="Next week" right disabled={at === weeks.length - 1} onClick={() => onAt(at + 1)} />
       </div>
-      {/* Along the bottom, the key, then ACTIVITIES, with a line halfway
-          between. Weeks saved before days were kept have their totals only;
-          a note takes the key's place. */}
-      <div className="border-t border-stone-100 px-4 py-1.5 flex items-center justify-between gap-2">
-        {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="gap-x-2.5" />}
+      {/* Along the bottom, the key, then Activities, a line between and
+          each centered in its part. Weeks saved before days were kept have
+          their totals only; a note takes the key's place. */}
+      <div className="border-t border-stone-100 py-1.5 flex items-center">
+        <div className="flex-1 min-w-0 flex justify-center px-2">
+          {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="justify-center gap-x-2.5" />}
+        </div>
         <span className="w-px self-stretch bg-stone-200" />
-        <button onClick={onActivities} className="text-xs font-bold tracking-wider text-accent-500 whitespace-nowrap active:opacity-70">
-          ACTIVITIES ›
+        <button onClick={onActivities} className="px-4 text-xs font-semibold text-accent-500 whitespace-nowrap active:opacity-70">
+          Activities ›
         </button>
       </div>
     </div>

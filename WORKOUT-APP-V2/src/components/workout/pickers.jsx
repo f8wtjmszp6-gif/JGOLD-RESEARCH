@@ -3,6 +3,7 @@ import { STRETCH_ROUTINE, MUSCLE_GROUPS } from '../../data/workout'
 import { EXERCISE_BANK, SUGGESTED_GROUPS, fitsPlan, isCore, ratingFor, coverage, coversOf } from '../../data/exercises'
 import { openDemo } from '../../data/howto'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchFits, stretchRating } from '../../data/stretches'
+import { fitsEquipment } from '../../data/targeted'
 import { InfoIcon } from '../ui/glyphs'
 import { SettingsSheet } from '../ui/Sheet'
 
@@ -32,7 +33,7 @@ export function StretchPicker({ listId, store, onPick, onClose }) {
 // Only exercises that fit: for the main list, what the plan is for; for the
 // Core section, core exercises.
 // Exercises that cover an area the list is missing are marked "Fills" and
-// listed first.
+// listed first. A built workout offers only what fits its equipment.
 export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
   const core = section === 'core'
   const area = core ? 'core' : workoutId
@@ -51,7 +52,7 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
       kind="exercise"
       sections={MUSCLE_GROUPS}
       sectionOf={x => x.group}
-      bank={EXERCISE_BANK.filter(x => (core ? isCore(x) : fitsPlan(x, workoutId)))}
+      bank={EXERCISE_BANK.filter(x => (core ? isCore(x) : fitsPlan(x, workoutId)) && (workoutId !== 'targeted' || fitsEquipment(x, store.targeted.eq)))}
       rate={x => ratingFor(x, core ? 'core' : workoutId)}
       exclude={store.getExercises(workoutId).map(x => x.id)}
       current={list}

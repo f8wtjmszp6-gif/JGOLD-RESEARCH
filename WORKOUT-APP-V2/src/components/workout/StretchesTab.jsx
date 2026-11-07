@@ -11,6 +11,8 @@ import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
 import { useScope } from '../../hooks/useScope'
+import { WeekTag, OffRow } from './weekDiff'
+import { SlotRows } from './slots'
 import { STRETCH_BY_ID } from '../../data/stretches'
 
 // Seconds → "6m 30s" / "6m" / "45s"
@@ -23,12 +25,14 @@ function fmtDuration(totalSeconds) {
 }
 
 // A list's stretches: drag one by its handle to reorder, swipe it away to
-// remove it (never the last), + Add stretch at the end.
-export function StretchesTab({ workout, store, onTimer }) {
+// remove it (never the last), + Add stretch at the end. `diff`: how this
+// week's differs from every week's (see weekDiffOf), for one you can do any
+// number of times (`repeat`) this time's.
+export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
   const list = store.getStretches(workout.id)
   const [adding, setAdding] = useState(false)
   // Adding or removing one asks: just this week, or every week after?
-  const [ask, scopeSheet] = useScope(store, workout.id === 'targeted')
+  const [ask, scopeSheet] = useScope(store, workout.id)
   const listRef = useRef(null)
   const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
   const totalStretchSeconds = list.reduce(
@@ -56,6 +60,7 @@ export function StretchesTab({ workout, store, onTimer }) {
         <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => ask(`Remove ${stretch.name}?`, scope => store.removeStretch(workout.id, stretch.id, scope)) : null}>
         <StretchCard
           stretch={stretch}
+          tag={diff?.stretches.added.includes(stretch.id) && <WeekTag repeat={repeat} />}
           grip={drag.handlers(stretch.id)}
           checked={store.getStretchDone(workout.id, stretch.id)}
           onToggle={() => store.toggleStretch(workout.id, stretch.id)}
@@ -78,6 +83,9 @@ export function StretchesTab({ workout, store, onTimer }) {
         </SwipeRow>
         </div>
       ))}
+      {diff?.stretches.dropped.map(id => <OffRow key={id} name={STRETCH_BY_ID[id].name} repeat={repeat} />)}
+      {/* A built workout's stretches still to pick. */}
+      {workout.id === 'targeted' && <SlotRows kind="stretch" slots={store.targeted.stretchSlots} store={store} />}
       </div>
       <AddRow label="Add stretch" onClick={() => setAdding(true)} />
 
@@ -101,7 +109,7 @@ export function StretchesTab({ workout, store, onTimer }) {
 // One line per stretch: tick, name, a timer that shows the hold (×2 when it
 // runs per side, more with extra sets) and ••• for how-to and settings.
 // Removing is a swipe.
-function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
+function StretchCard({ stretch, tag, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
   const runs = (perSide ? 2 : 1) * sets
 
@@ -122,7 +130,7 @@ function StretchCard({ stretch, grip, checked, onToggle, onTimer, customDuration
             )}
           </div>
         </button>
-        <p className={`flex-1 min-w-0 text-[15px] font-semibold leading-snug ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}</p>
+        <p className={`flex-1 min-w-0 text-[15px] font-semibold leading-snug ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}{tag}</p>
         <button
           onClick={onTimer}
           aria-label={`Time ${stretch.name}, ${customDuration} seconds${runs > 1 ? `, ${runs} times` : ''}`}

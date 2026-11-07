@@ -2,10 +2,8 @@ import { useState } from 'react'
 import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE } from '../../data/workout'
 import WeekStrip from '../week/WeekStrip'
 import DaySheet from '../week/DaySheet'
-import { dayLabel, inDayOrder } from '../../utils/days'
-import { ClassCard, RoutineCard, WorkoutCard, ActivityCard } from './cards'
-import { LineButton, Part, CardioLine, StretchLine } from './lines'
-import { LogClassSheet, AddCardioSheet, RestSheet, AddStretchSheet } from './logSheets'
+import { ClassCard, RoutineCard, WorkoutCard, LogCard } from './cards'
+import { LogClassSheet, AddCardioSheet, AddStretchSheet } from './logSheets'
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { BuildCard, BuildSheet } from './buildWorkout'
@@ -15,7 +13,7 @@ import { upNextOf } from '../../utils/upNext'
 // The homepage shows one group at a time, picked by these tabs. The tab you
 // pick holds while the app is open (in the background too); starting the app
 // fresh opens on Gym.
-const TABS = [['gym', 'Gym'], ['cardio', 'Cardio'], ['stretch', 'Stretch'], ['rest', 'Rest']]
+const TABS = [['gym', 'Gym'], ['cardio', 'Cardio'], ['stretch', 'Stretch']]
 const TAB_KEY = 'workout-v2-home-tab'
 function savedTab() {
   try {
@@ -42,13 +40,15 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
     if (weeks[i].live) setPicked(p => Math.min(p, new Date().getDay()))
   }
   const upNext = store && upNextOf(store)
-  // Plans in order: under way (a set or a stretch ticked), up next, not
-  // started, then complete (every set done).
+  // Plans in order: unfinished (begun on a day that's over), under way (a
+  // set or a stretch ticked), up next, not started, then complete (every
+  // set done).
   const rank = id => {
     const { done, total } = store.workoutProgress(id)
-    if (total > 0 && done >= total) return 3
-    if (done > 0 || store.getStretches(id).some(x => store.getStretchDone(id, x.id))) return 0
-    return id === upNext?.id ? 1 : 2
+    if (total > 0 && done >= total) return 4
+    if (store.planEnded(id)) return 0
+    if (done > 0 || store.getStretches(id).some(x => store.getStretchDone(id, x.id))) return 1
+    return id === upNext?.id ? 2 : 3
   }
   function setTab(t) {
     setTabState(t)
@@ -68,12 +68,24 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   // Tapping a logged line asks what to do first (see LineMenu).
   const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
-  // The picked day's pop-up, opened from ACTIVITIES on the strip.
+  // The picked day's pop-up, opened from Activities on the strip. Tapping a
+  // line there opens its workout, or asks what to do with it (over the
+  // pop-up), as on the cards.
   const [dayOpen, setDayOpen] = useState(false)
+  function editLine({ open: id, menu: kind, index }) {
+    if (id) {
+      setDayOpen(false)
+      onOpenWorkout(id)
+    } else if (kind === 'session') open('menu', { kind, index })
+    else {
+      const list = { class: store.classes, walk: store.walks, other: store.otherCardio, sport: store.sports, stretch: store.ownStretches, rest: store.restDays.map(at => ({ at })) }[kind]
+      if (list?.[index]) menu(kind, { index, entry: list[index] })
+    }
+  }
   const strip = (
     <div className="shrink-0 px-5 pb-2.5">
       <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} onActivities={() => setDayOpen(true)} />
-      {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} onPick={setPicked} onAt={toWeek} goals={store?.goals} onClose={() => setDayOpen(false)} />}
+      {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} goals={store?.goals} onEdit={store ? editLine : null} onRest={store ? () => store.addRest(new Date().toISOString()) : null} onClose={() => setDayOpen(false)} />}
     </div>
   )
   if (!store) return (
@@ -85,9 +97,6 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
     </div>
   )
   const walk = byId('walk')
-  const walks = store.walks
-  const other = store.otherCardio
-  const sports = store.sports
 
   return (
     <div className="h-full flex flex-col">
@@ -125,6 +134,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
                 key={id}
                 workout={workouts[id]}
                 upNext={id === upNext?.id}
+                ended={store.planEnded(id)}
                 progress={store.workoutProgress(id)}
                 stretches={store.getStretches(id)}
                 stretchesDone={store.getStretches(id).filter(x => store.getStretchDone(id, x.id)).length}
@@ -133,109 +143,30 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             ))}
           </Section>
 
-          {/* Any day, as often as you like: full body, or just the areas you
-              pick, at the gym or at home. */}
-          <Section title="Custom workout">
-            <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} onEditSession={item => open('menu', item)} />
-          </Section>
-
-          <Section title="Gym class">
-            <ClassCard store={store} activity={byId('class')} onAdd={() => open('class')} onEdit={e => menu('class', e)} />
+          {/* Any day, as often as you like: a workout built from full body or
+              just the areas you pick, at the gym or at home, and classes. */}
+          <Section title="More workouts">
+            <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
+            <ClassCard activity={byId('class')} onAdd={() => open('class')} />
           </Section>
         </>}
 
         {tab === 'cardio' && (
           <Section title="Cardio">
-            {/* Each walk is logged with its own length: + asks how long. */}
-            <ActivityCard
-              activity={walk}
-              icon="walk"
-              count={walks.length}
-              detail={walks.length ? `${walks.length} ${walks.length === 1 ? walk.one : walk.many} · ${store.cardioLabel('walk')}` : undefined}
-              onAdd={() => open('walk')}
-              onRemove={() => store.removeActivity('walk')}
-            >
-              {walks.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(walks).map(e => <CardioLine key={e.index} session={e.entry} showWorkout={false} onEdit={() => menu('walk', e)} />)}
-                </div>
-              )}
-            </ActivityCard>
-            <ActivityCard
-              activity={OTHER_CARDIO}
-              icon="cardio"
-              count={other.length}
-              detail={other.length ? `${other.length} ${other.length === 1 ? 'session' : 'sessions'} · ${store.cardioLabel('other')}` : undefined}
-              onAdd={() => open('other')}
-              onRemove={store.removeOtherCardio}
-            >
-              {other.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(other).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => menu('other', e)} />)}
-                </div>
-              )}
-            </ActivityCard>
-            {/* Games and hikes, each with what it was. */}
-            <ActivityCard
-              activity={SPORTS_CARD}
-              icon="sport"
-              count={sports.length}
-              detail={sports.length ? `${sports.length} ${sports.length === 1 ? 'session' : 'sessions'} · ${store.cardioLabel('sport')}` : undefined}
-              onAdd={() => open('sport')}
-              onRemove={store.removeSport}
-            >
-              {sports.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(sports).map(e => <CardioLine key={e.index} session={e.entry} onEdit={() => menu('sport', e)} />)}
-                </div>
-              )}
-            </ActivityCard>
+            <LogCard activity={walk} icon="walk" sub="Every walk adds to your cardio" onAdd={() => open('walk')} />
+            <LogCard activity={OTHER_CARDIO} icon="cardio" sub="Running, cycling, rowing and more" onAdd={() => open('other')} />
+            <LogCard activity={SPORTS_CARD} icon="sport" sub="Pickleball, tennis, hikes and more" onAdd={() => open('sport')} />
           </Section>
         )}
 
         {tab === 'stretch' && (
           <Section title="Stretching">
-            <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} onEditSession={item => open('menu', item)} />
-            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} onEditSession={item => open('menu', item)} />
-            <ActivityCard
-              activity={OWN_STRETCH}
-              icon="stretch"
-              count={store.ownStretches.length}
-              detail={store.ownStretches.length ? ownDetail(store.ownStretches) : undefined}
-              onAdd={() => open('stretch')}
-              onRemove={store.removeOwnStretch}
-            >
-              {store.ownStretches.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(store.ownStretches).map(e => <StretchLine key={e.index} session={e.entry} onEdit={() => menu('stretch', e)} />)}
-                </div>
-              )}
-            </ActivityCard>
+            <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
+            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} />
+            <LogCard activity={OWN_STRETCH} icon="stretch" sub={OWN_STRETCH.note} onAdd={() => open('stretch')} />
           </Section>
         )}
 
-        {tab === 'rest' && (
-          <Section title="Rest">
-            {/* + asks which day; each rest day is listed, tap one to move it. */}
-            <ActivityCard
-              activity={byId('rest')}
-              icon="rest"
-              count={store.restDays.length}
-              onAdd={() => open('rest')}
-              onRemove={() => store.removeActivity('rest')}
-            >
-              {store.restDays.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-                  {inDayOrder(store.restDays.map(at => ({ at }))).map(e => (
-                    <LineButton key={e.index} label={`${dayLabel(e.entry.at)} rest day`} day={dayLabel(e.entry.at)} onEdit={() => menu('rest', e)}>
-                      <Part kind="rest">Rest day</Part>
-                    </LineButton>
-                  ))}
-                </div>
-              )}
-            </ActivityCard>
-          </Section>
-        )}
 
       </div>
 
@@ -246,7 +177,6 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'full' && <BuildSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'menu' && <LineMenu store={store} item={sheet.edit} onEdit={item => open(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={onOpenWorkout} onClose={close} />}
-      {sheet?.type === 'rest' && <RestSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'sport' && <AddCardioSheet kind="sport" store={store} edit={sheet.edit} onClose={close} />}
     </div>
@@ -324,10 +254,4 @@ const OWN_STRETCH = {
   one: 'session',
   many: 'sessions',
   tile: 'from-teal-50 to-teal-100',
-}
-
-// "2 sessions · 45 min" (sessions logged before lengths were asked add none).
-function ownDetail(list) {
-  const total = list.reduce((n, x) => n + (x.minutes ?? 0), 0)
-  return `${list.length} ${list.length === 1 ? 'session' : 'sessions'}${total ? ` · ${total} min` : ''}`
 }

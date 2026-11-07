@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID, TARGETED } from '../../data/workout'
-import { equipmentName } from '../../data/targeted'
-import { gapsAfter, EXERCISE_BY_ID } from '../../data/exercises'
+import { equipmentName, TARGET_AREAS } from '../../data/targeted'
+import { AddAreaSheet } from '../home/buildWorkout'
+import { gapsAfter, EXERCISE_BY_ID, isCore } from '../../data/exercises'
 import { weekRange, sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab } from './StretchesTab'
@@ -15,6 +16,8 @@ import { CoveragePill, GapRows, AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
 import { useScope } from '../../hooks/useScope'
+import { DiffBar, WeekTag, OffRow } from './weekDiff'
+import { SlotRows } from './slots'
 import { warmupSetLabel } from '../../utils/format'
 import { WarmupCard } from './WarmupCard'
 import { ExerciseCard } from './ExerciseCard'
@@ -31,6 +34,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const targeted = workoutId === TARGETED.id
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
+  const [addingArea, setAddingArea] = useState(false)
   // The first set ticked (or warm-up, or last stretch) on a rest day asks whether it's
   // still a rest day, once. A plan already ticked when you open it doesn't ask.
   const stamps = store.stampsOf(workoutId)
@@ -39,20 +43,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const current = repeatable ? store.currentSession(workoutId) : null
   const started = !!current && ((current.done ?? 0) > 0 || current.stretched > 0)
   const [ending, setEnding] = useState(false)
-  const clash = [stamps.at, stamps.warmedAt, stamps.stretchedAt].find(t => t && store.restIndexOn(t) >= 0) ?? null
-  const [answered, setAnswered] = useState(clash)
-  const [toast, setToast] = useState(null)
   const [pickingDay, setPickingDay] = useState(false)
-  const toastTimer = useRef(null)
-  function removeRest() {
-    const i = store.restIndexOn(clash)
-    const at = store.restDays[i]
-    store.deleteRest(i)
-    setAnswered(clash)
-    setToast({ text: 'Rest day removed', undo: () => store.addRest(at) })
-    clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 4000)
-  }
   const warmup = store.getWarmup(workoutId)
   // Every exercise starts folded; tapping one opens it (and folds any other).
   // Finishing it folds it again.
@@ -72,9 +63,13 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   )
 
   // Adding or removing an exercise, or adding Core, asks: just this week, or
-  // every week after?
-  // A targeted workout is made fresh each time, so there's nothing to ask.
-  const [ask, scopeSheet] = useScope(store, targeted)
+  // every week after? (Or, for one you can do any number of times, this
+  // time or every time.)
+  const [ask, scopeSheet] = useScope(store, workoutId)
+  // What's different from every week's version: tagged, struck through, and
+  // a bar to reset it. Build a Workout's are made fresh each time, so they
+  // have none.
+  const diff = !targeted && !FULL_BODY_BY_ID[workoutId] && !store.past ? store.weekDiff(workoutId) : null
 
   // Swiping an exercise away, saying so if it's the only one for an area.
   function removeExercise(ex) {
@@ -268,8 +263,10 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // One exercise in the list: dragged by its handle, swiped to remove.
   const sections = store.getExerciseSections(workoutId)
   const finished = x => store.getLog(workoutId, x).all.every(set => set.done)
-  const partDone = list => list.length > 0 && list.every(finished)
-  const partProgress = list => `${list.filter(finished).length} of ${list.length} Completed`
+  // A built workout's empty slots (main or Core) count as still to do.
+  const slotsIn = core => (targeted ? store.targeted.slots.filter(x => (x.area === 'core') === core).length : 0)
+  const partDone = (list, core) => list.length > 0 && !slotsIn(core) && list.every(finished)
+  const partProgress = (list, core) => `${list.filter(finished).length} of ${list.length + slotsIn(core)} Completed`
   const exerciseCard = exercise => {
     const open = exercise.id === openExercise
     const card = (
@@ -286,6 +283,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           if (setsLeft === 0) setOpenId(null)
         }}
         onTimer={store.getSetup(exercise).mode === 'hold' ? () => startHold(exercise) : null}
+        tag={diff?.exercises.added.includes(exercise.id) && <WeekTag repeat={repeatable} />}
       />
     )
     // Folded or open, swipe it left to remove it.
@@ -303,6 +301,11 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
     const index = sets.findIndex(x => !x.done)
     next = { complete: index === -1, set: index + 1, of: sets.length }
   }
+
+  // Taken out just for now, in their own list (main or Core).
+  const offRows = core => (diff?.exercises.dropped ?? [])
+    .filter(id => isCore(EXERCISE_BY_ID[id]) === core)
+    .map(id => <OffRow key={id} name={EXERCISE_BY_ID[id].name} repeat={repeatable} />)
 
   const exerciseList = store.getExercises(workoutId)
   const exerciseDone = exerciseList.filter(e => store.getLog(workoutId, e).all.every(x => x.done)).length
@@ -324,7 +327,13 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           {/* Full-body days, the Full Body Stretch and cool-downs go on the day
               they're done (each moves from its line on the card); one you
               can't finish is ended here and still logged. */}
-          {repeatable ? (
+          {/* One built with nothing done yet can be called off, as if it
+              never happened. */}
+          {(targeted || FULL_BODY_BY_ID[workoutId]) && !store.past && !started && !store.getWarmupDone(workoutId) ? (
+            <button onClick={() => { store.discard(workoutId); onBack() }} className="px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 text-sm font-medium active:bg-stone-200">
+              Cancel
+            </button>
+          ) : repeatable ? (
             started && !current.finished && (
               <button onClick={() => setEnding(true)} className="px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 text-sm font-medium active:bg-stone-200">
                 End
@@ -341,21 +350,21 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           <FullBodySwitch at={workoutId} onSwitch={onSwitch} />
         ) : cool ? (
           // Switch if you picked the wrong activity; each keeps its own list.
-          <div className="flex flex-wrap gap-1.5 mt-3" role="tablist" aria-label="What you did">
+          <div className="bg-stone-100 rounded-xl p-1 flex mt-3" role="tablist" aria-label="What you did">
             {COOL_DOWNS.map(c => (
               <button
                 key={c.id}
                 role="tab"
                 aria-selected={c.id === workoutId}
                 onClick={() => onSwitch(c.id)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${c.id === workoutId ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-500 active:bg-stone-200'}`}
+                className={`flex-auto px-2 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${c.id === workoutId ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}
               >
                 {c.chip}
               </button>
             ))}
           </div>
-        ) : (
-          <p className="text-stone-400 text-sm mt-1">{isRoutine ? 'For days without a gym workout' : targeted ? `Targeted · ${equipmentName(store.targeted.eq)}` : workout.name}</p>
+        ) : !isRoutine && (
+          <p className="text-stone-400 text-sm mt-1">{targeted ? equipmentName(store.targeted.eq) : workout.name}</p>
         )}
       </div>
 
@@ -395,20 +404,29 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
       {/* Content */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-5 space-y-2 pb-6">
+        {diff?.differs && <DiffBar repeat={repeatable} onReset={() => store.resetWeek(workoutId)} />}
         {/* The plan in three parts: an optional warm-up, the main workout,
             and an optional Core section. */}
         {tab === 'exercises' && (
           <>
+            {/* A built workout can take more areas once it's under way. */}
+            {targeted && store.targeted.areas.length < TARGET_AREAS.length && (
+              <div className="pb-2">
+                <AddRow label="Add an area" note="exercises & stretches" onClick={() => setAddingArea(true)} />
+              </div>
+            )}
             <PartHead title="Warm-up" right={store.getWarmup(workoutId).on && store.getWarmupDone(workoutId) ? 'Done ✓' : null} done />
             <WarmupCard workoutId={workoutId} store={store} onStart={startWarmup} />
 
             <PartHead
               title="Main workout"
               pill={<CoveragePill list={sections.main} area={workoutId} />}
-              right={partProgress(sections.main)}
-              done={partDone(sections.main)}
+              right={partProgress(sections.main, false)}
+              done={partDone(sections.main, false)}
             />
             {sections.main.map(exerciseCard)}
+            {offRows(false)}
+            {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area !== 'core'} store={store} />}
             <GapRows list={sections.main} area={workoutId} onAdd={() => setAdding('main')} />
             <AddRow label="Add exercise" onClick={() => setAdding('main')} />
 
@@ -417,16 +435,19 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
                 <PartHead
                   title="Core"
                   pill={<CoveragePill list={sections.core} area="core" />}
-                  right={sections.core.length ? partProgress(sections.core) : null}
-                  done={partDone(sections.core)}
+                  right={sections.core.length + slotsIn(true) ? partProgress(sections.core, true) : null}
+                  done={partDone(sections.core, true)}
                 />
                 {sections.core.map(exerciseCard)}
+                {offRows(true)}
+                {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area === 'core'} store={store} />}
                 <GapRows list={sections.core} area="core" onAdd={() => setAdding('core')} />
                 <AddRow label="Add core exercise" onClick={() => setAdding('core')} />
               </>
             ) : (
               <>
                 <PartHead title="Core" />
+                {offRows(true)}
                 <AddRow
                   label="Add core"
                   note="abs & obliques"
@@ -439,11 +460,12 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
                 />
               </>
             )}
+
           </>
         )}
 
         {tab === 'stretches' && (
-          <StretchesTab workout={workout} store={store} onTimer={startStretch} />
+          <StretchesTab workout={workout} store={store} diff={diff} repeat={repeatable} onTimer={startStretch} />
         )}
       </div>
 
@@ -459,21 +481,8 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           onClose={() => setAdding(null)}
         />
       )}
+      {addingArea && <AddAreaSheet store={store} onClose={() => setAddingArea(false)} />}
       {scopeSheet}
-      {clash && clash !== answered && (() => {
-        const day = sameDay(new Date(clash), store.today) ? 'Today' : new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
-        const weekday = new Date(clash).toLocaleDateString('en-US', { weekday: 'long' })
-        return (
-          <SettingsSheet title={`${day} is a rest day`} closeLabel="Keep it" onClose={() => setAnswered(clash)}>
-            <p className="text-stone-500 leading-relaxed">
-              You marked {weekday} as a rest day. Keep it, or remove it now that you’ve {clash === stamps.stretchedAt ? 'stretched' : 'worked out'}?
-            </p>
-            <button onClick={removeRest} className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors">
-              Remove rest day
-            </button>
-          </SettingsSheet>
-        )
-      })()}
       {ending && (
         <ConfirmSheet
           title="End now?"
@@ -489,15 +498,9 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
         <PlanDaySheet
           store={store}
           stamps={stamps}
-          onPick={at => { store.setPlanDay(workoutId, at); setAnswered(at) }}
+          onPick={at => store.setPlanDay(workoutId, at)}
           onClose={() => setPickingDay(false)}
         />
-      )}
-      {toast && (
-        <div role="status" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 rounded-2xl bg-stone-800 text-white text-sm px-4 py-3 flex items-center justify-between gap-3 shadow-lg">
-          {toast.text}
-          <button onClick={() => { toast.undo(); setToast(null) }} className="font-semibold text-blue-300 active:opacity-60">Undo</button>
-        </div>
       )}
     </div>
   )
@@ -553,7 +556,7 @@ function PlanDaySheet({ store, stamps, onPick, onClose }) {
         {logged ? 'Move this session (sets, warm-up and stretches) to another day.' : 'Everything you tick in this plan goes on this day.'}
       </p>
       <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
-      <LogButton store={store} at={at} verb={logged ? 'Move' : 'Log'} onSave={() => { onPick(at); onClose() }}>
+      <LogButton onSave={() => { onPick(at); onClose() }}>
         {logged ? (today ? 'Move to today' : `Move to ${weekdayOf(at)}`) : today ? 'Log today' : `Log on ${weekdayOf(at)}`}
       </LogButton>
     </SettingsSheet>

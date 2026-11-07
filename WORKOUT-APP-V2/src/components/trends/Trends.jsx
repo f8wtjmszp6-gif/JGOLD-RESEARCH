@@ -222,6 +222,8 @@ function WeekGrid({ weeks, goals }) {
 }
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+// A change in help on an assisted move, which reads the wrong way as + or −.
+const helpChange = n => `${fmt(Math.abs(n))} lb ${n > 0 ? 'more' : 'less'} help`
 
 // One exercise across the weeks it was done: each point carries its week,
 // the charted value, and the lift as saved. A PR beats every earlier point
@@ -260,7 +262,7 @@ function ExerciseTrend({ exercise, weeks, wide, onOpen }) {
           {fmt(latest.v)} {latest.unit}{latest.assist ? ' assist' : ''}
           {points.length > 1 && (
             <span className={`ml-1 font-semibold ${change === 0 ? 'text-stone-400' : improved ? 'text-emerald-700' : 'text-stone-500'}`}>
-              {change === 0 ? 'no change' : `${change > 0 ? '+' : ''}${fmt(change)} ${latest.unit}`}
+              {change === 0 ? 'no change' : latest.assist ? helpChange(change) : `${change > 0 ? '+' : ''}${fmt(change)} ${latest.unit}`}
             </span>
           )}
         </p>
@@ -323,10 +325,10 @@ function ExerciseDetail({ exercise, group, weeks, onClose }) {
         </div>
 
         <div className="grid grid-cols-3 gap-2 my-4">
-          <Stat value={`${fmt(latest.v)}`} label={`now (${latest.unit})`} />
+          <Stat value={`${fmt(latest.v)}`} label={`now (${latest.unit}${latest.assist ? ' help' : ''})`} />
           <Stat
-            value={change === 0 ? '—' : `${change > 0 ? '+' : ''}${fmt(change)}`}
-            label={`${points.length} ${points.length === 1 ? 'week' : 'weeks'}`}
+            value={change === 0 ? '—' : latest.assist ? `${fmt(Math.abs(change))} lb` : `${change > 0 ? '+' : ''}${fmt(change)}`}
+            label={latest.assist && change !== 0 ? `${change > 0 ? 'more' : 'less'} help` : `${points.length} ${points.length === 1 ? 'week' : 'weeks'}`}
             tone={change === 0 ? '' : improved ? 'text-emerald-700' : 'text-stone-500'}
           />
           <Stat value={String(prs)} label={prs === 1 ? 'PR' : 'PRs'} />

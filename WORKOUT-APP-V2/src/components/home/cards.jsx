@@ -1,56 +1,58 @@
-import { STRETCH_ROUTINE } from '../../data/workout'
+import { STRETCH_ROUTINE, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
 import { TileIcon } from '../ui/Icons'
-import { inDayOrder } from '../../utils/days'
-import { ClassLine } from './lines'
-import { SessionLines } from './sessions'
+import { Part } from './lines'
+import { UnderWay, InProgressLine } from './sessions'
 
 // ── Workout classes ──────────────────────────────────────────────────────────
-// + opens Log a class; the card lists each class this week with its answers.
-export function ClassCard({ store, activity, onAdd, onEdit }) {
-  const classes = store.classes
-  const n = classes.length
+export function ClassCard({ activity, onAdd }) {
+  return <LogCard activity={activity} icon="class" sub="Log what the class covered" onAdd={onAdd} />
+}
+
+// A card you log things on, as a class or a walk: tapping it logs one.
+// What you've logged is on the Activities screen.
+export function LogCard({ activity, icon, sub, onAdd }) {
   return (
-    <ActivityCard
-      activity={activity}
-      icon="class"
-      count={n}
-      detail={n ? `${n} ${n === 1 ? activity.one : activity.many} · ${store.cardioLabel('class')}` : undefined}
-      onAdd={onAdd}
-      onRemove={() => store.removeActivity('class')}
-    >
-      {n > 0 && (
-        <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-          {inDayOrder(classes).map(e => <ClassLine key={e.index} entry={e.entry} onEdit={() => onEdit(e)} />)}
-        </div>
-      )}
-    </ActivityCard>
+    <div className={CARD}>
+      <CardHead icon={icon} tile={activity.tile} title={activity.name} sub={sub} label={`Log a ${activity.one}`} onClick={onAdd} />
+    </div>
   )
 }
 
-// The Full Body Stretch, which can be done more than once a week. The one
-// under way fills the ring; tapping opens it, or, once it's finished, files
-// it and opens a fresh one. Each finished one gets a line with its day; 30+
-// minutes counts as a workout (the dumbbell).
-export function RoutineCard({ store, onOpen, onEditSession }) {
-  const list = store.getStretches(STRETCH_ROUTINE.id)
-  const done = list.filter(x => store.getStretchDone(STRETCH_ROUTINE.id, x.id)).length
+// The top of a card you tap: its icon (with a ring that fills when `value`
+// is given), its name (and `sub` under it) and ›.
+export function CardHead({ icon, tile, value, fill, title, sub, label = title, onClick }) {
+  return (
+    <button onClick={onClick} aria-label={label} className="w-full text-left transition-all active:scale-[0.98]">
+      <div className="flex items-center gap-3">
+        <CardIcon icon={icon} tile={tile} value={value} fill={fill} />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-stone-900 truncate">{title}</p>
+          {sub && <p className="text-sm text-stone-400 truncate">{sub}</p>}
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+      </div>
+    </button>
+  )
+}
+
+// The Full Body Stretch, which can be done more than once a week. Tapping
+// opens the one under way, or, once it's finished, files it and opens a
+// fresh one. The one under way gets an IN PROGRESS line and fills the ring.
+export function RoutineCard({ store, onOpen }) {
+  const id = STRETCH_ROUTINE.id
+  const list = store.getStretches(id)
+  const done = list.filter(x => store.getStretchDone(id, x.id)).length
   const under = done > 0 && done < list.length
   return (
     <div className={CARD}>
-      <button onClick={() => { store.startAgain(STRETCH_ROUTINE.id); onOpen() }} aria-label={STRETCH_ROUTINE.name} className="w-full text-left transition-all active:scale-[0.98]">
-        <div className="flex items-center gap-3">
-          <CardIcon icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-stone-900 truncate">{STRETCH_ROUTINE.name}</p>
-            <p className="text-sm text-stone-400 truncate">{store.routineMinutes} min</p>
-          </div>
-          {/* Like a plan card: what's in it until you start, then how far along. */}
-          <Counts>
-            <p>{under ? <Of n={done} of={list.length} /> : list.length} stretches</p>
-          </Counts>
-        </div>
-      </button>
-      <SessionLines list={store.sessionsFor([STRETCH_ROUTINE.id])} onMenu={onEditSession} />
+      <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" title={STRETCH_ROUTINE.name} sub={`${STRETCH_WORKOUT_MINUTES}+ min counts as a workout`} onClick={() => { store.startAgain(id); onOpen() }} />
+      <UnderWay>
+        {under && (
+          <InProgressLine label={STRETCH_ROUTINE.name} onOpen={onOpen}>
+            <Part kind="stretch">{done}/{list.length} stretches</Part>
+          </InProgressLine>
+        )}
+      </UnderWay>
     </div>
   )
 }
@@ -67,14 +69,15 @@ const STATUS = {
   complete: ['Complete', 'text-emerald-500', 'ring-emerald-300'],
   next: ['Up next', 'text-red-600', 'ring-red-200'],
   started: ['In progress', 'text-amber-500', 'ring-amber-300'],
+  ended: ['Unfinished', 'text-amber-500', 'ring-amber-300'],
   none: ['Not started', 'text-stone-400', 'ring-stone-200'],
 }
-export function WorkoutCard({ workout, progress, stretches, stretchesDone, upNext, onOpen }) {
+export function WorkoutCard({ workout, progress, stretches, stretchesDone, upNext, ended, onOpen }) {
   const { done, total, exercises } = progress
   const complete = total > 0 && done === total
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
   const started = done > 0 || stretchesDone > 0
-  const [label, text, ring] = STATUS[complete ? 'complete' : upNext ? 'next' : started ? 'started' : 'none']
+  const [label, text, ring] = STATUS[complete ? 'complete' : ended ? 'ended' : upNext ? 'next' : started ? 'started' : 'none']
 
   return (
     <button
@@ -147,48 +150,3 @@ export const Of = ({ n, of }) => <span className="font-semibold text-stone-500">
 // Every card's shell: 46px icon, then the rest, ~66px tall.
 export const CARD = 'w-full text-left rounded-2xl px-3.5 py-2.5 bg-white shadow-sm'
 
-export function ActivityCard({ activity, icon, count, detail, onAdd, onRemove, children }) {
-  const active = count > 0
-
-  return (
-    <div className={CARD}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <CardIcon icon={icon} tile={activity.tile} />
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-900 truncate">{activity.name}</p>
-            <p className="text-sm text-stone-400 truncate">
-              {detail ?? (active ? `${count} ${count === 1 ? activity.one : activity.many}` : activity.note)}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {active && (
-            <>
-              <button
-                onClick={onRemove}
-                aria-label={`Remove a ${activity.one}`}
-                className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-stone-600 text-lg font-medium active:bg-stone-100 transition-colors"
-              >
-                −
-              </button>
-              <span className="w-5 text-center text-lg font-bold text-stone-900">{count}</span>
-            </>
-          )}
-          <button
-            onClick={onAdd}
-            aria-label={`Add a ${activity.one}`}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-medium transition-colors ${
-              active
-                ? 'bg-white shadow-sm text-stone-600 active:bg-stone-100'
-                : 'bg-accent-500 text-white active:bg-accent-600'
-            }`}
-          >
-            +
-          </button>
-        </div>
-      </div>
-      {children}
-    </div>
-  )
-}

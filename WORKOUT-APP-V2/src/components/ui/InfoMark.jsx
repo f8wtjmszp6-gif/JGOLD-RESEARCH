@@ -5,7 +5,7 @@ import { SettingsSheet } from './Sheet'
 // What each status mark means, said the same way wherever it shows.
 const MARK_INFO = {
   workout: { Icon: WorkoutMark, title: 'Counts as a workout', text: 'This counted toward your workouts this week.' },
-  early: { Icon: EarlyMark, title: 'Ended early', text: 'Stopped before it was finished, so it doesn’t count.' },
+  early: { Icon: EarlyMark, title: 'Unfinished', text: 'It wasn’t finished, so it doesn’t count.' },
   done: { Icon: DoneMark, title: 'Done', text: 'Finished in full.' },
   open: { Icon: OpenMark, title: 'Not finished', text: 'Started, but not finished yet.' },
 }

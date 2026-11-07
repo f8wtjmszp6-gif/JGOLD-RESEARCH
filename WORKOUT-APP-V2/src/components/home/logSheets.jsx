@@ -3,20 +3,22 @@ import { CLASS_AREAS, CLASS_DEFAULT, SPORTS, CARDIO_TYPES, CARDIO_WORKOUT_MINUTE
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { TypeIcon } from '../ui/Icons'
-import { weekDays, sameDay, weekdayOf } from '../../utils/days'
-import { TAB_DOT, tabsOf } from '../../utils/dayKinds'
+import { EffortInfo } from '../ui/EffortInfo'
+import { weekdayOf } from '../../utils/days'
 import { DayPicker } from '../ui/DayPicker'
-import { Heads, LogButton } from '../ui/LogButton'
+import { LogButton } from '../ui/LogButton'
 
 const EFFORT = [['easy', 'Easy'], ['hard', 'Hard']]
 
-function EffortNote() {
-  return (
-    <p className="text-sm text-stone-400 leading-relaxed">
-      Easy: you can still talk. Hard: only a few words at a time. Hard minutes count double toward
-      the 300-minute cardio goal.
-    </p>
-  )
+// "Effort" with its ⓘ (see EffortInfo).
+function EffortLabel({ kind }) {
+  return <span className="flex items-center gap-1">Effort<EffortInfo kind={kind} /></span>
+}
+
+// What this session adds to the cardio goal (a hard minute counts as two),
+// as subtext: under a sheet's title, or a row's.
+function CountsAs({ minutes, hard }) {
+  return <span className="text-stone-400">{minutes} min {hard ? 'hard' : 'easy'} counts as <span className="font-semibold text-stone-500">{minutes * (hard ? 2 : 1)} cardio min</span></span>
 }
 
 // What you did in a class: cardio (how long, how hard), strength (which
@@ -29,8 +31,10 @@ export function LogClassSheet({ store, edit, onClose }) {
   const all = CLASS_AREAS.map(a => a.id)
   const full = all.every(id => c.areas.includes(id))
 
+  // Full body stands on its own (it's all three): picking an area after it
+  // starts over with just that one, and picking all three is Full body.
   function toggleArea(id) {
-    set({ areas: c.areas.includes(id) ? c.areas.filter(x => x !== id) : [...c.areas, id] })
+    set({ areas: full ? [id] : c.areas.includes(id) ? c.areas.filter(x => x !== id) : [...c.areas, id] })
   }
 
   const strengthOn = c.strength && c.areas.length > 0
@@ -38,6 +42,7 @@ export function LogClassSheet({ store, edit, onClose }) {
   const nothing = !c.cardio && !strengthOn && !c.stretch
   // Stretching alone: how many more minutes until it counts as a workout.
   const need = c.stretch && !c.cardio && !strengthOn ? CLASS_STRETCH_WORKOUT_MINUTES - c.stretchMinutes : 0
+  const cardioNeed = CARDIO_WORKOUT_MINUTES[c.hard ? 'hard' : 'easy'] - c.minutes
 
   // Strength with no areas picked would light nothing up, so it doesn't count.
   function log() {
@@ -47,19 +52,26 @@ export function LogClassSheet({ store, edit, onClose }) {
     onClose()
   }
 
-  const counts = c.cardio ? `${c.minutes * (c.hard ? 2 : 1)} cardio min` : workout ? 'counts as a workout' : c.stretch ? 'stretch day only' : ''
-  const chip = on => `px-3 py-1.5 rounded-xl text-sm font-semibold border-[1.5px] transition-colors ${
-    on ? 'bg-orange-50 text-orange-700 border-orange-300' : 'bg-stone-100 text-stone-500 border-transparent'
-  }`
+  const chip = on => `flex-auto px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`
 
   return (
     <SettingsSheet title={edit ? editTitle(edit.entry.at, 'Class') : 'Log a class'} closeLabel="Cancel" tall onClose={onClose}>
       <div className="space-y-4">
-        <ToggleRow label="Cardio" on={c.cardio} onChange={v => set({ cardio: v })} />
+        <ToggleRow label="Cardio" detail={c.cardio && <CountsAs minutes={c.minutes} hard={c.hard} />} on={c.cardio} onChange={v => set({ cardio: v })} />
         {c.cardio && (
           <>
             <StepperRow label="Length" value={c.minutes} step={5} min={5} max={240} editable suffix=" min" onChange={v => set({ minutes: v })} />
-            <Segmented label="Effort" value={c.hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => set({ hard: v === 'hard' })} />
+            <Segmented label={<EffortLabel kind="class" />} value={c.hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => set({ hard: v === 'hard' })} />
+            {/* Only matters when cardio is all you did: then it needs as long
+                as any cardio session to count. */}
+            {strengthOn || c.stretch ? null : workout ? (
+              <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
+            ) : (
+              <p className="text-sm text-stone-500">
+                {cardioNeed} more {cardioNeed === 1 ? 'minute' : 'minutes'} to count as a workout
+                <span className="text-stone-400"> ({CARDIO_WORKOUT_MINUTES.hard} hard or {CARDIO_WORKOUT_MINUTES.easy} easy)</span>
+              </p>
+            )}
           </>
         )}
       </div>
@@ -70,18 +82,20 @@ export function LogClassSheet({ store, edit, onClose }) {
           onChange={v => set({ strength: v })}
         />
         {c.strength && (
-          <div className="flex flex-wrap gap-2">
+          // A full-width switch like Build a Workout's equipment, but you can
+          // pick more than one area, or Full body on its own.
+          <div className="bg-stone-100 rounded-xl p-1 flex">
             {CLASS_AREAS.map(a => (
-              <button key={a.id} onClick={() => toggleArea(a.id)} className={chip(c.areas.includes(a.id))}>{a.label}</button>
+              <button key={a.id} onClick={() => toggleArea(a.id)} aria-pressed={!full && c.areas.includes(a.id)} className={chip(!full && c.areas.includes(a.id))}>{a.label}</button>
             ))}
-            <button onClick={() => set({ areas: full ? [] : all })} className={chip(full)}>Full body</button>
+            <button onClick={() => set({ areas: full ? [] : all })} aria-pressed={full} className={chip(full)}>Full body</button>
           </div>
         )}
       </div>
       <div className="space-y-4 pt-5 border-t border-stone-100">
         <ToggleRow
           label="Stretching"
-          detail="Yoga, mobility. Counts as a stretch day."
+          detail="Counts as a stretch day"
           on={c.stretch}
           onChange={v => set({ stretch: v })}
         />
@@ -99,8 +113,8 @@ export function LogClassSheet({ store, edit, onClose }) {
         ))}
       </div>
       {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={c.at} onChange={at => set({ at })} />}
-      <LogButton store={store} at={c.at} verb={edit ? 'Save' : 'Log'} disabled={nothing} plain={!!edit} onSave={log}>
-        {nothing ? 'Turn on what you did' : `${edit ? 'Save' : 'Log class'}${counts && ` · ${counts}`}`}
+      <LogButton disabled={nothing} onSave={log}>
+        {nothing ? 'Turn on what you did' : edit ? 'Save' : 'Log class'}
       </LogButton>
     </SettingsSheet>
   )
@@ -156,18 +170,25 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
     on ? (isSport ? 'bg-lime-50 text-lime-800 border-lime-600' : 'bg-cyan-50 text-cyan-700 border-cyan-600') : 'bg-stone-100 text-stone-500 border-transparent active:bg-stone-200'
   }`
   return (
-    <SettingsSheet title={title} closeLabel="Cancel" onClose={onClose}>
+    <SettingsSheet title={title} subtitle={<CountsAs minutes={minutes} hard={hard} />} closeLabel="Cancel" onClose={onClose}>
       {!isWalk && (
         <div className="space-y-2">
           <span className="text-base text-stone-600">What did you do?</span>
-          <div className="grid grid-cols-4 gap-1.5">
-            {tiles.map(c => (
+          {/* Cardio: three to a row, then Other across the bottom. */}
+          <div className={`grid gap-1.5 ${isSport ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            {tiles.filter(c => isSport || c !== 'Other').map(c => (
               <button key={c} onClick={() => { setType(c); setKeep(true) }} aria-pressed={type === c} className={tile(type === c)}>
                 <TypeIcon name={c} />
                 <span className="w-full truncate text-center">{c}</span>
               </button>
             ))}
           </div>
+          {!isSport && tiles.includes('Other') && (
+            <button onClick={() => { setType('Other'); setKeep(true) }} aria-pressed={type === 'Other'} className={`${tile(type === 'Other')} w-full !flex-row justify-center gap-2 !text-sm py-2.5`}>
+              <TypeIcon name="Other" />
+              Other
+            </button>
+          )}
           {/* Sports: ones you've added, or a new one. */}
           {isSport && (
             <button
@@ -196,7 +217,7 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
         />
       )}
       <StepperRow label="Length" value={minutes} step={5} min={5} max={480} editable suffix=" min" onChange={setMinutes} />
-      <Segmented label="Effort" value={hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => setHard(v === 'hard')} />
+      <Segmented label={<EffortLabel kind={kind} />} value={hard ? 'hard' : 'easy'} options={EFFORT} onChange={v => setHard(v === 'hard')} />
       {/* 30 min hard or 45 easy makes it a workout, not just cardio minutes. */}
       {isWalk ? null : workout ? (
         <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout</p>
@@ -206,56 +227,13 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
           <span className="text-stone-400"> ({CARDIO_WORKOUT_MINUTES.hard} hard or {CARDIO_WORKOUT_MINUTES.easy} easy)</span>
         </p>
       )}
-      <EffortNote />
       {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />}
-      <LogButton store={store} at={at} verb={edit ? 'Save' : 'Add'} disabled={isSport && !picked} plain={!!edit} onSave={add}>
+      <LogButton disabled={isSport && !picked} onSave={add}>
         {isSport && !picked ? 'Pick what you did' : picked && picked !== 'Other'
           // Whether it counts shows just above, so a named one keeps the button short.
           ? `${edit ? 'Save' : 'Add'} ${picked} · ${minutes} min`
           : `${edit ? 'Save' : 'Add'} ${minutes} min · ${workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}`}
       </LogButton>
-    </SettingsSheet>
-  )
-}
-
-// Which day of the week something happened: Mon–Sun, days still to come
-// greyed out. Today keeps the time you logged it. `now` is today, or a past
-// week's last day.
-// Deleting asks once more, in place.
-// Adds a rest day, or moves or deletes one: which day was it?
-export function RestSheet({ store, edit, onClose }) {
-  const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
-  const day = weekDays(store.today).findIndex(d => sameDay(d, new Date(at)))
-  const there = (store.dayLog[day] ?? []).filter(x => x.kind !== 'rest')
-  return (
-    <SettingsSheet title={edit ? 'Edit rest day' : 'Add a rest day'} closeLabel="Cancel" onClose={onClose}>
-      <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />
-      {there.length > 0 && (
-        <Heads title={`${weekdayOf(at)} already has`}>
-          <ul className="space-y-1">
-            {there.flatMap(x => [
-              [x.detail ? `${x.label} · ${x.detail}` : x.label, tabsOf([{ kind: x.kind }])[0]],
-              ...(x.tags ?? []).filter(t => t.kind !== 'strength').map(t => [t.text, t.kind]),
-            ]).map(([text, tab], i) => (
-              <li key={i} className="flex items-center gap-2 text-stone-600">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TAB_DOT[tab]}`} />
-                {text}
-              </li>
-            ))}
-          </ul>
-          <p className="text-stone-600">Still mark it as a rest day?</p>
-        </Heads>
-      )}
-      <button
-        onClick={() => {
-          if (edit) store.editRest(edit.index, at)
-          else store.addRest(at)
-          onClose()
-        }}
-        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors"
-      >
-        {edit ? 'Save' : 'Add rest day'}{there.length > 0 && ' anyway'}
-      </button>
     </SettingsSheet>
   )
 }
@@ -396,10 +374,6 @@ export function AddStretchSheet({ store, edit, onClose }) {
       )}
       {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />}
       <LogButton
-        store={store}
-        at={at}
-        verb={edit ? 'Save' : 'Add'}
-        plain={!!edit}
         onSave={() => {
           if (edit) store.editOwnStretch(edit.index, { minutes, at })
           else store.addOwnStretch(minutes, at)

@@ -4,11 +4,14 @@ import { GOAL_SETTINGS } from '../data/workout'
 import { Segmented, StepperRow } from './ui/controls'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
 import { playBeep, setVolume } from '../utils/sound'
+import { DefaultsSettings } from './DefaultsSettings'
+import { defaultsSummary } from '../utils/defaults'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend), timers,
 // backups and reset, each a row that opens in place with what it's set to
-// underneath. Light or dark follows the phone.
+// underneath (your plans' defaults among them). Light or dark follows the
+// phone.
 export default function SettingsDrawer({ store, onClose }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose, 'x')
@@ -49,6 +52,9 @@ export default function SettingsDrawer({ store, onClose }) {
                   <GoalSetting key={g.id} setting={g} goal={store.goals[g.id]} onChange={patch => store.setGoal(g.id, patch)} />
                 ))}
               </div>
+            </Section>
+            <Section id="defaults" title="Defaults" summary={defaultsSummary(store)} tile="bg-orange-500" icon={ICONS.defaults} open={open} onToggle={toggle}>
+              <DefaultsSettings store={store} />
             </Section>
             <Section id="timers" title="Timers" summary={timerSummary(store.timer)} tile="bg-amber-500" icon={ICONS.timers} open={open} onToggle={toggle}>
               <TimerSettings timer={store.timer} onChange={store.setTimer} />
@@ -174,6 +180,7 @@ function Section({ id, title, summary, tile, icon, red, open, onToggle, children
 
 const ICONS = {
   goals: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></>,
+  defaults: <><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></>,
   timers: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M10 2h4" /></>,
   backup: <><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z" /><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5" /></>,
   reset: <><path d="M4 12a8 8 0 1 0 2.3-5.7" /><path d="M4 4v4h4" /></>,
@@ -181,7 +188,7 @@ const ICONS = {
 
 // What each section is set to, for its closed row.
 const range = (g, unit) => `${g.min === g.max ? g.min : `${g.min}–${g.max}`} ${unit}`
-const goalsSummary = goals => ({ text: [range(goals.workouts, 'workouts'), range(goals.stretch, 'stretches'), range(goals.cardio, 'min')].join(' · ') })
+const goalsSummary = goals => ({ text: [range(goals.workouts, 'workouts'), range(goals.stretch, 'stretch days'), range(goals.cardio, 'min')].join(' · ') })
 const timerSummary = t => ({ text: [t.sound === 'music' ? 'Over music' : 'On silent', t.volume === 0 ? 'Muted' : `${t.volume}%`, t.prep === 0 ? 'No get-ready' : `${t.prep} s get-ready`].join(' · ') })
 // Amber once it's been a week or more, or never.
 function backupSummary(at) {
@@ -194,10 +201,10 @@ function backupSummary(at) {
 // together (3–4 becomes 4–5). Tap the range to set the min and max apart.
 // What the guidelines recommend is written underneath.
 function GoalSetting({ setting, goal, onChange }) {
-  const { label, step, least, advice } = setting
+  const { label, step, least, most, advice } = setting
   const [apart, setApart] = useState(false)
   const shift = d => {
-    if (goal.min + d < least) return
+    if (goal.min + d < least || goal.max + d > most) return
     onChange({ min: goal.min + d, max: goal.max + d })
   }
   const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0 disabled:opacity-30'
@@ -209,12 +216,12 @@ function GoalSetting({ setting, goal, onChange }) {
         <button onClick={() => setApart(!apart)} aria-expanded={apart} aria-label={`${label}: ${goal.min} to ${goal.max}. Set min and max`} className="min-w-[4.5rem] text-center text-lg font-bold text-stone-900 tabular-nums active:opacity-60">
           {goal.min === goal.max ? goal.min : `${goal.min}–${goal.max}`}
         </button>
-        <button onClick={() => shift(step)} className={btn} aria-label={`${label} up`}>+</button>
+        <button onClick={() => shift(step)} disabled={goal.max + step > most} className={btn} aria-label={`${label} up`}>+</button>
       </div>
       {apart && (
         <div className="grid grid-cols-2 gap-3 pb-1">
-          <SmallStepper label="Min" value={goal.min} step={step} least={least} onChange={min => onChange({ min })} />
-          <SmallStepper label="Max" value={goal.max} step={step} least={least} onChange={max => onChange({ max })} />
+          <SmallStepper label="Min" value={goal.min} step={step} least={least} most={most} onChange={min => onChange({ min })} />
+          <SmallStepper label="Max" value={goal.max} step={step} least={least} most={most} onChange={max => onChange({ max })} />
         </div>
       )}
       <p className="text-xs text-stone-500 leading-relaxed">{advice}</p>
@@ -224,9 +231,9 @@ function GoalSetting({ setting, goal, onChange }) {
 
 // A compact − value + with its label above, so Min and Max fit side by side.
 // Tap the number to type one.
-function SmallStepper({ label, value, step, least, onChange }) {
+function SmallStepper({ label, value, step, least, most, onChange }) {
   const [draft, setDraft] = useState(null)
-  const set = v => onChange(Math.max(least, Math.round(v)))
+  const set = v => onChange(Math.min(most, Math.max(least, Math.round(v))))
   function save() {
     const n = parseFloat(draft)
     if (!isNaN(n)) set(n)

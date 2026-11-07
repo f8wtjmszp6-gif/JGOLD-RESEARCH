@@ -1,4 +1,4 @@
-import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, TARGETED, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS } from '../data/workout'
+import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, TARGETED, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS, GOAL_SETTINGS } from '../data/workout'
 import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
 import { weekDays, sameDay } from '../utils/days'
 import { cardioMinutes } from '../utils/format'
@@ -41,8 +41,9 @@ import { buildTargeted, targetName } from '../data/targeted'
 //
 //   Checkmarks — cleared by the header reset:
 //     checks            { [workoutId]: { exercises: { [id]: [bool, …] }, stretches: { [id]: bool }, warmup: bool,
-//                         splits: { [id]: split }, at, stretchedAt, warmedAt, day } }  (when its first set was ticked /
-//                         its last stretch / its warm-up; `day`: the day picked to log it on, if one was;
+//                         splits: { [id]: split }, at, stretchStartAt, stretchedAt, warmedAt, openedAt, day } }
+//                         (when its first set was ticked / its first stretch / its last stretch / its warm-up /
+//                         it was begun from Build a Workout; `day`: the day picked to log it on, if one was;
 //                         a split is this week's lighter sets — see splitOf)
 //     activities        { class | walk | rest: count }
 //     stretchExtra      count of stretch sessions done on your own
@@ -159,7 +160,8 @@ export function writeSettings(s, exercise, fn) {
 }
 
 // Also stamps the day, for the week strip: `at` once a set is ticked (gone
-// again if every set is unticked), `stretchedAt` once every stretch is.
+// again if every set is unticked), `stretchStartAt` once a stretch is,
+// `stretchedAt` once every stretch is.
 export function writeChecks(s, workoutId, fn) {
   const next = fn(s.checks?.[workoutId] ?? {})
   // Ticks go on the plan's picked day, if one was picked.
@@ -168,10 +170,12 @@ export function writeChecks(s, workoutId, fn) {
     Object.values(next.splits ?? {}).some(x => x.parts.some(p => p.ticks.some(Boolean)))
   const list = stretchesOf(s, workoutId)
   const stretched = list.length > 0 && list.every(x => next.stretches?.[x.id])
-  const { at, stretchedAt, warmedAt, ...rest } = next
+  const begun = list.some(x => next.stretches?.[x.id])
+  const { at, stretchedAt, stretchStartAt, warmedAt, ...rest } = next
   const stamped = {
     ...rest,
     ...(lifted && { at: at ?? now }),
+    ...(begun && { stretchStartAt: stretchStartAt ?? now }),
     ...(stretched && { stretchedAt: stretchedAt ?? now }),
     ...(next.warmup && { warmedAt: warmedAt ?? now }),
   }
@@ -268,12 +272,21 @@ export function dayLinesOf(s, now = new Date(s.clockAt ?? Date.now())) {
   const lines = { gym: [], stretch: [], cardio: [], rest: [] }
   const add = (tab, at, line) => at && lines[tab].push({ at: new Date(at), workout: false, ...line })
   // Cardio gives its time, and what it counts as when any was hard.
-  const cardio = (at, name, list, workout = false) => {
+  // `edit`: what tapping the line does, { open: workoutId } or { menu: kind,
+  // index } (see Home).
+  const cardio = (at, name, list, workout = false, edit) => {
     const minutes = list.reduce((m, x) => m + x.minutes, 0)
     const counted = list.reduce((m, x) => m + x.minutes * (x.hard ? 2 : 1), 0)
-    if (minutes > 0) add('cardio', at, { name, right: cardioMinutes(list), status: 'done', minutes, counted, workout })
+    if (minutes > 0) add('cardio', at, { name, right: cardioMinutes(list), status: 'done', minutes, counted, workout, edit })
   }
-  const warmup = (at, name, sets) => cardio(at, `${name} · Warm-up`, sets)
+  const warmup = (at, name, sets, edit) => cardio(at, `${name} · Warm-up`, sets, false, edit)
+  // A list's stretches: done once all are ticked, in progress from the first.
+  const stretching = (id, name, more = {}) => {
+    const c = s.checks?.[id]
+    const list = stretchesOf(s, id)
+    const k = list.filter(x => c?.stretches?.[x.id]).length
+    add('stretch', c?.stretchedAt ?? c?.stretchStartAt, { name, right: `${k}/${list.length}`, status: c?.stretchedAt ? 'done' : beforeToday(s, c?.stretchStartAt) ? 'early' : 'open', edit: { open: id }, ...(c?.stretchedAt && more) })
+  }
   const FULL = 'Full Body Workout'
   for (const id of PLAN_IDS) {
     const c = s.checks?.[id]
@@ -285,35 +298,32 @@ export function dayLinesOf(s, now = new Date(s.clockAt ?? Date.now())) {
       done += sets.filter(x => x.done).length
     }
     const complete = total > 0 && done >= total
-    add('gym', c?.at, { name, right: `${done}/${total} sets`, status: complete ? 'done' : 'open', workout: complete })
-    const n = stretchesOf(s, id).length
-    add('stretch', c?.stretchedAt, { name: `${name} · Stretches`, right: `${n}/${n}`, status: 'done' })
+    // One begun from Build a Workout shows from then on, ticked or not.
+    add('gym', c?.at ?? c?.openedAt, { name, right: `${done}/${total} sets`, status: complete ? 'done' : planEndedOf(s, id) ? 'early' : 'open', workout: complete, edit: { open: id } })
+    stretching(id, `${name} · Stretches`)
     const w = warmupOf(s, id)
-    if (w.on && c?.warmup) warmup(c.warmedAt ?? c.at, name, w.sets)
+    if (w.on && c?.warmup) warmup(c.warmedAt ?? c.at, name, w.sets, { open: id })
   }
   // The Full Body Stretch counts as a workout at 30+ minutes; a cool-down never.
-  const r = s.checks?.[STRETCH_ROUTINE.id]
-  const routineN = stretchesOf(s, STRETCH_ROUTINE.id).length
-  add('stretch', r?.stretchedAt, { name: STRETCH_ROUTINE.name, right: `${routineN}/${routineN}`, status: 'done', workout: longEnough(Math.round(routineSecondsOf(s) / 60)) })
-  for (const c of COOL_DOWNS) {
-    const n = stretchesOf(s, c.id).length
-    add('stretch', s.checks?.[c.id]?.stretchedAt, { name: `Cool Down · ${c.label}`, right: `${n}/${n}`, status: 'done' })
-  }
+  stretching(STRETCH_ROUTINE.id, STRETCH_ROUTINE.name, { workout: longEnough(Math.round(routineSecondsOf(s) / 60)) })
+  for (const c of COOL_DOWNS) stretching(c.id, `Cool Down · ${c.label}`)
   // Filed sessions: finished, or ended early.
-  for (const x of sessionsOf(s)) {
+  for (const [index, x] of sessionsOf(s).entries()) {
     const counts = sessionCounts(x)
     const all = x.stretched === x.stretches
+    const edit = { menu: 'session', index }
     if (stretchList(x.id)) {
-      add('stretch', x.at, { name: COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : STRETCH_ROUTINE.name, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : 'early', workout: counts })
+      add('stretch', x.at, { name: COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : STRETCH_ROUTINE.name, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : 'early', workout: counts, edit })
       continue
     }
     const finished = x.total > 0 && x.done >= x.total
     const name = x.id === TARGETED.id ? planName(s, x.id, x) : FULL
-    add('gym', x.at, { name, right: `${x.done}/${x.total} sets`, status: finished ? 'done' : 'early', workout: counts })
-    if (x.stretched > 0) add('stretch', x.at, { name: `${name} · Stretches`, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : finished ? 'open' : 'early' })
-    warmup(x.at, name, x.warmup ?? [])
+    add('gym', x.at, { name, right: `${x.done}/${x.total} sets`, status: finished ? 'done' : 'early', workout: counts, edit })
+    if (x.stretched > 0) add('stretch', x.at, { name: `${name} · Stretches`, right: `${x.stretched}/${x.stretches}`, status: all ? 'done' : finished ? 'open' : 'early', edit })
+    warmup(x.at, name, x.warmup ?? [], edit)
   }
-  for (const c of classesOf(s)) {
+  for (const [index, c] of classesOf(s).entries()) {
+    const edit = { menu: 'class', index }
     const areas = c.strength ? c.areas ?? [] : []
     const counts = classIsWorkout(c)
     const where = areas.length > 0 ? 'gym' : c.cardio ? 'cardio' : 'stretch'
@@ -321,17 +331,20 @@ export function dayLinesOf(s, now = new Date(s.clockAt ?? Date.now())) {
       const body = ['upper', 'lower'].filter(a => areas.includes(a))
       const what = areas.length === CLASS_AREAS.length ? 'Full Body'
         : [body.length && `${body.map(a => CLASS_AREAS.find(x => x.id === a).label).join(' & ')} Body`, areas.includes('core') && 'Core'].filter(Boolean).join(' & ')
-      add('gym', c.at, { name: `Class · ${what}`, right: '', status: 'done', workout: counts })
+      add('gym', c.at, { name: `Class · ${what}`, right: '', status: 'done', workout: counts, edit })
     }
-    if (c.cardio) cardio(c.at, 'Class · Cardio', [c], counts && where === 'cardio')
-    if (c.stretch) add('stretch', c.at, { name: 'Class · Stretch', right: '', status: 'done', workout: counts && where === 'stretch' })
+    if (c.cardio) cardio(c.at, 'Class · Cardio', [c], counts && where === 'cardio', edit)
+    if (c.stretch) add('stretch', c.at, { name: 'Class · Stretch', right: '', status: 'done', workout: counts && where === 'stretch', edit })
   }
+  // Each kind counts its own: the index is its place in that kind's list.
+  const seen = {}
   for (const x of s.cardio ?? []) {
     const name = x.kind === 'walk' ? 'Walk' : x.kind === 'sport' ? x.type ?? 'Sport' : x.type && x.type !== 'Other' ? x.type : 'Cardio'
-    cardio(x.at, name, [x], x.kind !== 'walk' && cardioIsWorkout(x))
+    const index = seen[x.kind] = (seen[x.kind] ?? -1) + 1
+    cardio(x.at, name, [x], x.kind !== 'walk' && cardioIsWorkout(x), { menu: x.kind, index })
   }
-  for (const x of ownStretchesOf(s)) add('stretch', x.at, { name: 'Stretch', right: '', status: 'done', workout: x.minutes !== null && longEnough(x.minutes) })
-  for (const at of restDaysOf(s)) add('rest', at, { name: 'Rest day', right: '', status: 'done' })
+  for (const [index, x] of ownStretchesOf(s).entries()) add('stretch', x.at, { name: 'Stretch', right: '', status: 'done', workout: x.minutes !== null && longEnough(x.minutes), edit: { menu: 'stretch', index } })
+  for (const [index, at] of restDaysOf(s).entries()) add('rest', at, { name: 'Rest day', right: '', status: 'done', edit: { menu: 'rest', index } })
   return weekDays(now).map(day => Object.fromEntries(Object.entries(lines).map(([k, list]) => [k, list.filter(x => sameDay(x.at, day)).sort((a, b) => a.at - b.at)])))
 }
 
@@ -441,7 +454,14 @@ export function dropLastCardio(list, kind) {
 // is ticked. (The warm-up and stretches aren't required.)
 function workoutComplete(s, workoutId) {
   const list = exercisesOf(s, workoutId)
-  return list.length > 0 && list.every(ex => weekSetsOf(s, workoutId, ex).every(x => x.done))
+  return list.length > 0 && openSlotsOf(s, workoutId) === 0 && list.every(ex => weekSetsOf(s, workoutId, ex).every(x => x.done))
+}
+
+// A built workout's exercise slots still to fill (see buildTargeted). Each
+// counts as this many sets to go, so it isn't done until they're filled.
+export const SLOT_SETS = 3
+export function openSlotsOf(s, workoutId) {
+  return workoutId === TARGETED.id ? s.targeted?.slots?.length ?? 0 : 0
 }
 
 // A plan's exercises come in two lists, each picked from the exercise bank:
@@ -513,29 +533,107 @@ export function writeCoreOn(s, workoutId, on, scope) {
 // ── Just this week, or every week ──────────────────────────────────────────
 // A plan's lists and Core can be changed for just this week: the
 // change goes under `weekOnly`, which is read over what you've set and
-// cleared when the week is filed.
-//   scope 'week'   – just this week
+// cleared when the week is filed. For one you can do any number of times
+// (a full-body day, the Full Body Stretch, a cool-down) it's just this
+// time: cleared when that one is filed or ended.
+//   scope 'week'   – just this week (or this time)
 //   scope 'always' – this week and after: what you've set changes, and so
 //                    does this week's own version if there is one
 //   scope 'auto'   – this week's own version if there is one, else what
 //                    you've set (for moving things around, which doesn't ask)
+//   scope 'past'   – a saved week's own copy, which has nothing after it
+// Build a Workout's full-body days have no every week: each one starts as
+// it came, and a change is just for that one.
 export function planOf(s, key) {
-  return { ...s[key], ...s.weekOnly?.[key] }
+  const always = Object.fromEntries(Object.entries(s[key] ?? {}).filter(([id]) => !FULL_BODY_BY_ID[id]))
+  return { ...always, ...s.weekOnly?.[key] }
 }
 const everyWeek = s => ({ ...s, weekOnly: undefined })
 export const hasWeekOnly = (s, key, id) => s.weekOnly?.[key]?.[id] !== undefined
 
 function writePlan(s, key, id, read, change, scope) {
   const own = hasWeekOnly(s, key, id)
-  const to = scope === 'auto' ? (own ? 'week' : 'always') : scope
+  const to = FULL_BODY_BY_ID[id] || scope === 'week' || (scope === 'auto' && own) ? 'week' : 'always'
   let next = s
   if (to === 'always') {
     next = { ...next, [key]: { ...s[key], [id]: change(read(everyWeek(s))) } }
   }
   if (to === 'week' || own) next = { ...next, weekOnly: { ...s.weekOnly, [key]: { ...s.weekOnly?.[key], [id]: change(read(s)) } } }
+  // Changed back to how every week has it: it's not this week's own any more.
+  if (hasWeekOnly(next, key, id) && JSON.stringify(read(next)) === JSON.stringify(read(everyWeek(next)))) {
+    next = withoutWeekOnly(next, id, [key])
+  }
   return next
 }
 
+// What's kept for a plan, by key.
+const PLAN_KEYS = ['order', 'coreLists', 'coreOn', 'stretchLists']
+
+// Drops this week's own version of `id` (for `keys`, or all of them).
+function withoutWeekOnly(s, id, keys = PLAN_KEYS) {
+  if (!s.weekOnly) return s
+  const weekOnly = Object.fromEntries(Object.entries(s.weekOnly).map(([k, v]) => [k, keys.includes(k) ? Object.fromEntries(Object.entries(v).filter(([x]) => x !== id)) : v]))
+  return { ...s, weekOnly }
+}
+
+const exerciseIds = (s, id) => exerciseIdsOf(s, id)
+const stretchIds = (s, id) => stretchesOf(s, id).map(x => x.id)
+const listDiff = (now, from) => ({ added: now.filter(x => !from.includes(x)), dropped: from.filter(x => !now.includes(x)) })
+
+// How this week's version of a plan differs from every week's: whether it
+// has its own, and the exercises and stretches it adds or takes out.
+export function weekDiffOf(s, id) {
+  const always = everyWeek(s)
+  return {
+    differs: PLAN_KEYS.some(k => hasWeekOnly(s, k, id)),
+    exercises: listDiff(exerciseIds(s, id), exerciseIds(always, id)),
+    stretches: listDiff(stretchIds(s, id), stretchIds(always, id)),
+  }
+}
+
+// Back to every week's version, dropping ticks on what goes.
+export function resetWeekOf(s, id) {
+  return pruneStretchTicks(pruneTicks(withoutWeekOnly(s, id), id), id)
+}
+
+// A plan as the app came, without anything you've set.
+function originalOf(s, id) {
+  const next = everyWeek(s)
+  for (const k of PLAN_KEYS) next[k] = Object.fromEntries(Object.entries(s[k] ?? {}).filter(([x]) => x !== id))
+  return next
+}
+
+// How every week's version differs from how the app came: what it adds and
+// takes out, and whether anything's changed at all (moved around, say).
+export function defaultEditsOf(s, id) {
+  const now = everyWeek(s), from = originalOf(s, id)
+  const ex = [exerciseIds(now, id), exerciseIds(from, id)]
+  const st = [stretchIds(now, id), stretchIds(from, id)]
+  return {
+    edited: JSON.stringify([ex[0], st[0]]) !== JSON.stringify([ex[1], st[1]]),
+    exercises: listDiff(...ex),
+    stretches: listDiff(...st),
+  }
+}
+
+// Puts every week's version back to how the app came, from next week: this
+// week keeps what it has now, as its own version (one it already has
+// stays as it is).
+export function restoreDefaultOf(s, id) {
+  const now = { order: listIds(s, id, 'main'), coreLists: listIds(s, id, 'core'), coreOn: coreOnOf(s, id), stretchLists: stretchIds(s, id) }
+  const next = { ...s, weekOnly: { ...s.weekOnly } }
+  for (const k of PLAN_KEYS) {
+    if (!hasWeekOnly(s, k, id)) next.weekOnly[k] = { ...s.weekOnly?.[k], [id]: now[k] }
+    next[k] = Object.fromEntries(Object.entries(s[k] ?? {}).filter(([x]) => x !== id))
+  }
+  // Nothing different from the original after all: no version of its own.
+  return PLAN_KEYS.reduce((x, k) => (JSON.stringify(now[k]) === JSON.stringify(readPlan(everyWeek(x), k, id)) ? withoutWeekOnly(x, id, [k]) : x), next)
+}
+
+// One of a plan's kept values (see PLAN_KEYS), as read.
+function readPlan(s, key, id) {
+  return { order: () => listIds(s, id, 'main'), coreLists: () => listIds(s, id, 'core'), coreOn: () => coreOnOf(s, id), stretchLists: () => stretchIds(s, id) }[key]()
+}
 
 // What a week is made of: finished gym workouts, classes that count as
 // workouts (see classIsWorkout), each walk and rest logged, and other cardio
@@ -554,6 +652,30 @@ export function weekOf(s) {
 // truth; sessions logged before lengths were asked have no minutes.
 // This week's rest days, oldest first: each one's day, or null for ones
 // added before rest days had days.
+// Rest days follow what's logged: a day with something on it has none, and
+// each day this week before today with nothing on it is one, so moving
+// something off a day makes it a rest day again. Today and later have one
+// only if you add it. (Applied after every change: see useStore's update.)
+export function settleRest(s) {
+  const now = new Date(s.clockAt ?? Date.now())
+  const days = weekDays(now)
+  const log = dayLogOf(s, now)
+  const busy = days.map((_, i) => log[i].some(x => x.kind !== 'rest'))
+  const dayOf = at => days.findIndex(d => sameDay(new Date(at), d))
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const from = new Date(s.lastResetAt ?? days[0])
+  from.setHours(0, 0, 0, 0)
+  const rest = restDaysOf(s)
+  const keep = rest.filter(at => !at || !busy[dayOf(at)])
+  const add = days
+    .filter((d, i) => d >= from && d < today && !busy[i] && !keep.some(at => at && dayOf(at) === i))
+    .map(d => d.toISOString())
+  if (keep.length === rest.length && !add.length) return s
+  const list = [...keep, ...add]
+  return { ...s, restLog: list, activities: { ...s.activities, rest: list.length } }
+}
+
 export function restDaysOf(s) {
   const n = countOf(s, 'rest')
   const log = (s.restLog ?? []).slice(-n)
@@ -579,11 +701,16 @@ export function stretchesOf(s, listId) {
 // Changes a list's stretch ids for `scope` (see writePlan), dropping the
 // tick of any stretch that left it.
 export function writeStretchList(s, listId, change, scope) {
-  const next = writePlan(s, 'stretchLists', listId, x => stretchesOf(x, listId).map(st => st.id), change, scope)
-  const ids = stretchesOf(next, listId).map(st => st.id)
+  return pruneStretchTicks(writePlan(s, 'stretchLists', listId, x => stretchesOf(x, listId).map(st => st.id), change, scope), listId)
+}
+
+// Drops ticks on stretches no longer in the list.
+function pruneStretchTicks(s, listId) {
+  const ids = stretchesOf(s, listId).map(st => st.id)
   const ticks = s.checks?.[listId]?.stretches ?? {}
+  if (Object.keys(ticks).every(id => ids.includes(id))) return s
   const kept = Object.fromEntries(Object.entries(ticks).filter(([id]) => ids.includes(id)))
-  return writeChecks(next, listId, cur => ({ ...cur, stretches: kept }))
+  return writeChecks(s, listId, cur => ({ ...cur, stretches: kept }))
 }
 
 // How long a stretch list takes with your settings: every hold (both sides
@@ -640,7 +767,10 @@ export function timerOf(s) {
 
 // Your weekly goals, falling back to the defaults.
 export function goalsOf(s) {
-  return Object.fromEntries(Object.entries(GOAL_DEFAULTS).map(([k, d]) => [k, { ...d, ...s.goals?.[k] }]))
+  return Object.fromEntries(GOAL_SETTINGS.map(({ id, most }) => {
+    const g = { ...GOAL_DEFAULTS[id], ...s.goals?.[id] }
+    return [id, { min: Math.min(g.min, most), max: Math.min(g.max, most) }]
+  }))
 }
 
 // ── Doing it again ─────────────────────────────────────────────────────────
@@ -681,7 +811,7 @@ export function sessionOf(s, id) {
   if (stretchList(id)) {
     return { id, at: c.stretchedAt ?? s.clockAt ?? new Date().toISOString(), stretched, stretches: list.length, minutes: Math.round(routineSecondsOf(s, id) / 60), checks: c }
   }
-  let done = 0, total = 0
+  let done = 0, total = SLOT_SETS * openSlotsOf(s, id)
   for (const ex of exercisesOf(s, id)) {
     const sets = weekSetsOf(s, id, ex)
     total += sets.length
@@ -700,7 +830,7 @@ export function fileSession(s, id) {
   if (!REPEATABLE.has(id) || !finishedOf(s, id)) return s
   const checks = { ...s.checks }
   delete checks[id]
-  return { ...s, sessionLog: [...sessionsOf(s), sessionOf(s, id)], checks }
+  return withoutWeekOnly({ ...s, sessionLog: [...sessionsOf(s), sessionOf(s, id)], checks }, id)
 }
 
 // Ends the one under way before it's finished: it's filed as it stands, on
@@ -712,11 +842,44 @@ export function endSession(s, id) {
   if (!((x.done ?? 0) > 0 || x.stretched > 0)) return s
   const checks = { ...s.checks }
   delete checks[id]
-  return { ...s, sessionLog: [...sessionsOf(s), x], checks }
+  return withoutWeekOnly({ ...s, sessionLog: [...sessionsOf(s), x], checks }, id)
 }
 
 // Whether a filed session can be opened again: 'ok', or 'busy' while
 // another of the same is under way and not finished.
+// Whether `at` was on a day before today.
+function beforeToday(s, at) {
+  if (!at) return false
+  const today = new Date(s.clockAt ?? Date.now())
+  today.setHours(0, 0, 0, 0)
+  return new Date(at) < today
+}
+
+// A plan begun on a day that's over without every set done ended there (the
+// stop sign on its day); finishing its sets later still completes it.
+export function planEndedOf(s, id) {
+  return !REPEATABLE.has(id) && beforeToday(s, s.checks?.[id]?.at) && !workoutComplete(s, id)
+}
+
+// Ones you can do again left unfinished on a day that's over are ended
+// there, as far as they got (see endSession); one begun but never ticked
+// just goes. (Applied after every change: see useStore's update.)
+export function endPastSessions(s) {
+  let next = s
+  for (const id of REPEATABLE) {
+    const c = next.checks?.[id]
+    if (!beforeToday(next, c?.at ?? c?.stretchStartAt ?? c?.openedAt) || finishedOf(next, id)) continue
+    const ended = endSession(next, id)
+    if (ended !== next) next = ended
+    else {
+      const checks = { ...next.checks }
+      delete checks[id]
+      next = withoutWeekOnly({ ...next, checks }, id)
+    }
+  }
+  return next
+}
+
 export function reopenOf(s, index) {
   const x = sessionsOf(s)[index]
   if (!x) return 'busy'
@@ -751,16 +914,21 @@ export function reopenSession(s, index) {
 }
 
 // ── Targeted workouts ──────────────────────────────────────────────────────
-// A targeted workout is a plan whose lists are made for you when you start
-// one (see data/targeted.js). Filed ones keep what they were, so each can
-// be opened again as it was.
+// A targeted workout is a plan for the areas you pick (all of them for full
+// body). It starts empty, with a slot for each exercise and stretch it
+// needs (see data/targeted.js), and you fill each from what's suggested or
+// pick your own. Filed ones keep what they were, so each can be opened
+// again as it was.
 
-// The one picked last: its areas and equipment, and its lists.
+// The one picked last: its areas and equipment, its lists, and the slots
+// still empty.
 export function targetedOf(s) {
   const id = TARGETED.id
   return {
     areas: s.targeted?.areas ?? [],
     eq: s.targeted?.eq ?? 'gym',
+    slots: s.targeted?.slots ?? [],
+    stretchSlots: s.targeted?.stretchSlots ?? [],
     main: listIds(s, id, 'main'),
     core: coreOnOf(s, id) ? listIds(s, id, 'core') : [],
     stretches: stretchesOf(s, id).map(x => x.id),
@@ -769,32 +937,90 @@ export function targetedOf(s) {
 
 // Sets the targeted workout's picks and lists (as everyday lists, not just
 // this week's: each one is made fresh anyway).
-function withTargeted(s, { areas, eq, main, core, stretches }) {
+function withTargeted(s, { areas, eq, main, core, stretches, slots = [], stretchSlots = [] }) {
   const id = TARGETED.id
-  const own = Object.fromEntries(Object.entries(s.weekOnly ?? {}).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).filter(([x]) => x !== id))]))
   return {
-    ...s,
-    targeted: { areas, eq },
+    ...withoutWeekOnly(s, id),
+    targeted: { areas, eq, slots, stretchSlots },
     order: { ...s.order, [id]: main },
     coreLists: { ...s.coreLists, [id]: core },
-    coreOn: { ...s.coreOn, [id]: core.length > 0 },
+    coreOn: { ...s.coreOn, [id]: core.length > 0 || slots.some(x => x.area === 'core') },
     stretchLists: { ...s.stretchLists, [id]: stretches },
-    weekOnly: own,
   }
 }
 
-// Starts a targeted workout for `areas` with `eq`: a finished one is filed
-// first; one under way but not finished is replaced (nothing is lost if it
-// had nothing ticked; the card opens one under way instead of asking).
-// Exercises you have numbers for come first, and last time's go to the back.
+// Marks one as begun from its card (`openedAt`), so it shows as under way
+// before anything's ticked.
+function opened(s, id) {
+  return { ...s, checks: { ...s.checks, [id]: { ...s.checks?.[id], openedAt: s.clockAt ?? new Date().toISOString() } } }
+}
+
+// A fresh one from Build a Workout starts without its warm-up (its lengths
+// are kept for when you add it).
+function noWarmup(s, id) {
+  return { ...s, warmups: { ...s.warmups, [id]: { ...warmupOf(s, id), on: false } } }
+}
+
+// Begins a full-body day from Build a Workout: a finished one is filed
+// first, and one under way carries on.
+export function beginSession(s, id) {
+  const filed = fileSession(s, id)
+  return opened(filed.checks?.[id] ? filed : noWarmup(filed, id), id)
+}
+
+// Starts a targeted workout for `areas` with `eq`, empty with its slots: one
+// before it is filed first, finished or as far as it got (if it got
+// anywhere). Exercises you have numbers for are suggested first, and last
+// time's last.
 export function startTargeted(s, areas, eq) {
   const id = TARGETED.id
-  const filed = fileSession(s, id)
+  const filed = endSession(fileSession(s, id), id)
   const last = [...sessionsOf(filed)].reverse().find(x => x.targeted)?.targeted
   const recent = new Set(last ? [...last.main, ...last.core, ...last.stretches] : [])
   const known = new Set(Object.keys(s.exerciseSettings ?? {}))
-  const built = buildTargeted(areas, eq, { known, recent })
+  const { slots, stretchSlots } = buildTargeted(areas, eq, { known, recent })
   const checks = { ...filed.checks }
   delete checks[id]
-  return { ...withTargeted(filed, { areas, eq, ...built }), checks }
+  return opened(noWarmup({ ...withTargeted(filed, { areas, eq, main: [], core: [], stretches: [], slots, stretchSlots }), checks }, id), id)
+}
+
+// Adds areas to the one under way: their slots go after what's there, each
+// with what it would get in a workout of that many areas, and nothing ticked
+// is touched.
+export function addTargetedAreas(s, more) {
+  const now = targetedOf(s)
+  const areas = [...now.areas, ...more.filter(a => !now.areas.includes(a))]
+  const taken = [...now.main, ...now.core, ...now.stretches, ...now.slots.map(x => x.suggest), ...now.stretchSlots.map(x => x.suggest)]
+  const known = new Set(Object.keys(s.exerciseSettings ?? {}))
+  const built = buildTargeted(more, now.eq, { known, among: areas, taken })
+  return withTargeted(s, { ...now, areas, slots: [...now.slots, ...built.slots], stretchSlots: [...now.stretchSlots, ...built.stretchSlots] })
+}
+
+// Fills an empty slot (`kind` 'exercise' or 'stretch', by its place among
+// them) with `id`, at the end of its list.
+export function fillSlot(s, kind, index, id) {
+  const now = targetedOf(s)
+  const key = kind === 'stretch' ? 'stretchSlots' : 'slots'
+  if (!now[key][index]) return s
+  const next = { ...now, [key]: now[key].filter((_, i) => i !== index) }
+  if (kind === 'stretch') next.stretches = [...now.stretches, id]
+  else if (isCore(EXERCISE_BY_ID[id])) next.core = [...now.core, id]
+  else next.main = [...now.main, id]
+  return withTargeted(s, next)
+}
+
+// Drops one begun from Build a Workout with nothing done yet, as if it was
+// never started.
+export function discardSession(s, id) {
+  const checks = { ...s.checks }
+  delete checks[id]
+  const next = { ...s, checks }
+  return id === TARGETED.id ? withTargeted(next, { areas: [], eq: targetedOf(s).eq, main: [], core: [], stretches: [] }) : next
+}
+
+// Takes away an empty slot you don't want.
+export function dropSlot(s, kind, index) {
+  const now = targetedOf(s)
+  const key = kind === 'stretch' ? 'stretchSlots' : 'slots'
+  return withTargeted(s, { ...now, [key]: now[key].filter((_, i) => i !== index) })
 }

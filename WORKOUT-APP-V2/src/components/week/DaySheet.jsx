@@ -10,28 +10,37 @@ const firstDay = weekStart => {
   return new Date(y, m - 1, d, 12)
 }
 const weekOf = days => `Week of ${days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-const rangeOf = days => {
-  const [a, b] = [days[0], days[6]]
-  const md = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  return a.getMonth() === b.getMonth() ? `${md(a)} – ${b.getDate()}` : `${md(a)} – ${md(b)}`
-}
 
-// The picked day, opened from ACTIVITIES on the week strip: the month on top
+// The picked day, opened from Activities on the week strip: the month on top
 // to move around (always the same height, so switching days doesn't make
-// it jump), then the day by tab. Tap the day again for the whole week, day
+// it jump), then the day by tab. Show week view gives the whole week, day
 // by day under the week's totals. `goals`: the weekly goals, for those
-// totals.
-export default function DaySheet({ weeks, at, picked, onPick, onAt, goals, onClose }) {
+// totals. This week's lines can be tapped: onEdit(line.edit). Today, with
+// nothing on it yet, can be marked as a rest day (onRest); earlier days with
+// nothing on them are rest days already.
+// It opens on `at` (a week) and `picked` (a day of it) and moves around on
+// its own, so the screen behind stays where it was.
+export default function DaySheet({ weeks, at: startAt, picked: startPicked, goals, onEdit, onRest, onClose }) {
   const [whole, setWhole] = useState(false)
+  const [at, setAt] = useState(startAt)
+  const [picked, setPicked] = useState(startPicked)
+  // Under the title, a way back to today once you've moved off it.
+  const live = weeks.findIndex(w => w.live)
+  const now = new Date().getDay()
+  const away = whole || at !== live || picked !== now
+  const toToday = () => { setWhole(false); setAt(live); setPicked(now) }
   const week = weeks[at]
   const days = weekDays(firstDay(week.weekStart))
   const day = days[picked]
   const future = week.live && day > new Date() && !sameDay(day, new Date())
+  const tap = week.live ? onEdit : null
 
   return (
     <SettingsSheet
       title={whole ? weekOf(days) : day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-      subtitle={whole ? rangeOf(days) : weekOf(days)}
+      subtitle={live >= 0 && away ? (
+        <button onClick={toToday} className="font-semibold text-accent-500 active:opacity-70">Go to today</button>
+      ) : undefined}
       closeLabel="Done"
       split
       onClose={onClose}
@@ -41,22 +50,24 @@ export default function DaySheet({ weeks, at, picked, onPick, onAt, goals, onClo
         at={at}
         picked={picked}
         compact
+        // On a day, a link to its week; on the week, how to get back to a
+        // day.
+        aside={whole ? (
+          <span className="text-xs text-stone-400 whitespace-nowrap">Tap a day</span>
+        ) : (
+          <button onClick={() => setWhole(true)} className="text-xs font-semibold text-accent-500 whitespace-nowrap active:opacity-70">
+            Show week view
+          </button>
+        )}
         onPick={(w, d) => {
-          setWhole(!whole && w.weekStart === week.weekStart && d === picked)
-          onAt(weeks.indexOf(w))
-          onPick(d)
+          setWhole(false)
+          setAt(weeks.indexOf(w))
+          setPicked(d)
         }}
       />
-      {/* On a day, a link to its week (tapping the day again does the
-          same); on the week, how to get back to a day. */}
-      {whole ? (
-        <p className="-mt-2 text-center text-xs text-stone-400">Tap a day to open it</p>
-      ) : (
-        <button onClick={() => setWhole(true)} className="-mt-2 self-center text-xs font-semibold text-accent-500 active:opacity-70">
-          Tap here to see the whole week
-        </button>
-      )}
-      <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 -mx-2 px-2">
+      {/* Out to the sheet's right edge, so the scrollbar sits in the margin
+          and not over the counts. */}
+      <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 -ml-2 pl-2 -mr-5 pr-5">
         {whole ? (
           <WeekList
             dayLines={week.dayLines}
@@ -64,11 +75,14 @@ export default function DaySheet({ weeks, at, picked, onPick, onAt, goals, onClo
             empty={week.dayLines ? (week.live ? 'Nothing yet' : 'Nothing logged') : 'Not recorded'}
             totals={week.totals}
             goals={goals}
+            onEdit={tap}
           />
         ) : (
           <DayList
             lines={week.dayLines?.[picked]}
             empty={future ? 'Nothing yet' : week.dayLines ? 'Nothing logged' : 'Not recorded'}
+            onEdit={tap}
+            onRest={week.live && sameDay(day, new Date()) ? onRest : null}
           />
         )}
       </div>
@@ -101,13 +115,22 @@ const weekCountOf = (tab, list, totals, goals) => {
   if (tab === 'rest') return <b className="font-semibold text-stone-700">{list.length}</b>
   return totalOf(tab, list)
 }
-function Line({ x, dot }) {
+// Tapping one (when `onEdit` is given) opens it or asks what to do with it.
+function Line({ x, dot, onEdit }) {
+  const tappable = !!(onEdit && x.edit)
   return (
     <div className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0 text-[15px] leading-snug">
       <InfoMark kind={x.status} />
-      {dot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
-      <span className="min-w-0 font-medium text-stone-900">{x.name}</span>
-      <span className="ml-auto shrink-0 whitespace-nowrap text-sm text-stone-500">{x.right}</span>
+      <button
+        disabled={!tappable}
+        onClick={() => onEdit(x.edit)}
+        aria-label={tappable ? `Edit ${x.name}` : undefined}
+        className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-lg -my-1 py-1 -mx-1 px-1 enabled:active:bg-stone-100"
+      >
+        {dot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
+        <span className="min-w-0 font-medium text-stone-900">{x.name}</span>
+        <span className="ml-auto shrink-0 whitespace-nowrap text-sm text-stone-500">{x.right}</span>
+      </button>
       {x.workout && <InfoMark kind="workout" />}
     </div>
   )
@@ -115,9 +138,18 @@ function Line({ x, dot }) {
 
 // The day by tab, in the tabs' colors: each tab's lines under what it added
 // up to.
-function DayList({ lines, empty }) {
+function DayList({ lines, empty, onEdit, onRest }) {
   const tabs = TABS.filter(([k]) => lines?.[k]?.length)
-  if (!tabs.length) return <p className="pt-3 text-sm text-stone-400">{empty}</p>
+  if (!tabs.length) {
+    return (
+      <div className="pt-3 flex items-center justify-between gap-3">
+        <p className="text-sm text-stone-400">{onRest ? 'Nothing yet' : empty}</p>
+        {onRest && (
+          <button onClick={onRest} className="text-sm font-semibold text-accent-500 active:opacity-70">Mark as rest day</button>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="divide-y divide-stone-100 pt-3">
       {tabs.map(([k, label, dot]) => (
@@ -128,7 +160,7 @@ function DayList({ lines, empty }) {
             <span className="ml-auto normal-case tracking-normal font-medium text-stone-400">{totalOf(k, lines[k])}</span>
           </p>
           <div className="pl-3 divide-y divide-stone-100">
-            {lines[k].map((x, j) => <Line key={j} x={x} />)}
+            {lines[k].map((x, j) => <Line key={j} x={x} onEdit={onEdit} />)}
           </div>
         </div>
       ))}
@@ -138,7 +170,7 @@ function DayList({ lines, empty }) {
 
 // The week: how far along each goal is, then each day that had something,
 // by name, with what you did in it (each with its tab's dot).
-function WeekList({ dayLines, days, empty, totals, goals }) {
+function WeekList({ dayLines, days, empty, totals, goals, onEdit }) {
   const tabs = TABS.filter(([k]) => dayLines?.some(d => d[k]?.length))
   const daysWith = (dayLines ?? []).map((d, i) => ({ i, lines: TABS.flatMap(([k, , dot]) => (d[k] ?? []).map(x => ({ x, dot }))) })).filter(d => d.lines.length)
   if (!daysWith.length) return <p className="pt-3 text-sm text-stone-400">{empty}</p>
@@ -159,7 +191,7 @@ function WeekList({ dayLines, days, empty, totals, goals }) {
             {days[i].toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
           <div className="divide-y divide-stone-100">
-            {lines.map(({ x, dot }, j) => <Line key={j} x={x} dot={dot} />)}
+            {lines.map(({ x, dot }, j) => <Line key={j} x={x} dot={dot} onEdit={onEdit} />)}
           </div>
         </div>
       ))}

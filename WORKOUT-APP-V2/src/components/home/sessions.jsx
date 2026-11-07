@@ -1,49 +1,22 @@
-import { FULL_BODY_BY_ID, STRETCH_ROUTINE, COOL_DOWN_BY_ID, TARGETED } from '../../data/workout'
-import { targetName, equipmentName } from '../../data/targeted'
-import { dayLabel } from '../../utils/days'
-import { LineButton, Part } from './lines'
+// What's under way on a card: an IN PROGRESS line for each, under a rule.
+// (Finished ones are on the Activities screen, where they can be changed.)
+export function UnderWay({ children }) {
+  const lines = [children].flat().filter(Boolean)
+  if (!lines.length) return null
+  return <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">{lines}</div>
+}
 
-// What shows at a line's right end: what a Build a Workout session was
-// ("Full Body", "Chest & Glutes"; tap it for the equipment), or what a
-// cool-down was after.
-const endOf = x => (x.id === TARGETED.id ? targetName(x.targeted?.areas ?? []) : COOL_DOWN_BY_ID[x.id] ? COOL_DOWN_BY_ID[x.id].label : FULL_BODY_BY_ID[x.id] ? 'Full Body' : undefined)
-const nameOf = x => (x.id === TARGETED.id ? `${targetName(x.targeted?.areas ?? [])} · ${equipmentName(x.targeted?.eq)}` : COOL_DOWN_BY_ID[x.id] ? `Cool Down · ${COOL_DOWN_BY_ID[x.id].label}` : FULL_BODY_BY_ID[x.id] ? `Full Body · ${FULL_BODY_BY_ID[x.id].label}` : STRETCH_ROUTINE.name)
-
-// A card's sessions on their own lines (see store.sessionsFor). Tapping one
-// asks what to do with it (see LineMenu). One ended before it was finished
-// gets the stop sign; a finished Full Body Stretch that counted, the dumbbell. A
-// finished full-body day always counts and a cool-down never does, so only
-// the Full Body Stretch gets the dumbbell.
-export function SessionLines({ list, onMenu }) {
-  if (!list.length) return null
+// One under way: IN PROGRESS, then how far along (Parts). Tap it to carry on.
+export function InProgressLine({ label, onOpen, children }) {
   return (
-    <div className="mt-3 pt-2.5 border-t border-stone-100 space-y-1.5">
-      {list.map(x => {
-        const day = dayLabel(x.at)
-        const routine = x.id === STRETCH_ROUTINE.id
-        const stretch = routine || !!COOL_DOWN_BY_ID[x.id]
-        return (
-          <LineButton
-            key={x.filed ? `filed-${x.index}` : x.id}
-            label={`${day} ${nameOf(x)}`}
-            day={day}
-            workout={routine ? x.counts : false}
-            early={stretch ? x.stretched < x.stretches : x.done < x.total}
-            end={endOf(x)}
-            onEdit={() => onMenu(x.filed ? { kind: 'session', index: x.index } : { kind: 'open', id: x.id })}
-          >
-            {stretch ? (
-              // One ended early shows how far it got.
-              <Part kind="stretch">{x.stretched < x.stretches ? `${x.stretched}/${x.stretches} stretches` : `Stretch ${x.minutes} min`}</Part>
-            ) : (
-              <>
-                <Part kind="gym">{x.done}/{x.total} sets</Part>
-                <Part kind="stretch">{x.stretched}/{x.stretches} stretches</Part>
-              </>
-            )}
-          </LineButton>
-        )
-      })}
-    </div>
+    <button
+      onClick={onOpen}
+      aria-label={`${label}, in progress`}
+      className="w-full -mx-1 px-1 py-0.5 flex items-center gap-2 text-[13px] text-left whitespace-nowrap rounded-lg active:bg-stone-100"
+    >
+      <span className="shrink-0 text-[11px] font-bold tracking-wider text-orange-600">IN PROGRESS</span>
+      <span className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden text-stone-500 tabular-nums">{children}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
+    </button>
   )
 }

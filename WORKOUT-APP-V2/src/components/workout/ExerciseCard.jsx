@@ -89,8 +89,9 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
 // ── Exercise card ────────────────────────────────────────────────────────────
 // Open, it's the full card with its sets; ⌃ or its name closes it. Folded,
 // it's one line ending in ⌄: finished exercises tinted with a tick, the rest
-// with a dot per set. Tap to open.
-export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone }) {
+// with a dot per set. Tap to open. `tag`: by its name, when it's in just
+// for this week.
+export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone, tag }) {
   const [showSettings, setShowSettings] = useState(false)
 
   const log = store.getLog(workoutId, exercise)
@@ -119,7 +120,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
         <DragHandle name={exercise.name} {...grip} />
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
+            <span className="block font-semibold text-stone-900 truncate">{exercise.name}{tag}</span>
             <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
           </span>
           <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.all.filter(x => x.done).length} of ${log.all.length} sets done`}>
@@ -152,7 +153,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           </span>
           {/* Name above what was done, like an unfinished row, so long names fit. */}
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-accent-600 leading-snug">{exercise.name}</span>
+            <span className="block font-semibold text-accent-600 leading-snug">{exercise.name}{tag}</span>
             <span className="block text-sm text-stone-500">{done}</span>
           </span>
           <Chevron />
@@ -172,6 +173,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           <p className={`font-semibold leading-tight ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
             {setup.perSide && <span className="text-stone-400 font-normal text-sm ml-1">(per side)</span>}
+            {tag}
           </p>
           <p className={`mt-1 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
             {summary}

@@ -1,53 +1,53 @@
 import { useState } from 'react'
 import { FULL_BODY, TARGETED } from '../../data/workout'
-import { TARGET_AREAS, TARGET_EQUIPMENT, perArea, stretchesPerArea, targetName, equipmentName } from '../../data/targeted'
+import { TARGET_AREAS, TARGET_EQUIPMENT, exerciseTotal, stretchTotal, share, equipmentName } from '../../data/targeted'
 import { SettingsSheet } from '../ui/Sheet'
 import { BodyFigure } from '../week/MuscleMap'
-import { CardIcon, Counts, Of, CARD } from './cards'
-import { SessionLines } from './sessions'
+import { CardHead, CARD } from './cards'
+import { Part } from './lines'
+import { cardioMinutes } from '../../utils/format'
+import { UnderWay, InProgressLine } from './sessions'
 
 // A full-body day's or targeted workout's progress this week: sets and
-// stretches ticked.
+// stretches ticked, and whether it's under way (begun from here, or ticked).
 function progressOf(store, id) {
   const { done, total, exercises } = store.workoutProgress(id)
   const stretches = store.getStretches(id)
   const stretched = stretches.filter(x => store.getStretchDone(id, x.id)).length
-  return { done, total, exercises, stretches: stretches.length, stretched, complete: total > 0 && done === total, started: done > 0 || stretched > 0 }
+  const complete = total > 0 && done === total
+  const begun = !!store.currentSession(id).checks?.openedAt || done > 0 || stretched > 0
+  const w = store.getWarmup(id)
+  // A built one's stretches still to pick count too.
+  const toPick = id === TARGETED.id ? store.targeted.stretchSlots.length : 0
+  return { done, total, exercises, stretches: stretches.length + toPick, stretched, complete, underWay: begun && !complete, warmup: w.on ? w.sets : null }
 }
 
+// Full-body days are built like the rest now (every area); one begun
+// before that still shows here until it's done.
 const IDS = [...FULL_BODY.map(p => p.id), TARGETED.id]
-// Full body with each kind of equipment is one of the full-body days.
-const FULL_FOR = { gym: 'fullGym', db: 'fullHomeDb', none: 'fullHome' }
+const ALL = TARGET_AREAS.map(a => a.id)
 
 // One card for working out any day, as often as you like: a full-body day,
-// or just the areas you pick. The one under way shows on top and opens
-// straight to it; with none under way, tapping asks what to hit. Each
-// finished one gets a line with its day (see SessionLines).
-export function BuildCard({ store, onOpen, onEditSession }) {
-  const current = IDS.map(id => ({ id, ...progressOf(store, id) })).find(p => p.started && !p.complete)
-  const label = current && (current.id === TARGETED.id
+// or just the areas you pick. Tapping it asks what to hit. Underneath, each
+// one under way, from the moment it's started (tap to carry on), then each
+// finished one with its day (see SessionLines).
+export function BuildCard({ store, onOpen }) {
+  const going = IDS.map(id => ({ id, ...progressOf(store, id) })).filter(p => p.underWay)
+  const nameOf = p => (p.id === TARGETED.id
     ? `${store.planName(TARGETED.id)} · ${equipmentName(store.targeted.eq)}`
-    : FULL_BODY.find(p => p.id === current.id).short)
+    : `Full Body · ${FULL_BODY.find(x => x.id === p.id).label}`)
   return (
     <div className={CARD}>
-      <button onClick={() => onOpen(current?.id ?? null)} aria-label={current ? `Build a Workout, ${label} under way` : 'Build a Workout'} className="w-full text-left transition-all active:scale-[0.98]">
-        <div className="flex items-center gap-3">
-          <CardIcon icon="fullBody" tile="from-orange-50 to-orange-100" value={current?.total ? current.done / current.total : 0} fill="stroke-orange-400" />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-stone-900 truncate">Build a Workout</p>
-            <p className="text-sm text-stone-400 truncate">{current ? label : 'Full body or just the areas you pick'}</p>
-          </div>
-          {current ? (
-            <Counts>
-              <p><Of n={current.done} of={current.total} /> sets</p>
-              <p><Of n={current.stretched} of={current.stretches} /> stretches</p>
-            </Counts>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0"><path d="M9 18l6-6-6-6" /></svg>
-          )}
-        </div>
-      </button>
-      <SessionLines list={store.sessionsFor(IDS)} onMenu={onEditSession} />
+      <CardHead icon="fullBody" tile="from-orange-50 to-orange-100" value={going[0]?.total ? going[0].done / going[0].total : 0} fill="stroke-orange-400" title="Build a Workout" sub="Pick your areas and equipment" onClick={() => onOpen(null)} />
+      <UnderWay>
+        {going.map(p => (
+          <InProgressLine key={p.id} label={nameOf(p)} onOpen={() => onOpen(p.id)}>
+            <Part kind="gym">{p.done}/{p.total} sets</Part>
+            {p.warmup && <Part kind="cardio">{cardioMinutes(p.warmup)}</Part>}
+            <Part kind="stretch">{p.stretched}/{p.stretches} stretches</Part>
+          </InProgressLine>
+        ))}
+      </UnderWay>
     </div>
   )
 }
@@ -56,37 +56,51 @@ export function BuildCard({ store, onOpen, onEditSession }) {
 const FIGURE_FILL = '#ff8904'
 const ALL_REGIONS = ['shoulders', 'chest', 'arms', 'core', 'hips', 'thighs', 'calves']
 
-// Picking what to work: Full body across the top, then the areas (any
-// number), and what you have to work with. It opens on your last picks.
-// Full body starts that equipment's full-body day; areas build a targeted
-// workout (see startTargeted).
-export function BuildSheet({ store, onPick, onClose }) {
-  const last = store.targeted
-  const [full, setFull] = useState(false)
-  const [areas, setAreas] = useState(last.areas)
-  const [eq, setEq] = useState(last.eq)
-  const toggle = id => { setFull(false); setAreas(a => (a.includes(id) ? a.filter(x => x !== id) : [...a, id])) }
-  const ready = full || areas.length > 0
-  const name = full ? 'Full Body' : targetName(areas)
+// A tile per choice, the picked ones outlined in the card's color.
+const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2 pb-2 border-[1.5px] text-[11.5px] font-semibold transition-colors min-w-0 ${
+  on ? 'bg-orange-50 text-orange-800 border-orange-500' : 'bg-stone-100 text-stone-500 border-transparent active:bg-stone-200'
+}`
 
-  const per = perArea(areas.length)
-  const exercises = full ? progressOf(store, FULL_FOR[eq]).exercises : per * areas.length
-  const stretches = full ? store.getStretches(FULL_FOR[eq]).length : stretchesPerArea(areas.length) * areas.length
+// The areas, three to a row, each with its part of the body filled in.
+function AreaTiles({ list, picked, onToggle }) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {list.map(a => (
+        <button key={a.id} onClick={() => onToggle(a.id)} aria-pressed={picked.includes(a.id)} className={tile(picked.includes(a.id))}>
+          <BodyFigure view={a.view} fills={Object.fromEntries(a.regions.map(r => [r, FIGURE_FILL]))} className="w-[30px] h-[38px]" />
+          <span className="w-full truncate text-center">{a.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Picking what to work: Full body across the top, then the areas (any
+// number), and what you have to work with. It opens with nothing picked,
+// on the equipment you used last.
+// Start opens the workout empty, with a slot for each exercise and stretch
+// to pick (full body is every area; see startTargeted).
+export function BuildSheet({ store, onPick, onClose }) {
+  // Every area picked is Full body.
+  const all = list => list.length === TARGET_AREAS.length
+  const [full, setFull] = useState(false)
+  const [areas, setAreas] = useState([])
+  const [eq, setEq] = useState(store.targeted.eq)
+  function toggle(id) {
+    const next = areas.includes(id) ? areas.filter(x => x !== id) : [...areas, id]
+    setFull(all(next))
+    setAreas(all(next) ? [] : next)
+  }
+  const ready = full || areas.length > 0
+
+  const exercises = exerciseTotal(full ? ALL.length : areas.length)
+  const stretches = stretchTotal(full ? ALL.length : areas.length)
 
   function start() {
-    if (full) {
-      store.startAgain(FULL_FOR[eq])
-      onPick(FULL_FOR[eq])
-    } else {
-      store.startTargeted(areas, eq)
-      onPick(TARGETED.id)
-    }
+    store.startTargeted(full ? ALL : areas, eq)
+    onPick(TARGETED.id)
   }
 
-  // A tile per choice, the picked ones outlined in the card's color.
-  const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2 pb-2 border-[1.5px] text-[11.5px] font-semibold transition-colors min-w-0 ${
-    on ? 'bg-orange-50 text-orange-800 border-orange-500' : 'bg-stone-100 text-stone-500 border-transparent active:bg-stone-200'
-  }`
   return (
     <SettingsSheet title="Build a Workout" closeLabel="Cancel" onClose={onClose}>
       <div className="space-y-2">
@@ -95,14 +109,7 @@ export function BuildSheet({ store, onPick, onClose }) {
           <BodyFigure view="front" fills={Object.fromEntries(ALL_REGIONS.map(r => [r, FIGURE_FILL]))} className="w-[22px] h-[28px]" />
           Full body
         </button>
-        <div className="grid grid-cols-3 gap-1.5">
-          {TARGET_AREAS.map(a => (
-            <button key={a.id} onClick={() => toggle(a.id)} aria-pressed={areas.includes(a.id)} className={tile(areas.includes(a.id))}>
-              <BodyFigure view={a.view} fills={Object.fromEntries(a.regions.map(r => [r, FIGURE_FILL]))} className="w-[30px] h-[38px]" />
-              <span className="w-full truncate text-center">{a.label}</span>
-            </button>
-          ))}
-        </div>
+        <AreaTiles list={TARGET_AREAS} picked={areas} onToggle={toggle} />
       </div>
       {/* Its own full-width row, so "Gym Equipment" fits on one line. */}
       <div className="space-y-2">
@@ -135,7 +142,37 @@ export function BuildSheet({ store, onPick, onClose }) {
         disabled={!ready}
         className="w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
       >
-        {ready ? `Start ${name}` : 'Pick what to hit'}
+        Start
+      </button>
+    </SettingsSheet>
+  )
+}
+
+const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+// More areas for a built workout under way: the ones it doesn't have yet.
+// Theirs go at the end, and the name grows to match (see addTargetedAreas).
+export function AddAreaSheet({ store, onClose }) {
+  const have = store.targeted.areas
+  const [areas, setAreas] = useState([])
+  const toggle = id => setAreas(a => (a.includes(id) ? a.filter(x => x !== id) : [...a, id]))
+  // What the new ones get: their share of a workout with every area.
+  const among = [...have, ...areas]
+  const added = total => Object.entries(share(total, among)).filter(([id]) => areas.includes(id)).reduce((n, [, k]) => n + k, 0)
+  return (
+    <SettingsSheet title="Add an area" closeLabel="Cancel" onClose={onClose}>
+      <AreaTiles list={TARGET_AREAS.filter(a => !have.includes(a.id))} picked={areas} onToggle={toggle} />
+      {areas.length > 0 && (
+        <p className="text-sm text-stone-500">
+          {count(added(exerciseTotal(among.length)), 'exercise')} · {count(added(stretchTotal(among.length)), 'stretch', 'stretches')} added at the end
+        </p>
+      )}
+      <button
+        onClick={() => { store.addAreas(areas); onClose() }}
+        disabled={!areas.length}
+        className="w-full px-4 py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
+      >
+        Add
       </button>
     </SettingsSheet>
   )

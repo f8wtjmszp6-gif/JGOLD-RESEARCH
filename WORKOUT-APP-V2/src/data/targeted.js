@@ -51,12 +51,27 @@ export function fitsEquipment(exercise, eq) {
   return kind === 'bodyweight' || (eq === 'db' && kind === 'dumbbell')
 }
 
-// Fewer areas get more exercises each, so it's a full session either way.
-export const perArea = n => (n === 1 ? 4 : n === 2 ? 3 : n <= 4 ? 2 : 1)
-export const stretchesPerArea = n => (n <= 2 ? 2 : 1)
+// How big a workout is: the exercises and stretches for `n` areas in all,
+// growing with the areas but leveling off, so a session stays about 45–60
+// minutes with 5–8 of stretching.
+export const exerciseTotal = n => [0, 4, 6, 7, 8, 8][n] ?? 9
+export const stretchTotal = n => [0, 3, 4, 5][n] ?? 6
+
+// Bigger areas first, for whatever doesn't share out evenly.
+const BY_SIZE = ['back', 'chest', 'quads', 'glutes', 'shoulders', 'hamstrings', 'arms', 'core', 'calves']
+
+// `total` shared across `areas`, as { [areaId]: count }: the same for each,
+// and what's left over one each to the biggest.
+export function share(total, areas) {
+  const sorted = BY_SIZE.filter(id => areas.includes(id))
+  const base = Math.floor(total / sorted.length)
+  const extra = total % sorted.length
+  return Object.fromEntries(sorted.map((id, i) => [id, base + (i < extra ? 1 : 0)]))
+}
 
 // "Chest & Glutes", "Chest, Back & Arms", "Chest, Back & 2 more".
 export function targetName(areas) {
+  if (areas.length === TARGET_AREAS.length) return 'Full Body'
   const labels = TARGET_AREAS.filter(a => areas.includes(a.id)).map(a => a.label)
   if (labels.length <= 2) return labels.join(' & ')
   if (labels.length === 3) return `${labels[0]}, ${labels[1]} & ${labels[2]}`
@@ -75,17 +90,24 @@ const compound = ex => ex.compound || COMPOUND_LIFTS.has(ex.id)
 // either way), big lifts first and
 // lighter ones after, and ones you already know (`known`: exercises you have
 // numbers for); ones in your last targeted workout (`recent`) go to the
-// back, so doing the same areas again mixes it up.
-export function buildTargeted(areas, eq, { known = new Set(), recent = new Set() } = {}) {
+// back, so doing the same areas again mixes it up. How many each area gets:
+// see share. Adding to one under way, `among` is every area it'll have (each
+// new one gets its share of a workout that size) and `taken` what it
+// already has.
+// Each pick comes with its slot (`slots`: { area, muscle, suggest } for
+// exercises, `stretchSlots`: { area, suggest } for stretches): a workout
+// starts with them empty, and the pick is what's suggested for each.
+export function buildTargeted(areas, eq, { known = new Set(), recent = new Set(), among = areas, taken = [] } = {}) {
   const picked = TARGET_AREAS.filter(a => areas.includes(a.id))
-  const n = perArea(picked.length)
-  const used = new Set()
+  const counts = share(exerciseTotal(among.length), among)
+  const used = new Set(taken)
   const main = []
   const core = []
+  const slots = []
   for (const area of picked) {
     const pool = EXERCISE_BANK.filter(ex =>
       (area.id === 'core') === isCore(ex) && fitsEquipment(ex, eq) && coversOf(ex).some(t => area.tags.includes(t)))
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < counts[area.id]; i++) {
       const slot = area.slots[i % area.slots.length]
       const score = ex => {
         const covers = coversOf(ex)
@@ -99,14 +121,39 @@ export function buildTargeted(areas, eq, { known = new Set(), recent = new Set()
       if (!next) break
       used.add(next.id)
       ;(area.id === 'core' ? core : main).push(next.id)
+      slots.push({ area: area.id, muscle: slot, suggest: next.id })
     }
   }
-  const s = stretchesPerArea(picked.length)
+  const stretchCounts = share(stretchTotal(among.length), among)
   const stretches = []
+  const stretchSlots = []
   for (const area of picked) {
-    const list = area.stretches.filter(id => STRETCH_BY_ID[id] && !stretches.includes(id))
-    const fresh = [...list.filter(id => !recent.has(id)), ...list.filter(id => recent.has(id))]
-    stretches.push(...fresh.slice(0, s))
+    const list = area.stretches.filter(id => STRETCH_BY_ID[id] && !stretches.includes(id) && !used.has(id))
+    const fresh = [...list.filter(id => !recent.has(id)), ...list.filter(id => recent.has(id))].slice(0, stretchCounts[area.id])
+    stretches.push(...fresh)
+    stretchSlots.push(...fresh.map(id => ({ area: area.id, suggest: id })))
   }
-  return { main, core, stretches }
+  return { main, core, stretches, slots, stretchSlots }
+}
+
+// What each exercise slot is for, as it's shown: "Lats exercise".
+export const MUSCLE_LABEL = {
+  chest: 'Chest', lats: 'Lats', traps: 'Traps', 'lower-back': 'Lower back', 'front-delts': 'Front delts',
+  'side-delts': 'Side delts', 'rear-delts': 'Rear delts', biceps: 'Biceps', triceps: 'Triceps', quads: 'Quads',
+  glutes: 'Glutes', 'outer-thighs': 'Outer thighs', hamstrings: 'Hamstrings', calves: 'Calves', abs: 'Abs', obliques: 'Obliques',
+}
+
+// What can go in an exercise slot with `eq`, not counting `skip` (what the
+// workout has): ones that mainly work its muscle, then ones that work it
+// too, then the rest of its area's, the most effective first in each.
+export function slotChoices({ area, muscle }, eq, skip = []) {
+  const a = TARGET_AREA_BY_ID[area]
+  const tier = ex => {
+    const covers = coversOf(ex)
+    return covers[0] === muscle ? 0 : covers.includes(muscle) ? 1 : 2
+  }
+  return EXERCISE_BANK
+    .filter(ex => (area === 'core') === isCore(ex) && fitsEquipment(ex, eq) && coversOf(ex).some(t => a.tags.includes(t)) && !skip.includes(ex.id))
+    .map(ex => ({ ex, tier: tier(ex) }))
+    .sort((x, y) => x.tier - y.tier || Number(best(y.ex)) - Number(best(x.ex)))
 }

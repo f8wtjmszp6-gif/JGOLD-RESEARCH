@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cardioMinutes } from '../../utils/format'
 import { Chevron, CloseButton } from '../ui/glyphs'
+import { EffortInfo } from '../ui/EffortInfo'
 
 // The warm-up at the top of a plan, added week by week. Until it's added, a dashed "Add a
 // warm-up" row. Added, a card of sets, each with its length and effort,
@@ -83,6 +84,7 @@ export function WarmupCard({ workoutId, store, onStart }) {
             <span className="w-12 text-center text-sm font-bold text-stone-900">{x.minutes} min</span>
             <button onClick={() => store.setWarmupSet(workoutId, i, { minutes: x.minutes + 1 })} disabled={x.minutes >= 60} className={step} aria-label={`Set ${i + 1} longer`}>+</button>
             <span className="flex gap-1 ml-1">{effort(x, i, false)}{effort(x, i, true)}</span>
+            <EffortInfo kind="warmup" />
             {sets.length > 1 && (
               <button onClick={() => store.removeWarmupSet(workoutId, i)} className="ml-auto w-7 h-7 rounded-lg text-stone-400 flex items-center justify-center active:bg-white" aria-label={`Remove set ${i + 1}`}>✕</button>
             )}

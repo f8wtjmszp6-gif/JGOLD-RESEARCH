@@ -83,7 +83,7 @@ export function LineMenu({ store, item, onEdit, onOpenWorkout, onClose }) {
         {item.kind === 'rest' ? (
           <SaveButton onClick={() => { d.move(at); onClose() }} />
         ) : (
-          <LogButton store={store} at={at} verb="Save" onSave={() => { d.move(at); onClose() }}>Save</LogButton>
+          <LogButton onSave={() => { d.move(at); onClose() }}>Save</LogButton>
         )}
       </SettingsSheet>
     )
