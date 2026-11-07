@@ -4,7 +4,7 @@ import { STRETCH_BY_ID, stretchFits } from '../data/stretches'
 import { EXERCISE_BY_ID, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, addTargetedAreas, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, defaultEditsOf, restoreDefaultOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, defaultEditsOf, restoreDefaultOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 import { cardioMinutes } from '../utils/format'
 
@@ -632,10 +632,6 @@ function makeStore(state, update) {
     update(s => startTargeted(s, areas, eq))
   }
 
-  // More areas for the targeted workout under way (see addTargetedAreas).
-  function addAreas(areas) {
-    update(s => addTargetedAreas(s, areas))
-  }
 
   // Opening a filed one again: see reopenOf and reopenSession.
   const canReopen = index => reopenOf(state, index)
@@ -936,7 +932,6 @@ function makeStore(state, update) {
     begin,
     targeted: targetedOf(state),
     startTargeted: startTargetedWorkout,
-    addAreas,
     planName: (id, session) => planName(state, id, session),
     canReopen,
     reopen,

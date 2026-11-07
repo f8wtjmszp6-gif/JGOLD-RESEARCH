@@ -984,18 +984,6 @@ export function startTargeted(s, areas, eq) {
   return opened(noWarmup({ ...withTargeted(filed, { areas, eq, main: [], core: [], stretches: [], slots, stretchSlots }), checks }, id), id)
 }
 
-// Adds areas to the one under way: their slots go after what's there, each
-// with what it would get in a workout of that many areas, and nothing ticked
-// is touched.
-export function addTargetedAreas(s, more) {
-  const now = targetedOf(s)
-  const areas = [...now.areas, ...more.filter(a => !now.areas.includes(a))]
-  const taken = [...now.main, ...now.core, ...now.stretches, ...now.slots.map(x => x.suggest), ...now.stretchSlots.map(x => x.suggest)]
-  const known = new Set(Object.keys(s.exerciseSettings ?? {}))
-  const built = buildTargeted(more, now.eq, { known, among: areas, taken })
-  return withTargeted(s, { ...now, areas, slots: [...now.slots, ...built.slots], stretchSlots: [...now.stretchSlots, ...built.stretchSlots] })
-}
-
 // Fills an empty slot (`kind` 'exercise' or 'stretch', by its place among
 // them) with `id`, at the end of its list.
 export function fillSlot(s, kind, index, id) {

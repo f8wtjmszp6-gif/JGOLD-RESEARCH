@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FULL_BODY, TARGETED } from '../../data/workout'
-import { TARGET_AREAS, TARGET_EQUIPMENT, exerciseTotal, stretchTotal, share, equipmentName } from '../../data/targeted'
+import { TARGET_AREAS, TARGET_EQUIPMENT, exerciseTotal, stretchTotal, equipmentName } from '../../data/targeted'
 import { SettingsSheet } from '../ui/Sheet'
 import { BodyFigure } from '../week/MuscleMap'
 import { CardHead, CARD } from './cards'
@@ -143,36 +143,6 @@ export function BuildSheet({ store, onPick, onClose }) {
         className="w-full px-4 truncate py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
       >
         Start
-      </button>
-    </SettingsSheet>
-  )
-}
-
-const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
-// More areas for a built workout under way: the ones it doesn't have yet.
-// Theirs go at the end, and the name grows to match (see addTargetedAreas).
-export function AddAreaSheet({ store, onClose }) {
-  const have = store.targeted.areas
-  const [areas, setAreas] = useState([])
-  const toggle = id => setAreas(a => (a.includes(id) ? a.filter(x => x !== id) : [...a, id]))
-  // What the new ones get: their share of a workout with every area.
-  const among = [...have, ...areas]
-  const added = total => Object.entries(share(total, among)).filter(([id]) => areas.includes(id)).reduce((n, [, k]) => n + k, 0)
-  return (
-    <SettingsSheet title="Add an area" closeLabel="Cancel" onClose={onClose}>
-      <AreaTiles list={TARGET_AREAS.filter(a => !have.includes(a.id))} picked={areas} onToggle={toggle} />
-      {areas.length > 0 && (
-        <p className="text-sm text-stone-500">
-          {count(added(exerciseTotal(among.length)), 'exercise')} · {count(added(stretchTotal(among.length)), 'stretch', 'stretches')} added at the end
-        </p>
-      )}
-      <button
-        onClick={() => { store.addAreas(areas); onClose() }}
-        disabled={!areas.length}
-        className="w-full px-4 py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400"
-      >
-        Add
       </button>
     </SettingsSheet>
   )

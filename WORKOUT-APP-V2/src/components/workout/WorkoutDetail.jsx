@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { playBeep, playGo, playTick, unlockAudio } from '../../utils/sound'
 import { useCountdown, useWakeLock } from '../../hooks/timing'
 import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY, FULL_BODY_BY_ID, TARGETED } from '../../data/workout'
-import { equipmentName, TARGET_AREAS } from '../../data/targeted'
-import { AddAreaSheet } from '../home/buildWorkout'
+import { equipmentName } from '../../data/targeted'
 import { gapsAfter, EXERCISE_BY_ID, isCore } from '../../data/exercises'
 import { weekRange, sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
@@ -34,7 +33,6 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const targeted = workoutId === TARGETED.id
   const [tab, setTab] = useState(isRoutine ? 'stretches' : 'exercises')
   const [adding, setAdding] = useState(null) // 'main' | 'core': the exercise bank is open
-  const [addingArea, setAddingArea] = useState(false)
   // The first set ticked (or warm-up, or last stretch) on a rest day asks whether it's
   // still a rest day, once. A plan already ticked when you open it doesn't ask.
   const stamps = store.stampsOf(workoutId)
@@ -409,12 +407,6 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
             and an optional Core section. */}
         {tab === 'exercises' && (
           <>
-            {/* A built workout can take more areas once it's under way. */}
-            {targeted && store.targeted.areas.length < TARGET_AREAS.length && (
-              <div className="pb-2">
-                <AddRow label="Add an area" note="exercises & stretches" onClick={() => setAddingArea(true)} />
-              </div>
-            )}
             <PartHead title="Warm-up" right={store.getWarmup(workoutId).on && store.getWarmupDone(workoutId) ? 'Done ✓' : null} done />
             <WarmupCard workoutId={workoutId} store={store} onStart={startWarmup} />
 
@@ -481,7 +473,6 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           onClose={() => setAdding(null)}
         />
       )}
-      {addingArea && <AddAreaSheet store={store} onClose={() => setAddingArea(false)} />}
       {scopeSheet}
       {ending && (
         <ConfirmSheet
