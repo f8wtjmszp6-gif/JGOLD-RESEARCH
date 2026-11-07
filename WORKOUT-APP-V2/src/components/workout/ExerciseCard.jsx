@@ -120,8 +120,9 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
         <DragHandle name={exercise.name} {...grip} />
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-stone-900 truncate">{exercise.name}{tag}</span>
-            <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}</span>
+            <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
+            {/* The tag goes by what's been done, where it's never cut off. */}
+            <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}{tag}</span>
           </span>
           <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.all.filter(x => x.done).length} of ${log.all.length} sets done`}>
             {log.all.map((x, i) => (

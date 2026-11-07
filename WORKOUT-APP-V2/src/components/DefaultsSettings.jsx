@@ -40,10 +40,12 @@ export function DefaultsSettings({ store }) {
           </button>
         )
       )}
-      {open && (
+      {/* It closes once nothing's left to undo. */}
+      {open && store.defaultEdits(open).edited && (
         <EditsSheet
           name={names[open]}
           edits={store.defaultEdits(open)}
+          onUndo={(kind, item) => store.undoDefaultEdit(open, kind, item)}
           onRestore={() => { store.restoreDefault(open); setOpen(null) }}
           onClose={() => setOpen(null)}
         />
@@ -73,8 +75,9 @@ function Row({ name, edited, onOpen }) {
 
 // An edited default: its exercises, then its stretches, as every week has
 // them, what you added or moved marked and what you took out struck
-// through, and Restore (which asks first).
-function EditsSheet({ name, edits, onRestore, onClose }) {
+// through, and Restore (which asks first). Tap a mark to undo just that
+// one, from next week (see undoDefaultEditOf).
+function EditsSheet({ name, edits, onUndo, onRestore, onClose }) {
   const [asking, setAsking] = useState(false)
   const sections = [['Exercises', 'exercises'], ['Stretches', 'stretches']]
     .filter(([, k]) => edits.lists[k].length || edits[k].dropped.length)
@@ -87,14 +90,14 @@ function EditsSheet({ name, edits, onRestore, onClose }) {
             {edits.lists[k].map(id => (
               <div key={id} className="py-2.5 flex items-center gap-2">
                 <p className="flex-1 min-w-0 text-base text-stone-700">{nameOf(id)}</p>
-                {edits[k].added.includes(id) && <span className="text-sm text-emerald-600">Added</span>}
-                {edits[k].moved.includes(id) && <span className="text-sm text-stone-400">Moved</span>}
+                {edits[k].added.includes(id) && <Undo label="Added" color="text-emerald-600" what={`Take out ${nameOf(id)}`} onClick={() => onUndo(k, id)} />}
+                {edits[k].moved.includes(id) && <Undo label="Moved" color="text-stone-400" what={`Move ${nameOf(id)} back`} onClick={() => onUndo(k, id)} />}
               </div>
             ))}
             {edits[k].dropped.map(id => (
               <div key={id} className="py-2.5 flex items-center gap-2">
                 <p className="flex-1 min-w-0 text-base text-stone-400 line-through">{nameOf(id)}</p>
-                <span className="text-sm text-red-500">Removed</span>
+                <Undo label="Removed" color="text-red-500" what={`Put ${nameOf(id)} back`} onClick={() => onUndo(k, id)} />
               </div>
             ))}
           </div>
@@ -108,6 +111,16 @@ function EditsSheet({ name, edits, onRestore, onClose }) {
         </button>
       )}
     </SettingsSheet>
+  )
+}
+
+// A mark on a change, with ↺ to undo it.
+function Undo({ label, color, what, onClick }) {
+  return (
+    <button onClick={onClick} aria-label={what} className={`shrink-0 flex items-center gap-1 text-sm ${color} active:opacity-60`}>
+      {label}
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7" /><path d="M4 4v4h4" /></svg>
+    </button>
   )
 }
 

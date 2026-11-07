@@ -623,18 +623,56 @@ export function defaultEditsOf(s, id) {
   }
 }
 
-// Puts every week's version back to how the app came, from next week: this
-// week keeps what it has now, as its own version (one it already has
-// stays as it is).
-export function restoreDefaultOf(s, id) {
-  const now = { order: listIds(s, id, 'main'), coreLists: listIds(s, id, 'core'), coreOn: coreOnOf(s, id), stretchLists: stretchIds(s, id) }
-  const next = { ...s, weekOnly: { ...s.weekOnly } }
+// Changes every week's version of a plan (`change` gets the state, gives it
+// back changed), from next week: this week keeps what it has now, as its
+// own version (one it already has stays as it is). Anything that ends up
+// as the app came is kept as the original, and this week's own version
+// where it's the same as every week's is dropped.
+function changeDefault(s, id, change) {
+  const now = Object.fromEntries(PLAN_KEYS.map(k => [k, readPlan(s, k, id)]))
+  const pinned = { ...s, weekOnly: { ...s.weekOnly } }
+  for (const k of PLAN_KEYS) if (!hasWeekOnly(s, k, id)) pinned.weekOnly[k] = { ...s.weekOnly?.[k], [id]: now[k] }
+  let next = change(pinned)
   for (const k of PLAN_KEYS) {
-    if (!hasWeekOnly(s, k, id)) next.weekOnly[k] = { ...s.weekOnly?.[k], [id]: now[k] }
-    next[k] = Object.fromEntries(Object.entries(s[k] ?? {}).filter(([x]) => x !== id))
+    if (JSON.stringify(readPlan(everyWeek(next), k, id)) === JSON.stringify(readPlan(originalOf(next, id), k, id))) {
+      next = { ...next, [k]: Object.fromEntries(Object.entries(next[k] ?? {}).filter(([x]) => x !== id)) }
+    }
+    if (JSON.stringify(now[k]) === JSON.stringify(readPlan(everyWeek(next), k, id))) next = withoutWeekOnly(next, id, [k])
   }
-  // Nothing different from the original after all: no version of its own.
-  return PLAN_KEYS.reduce((x, k) => (JSON.stringify(now[k]) === JSON.stringify(readPlan(everyWeek(x), k, id)) ? withoutWeekOnly(x, id, [k]) : x), next)
+  return next
+}
+
+// Puts every week's version back to how the app came, from next week.
+export function restoreDefaultOf(s, id) {
+  return changeDefault(s, id, x => ({ ...x, ...Object.fromEntries(PLAN_KEYS.map(k => [k, Object.fromEntries(Object.entries(x[k] ?? {}).filter(([y]) => y !== id))])) }))
+}
+
+// Undoes one change to every week's version, from next week: an exercise or
+// stretch (`kind`) you added comes out, and one you took out or moved goes
+// back to its spot in the original. The main list always keeps one.
+export function undoDefaultEditOf(s, id, kind, item) {
+  return changeDefault(s, id, x => {
+    const always = everyWeek(x), from = originalOf(x, id)
+    if (kind === 'stretches') return { ...x, stretchLists: { ...x.stretchLists, [id]: putBack(stretchIds(always, id), stretchIds(from, id), item) } }
+    const section = isCore(EXERCISE_BY_ID[item]) ? 'core' : 'main'
+    const list = putBack(listIds(always, id, section), listIds(from, id, section), item)
+    if (!list.length && section === 'main') return x
+    const key = LIST_KEY[section]
+    const next = { ...x, [key]: { ...x[key], [id]: list } }
+    // The main list written keeps Core as it is (see writeList); a core
+    // exercise back turns Core on.
+    if (section === 'main' && !x.coreLists?.[id]) next.coreLists = { ...x.coreLists, [id]: listIds(always, id, 'core') }
+    if (section === 'core' && list.includes(item)) next.coreOn = { ...x.coreOn, [id]: true }
+    return next
+  })
+}
+
+// `now` with `item` where `from` has it, or out if `from` doesn't.
+function putBack(now, from, item) {
+  const rest = now.filter(x => x !== item)
+  if (!from.includes(item)) return rest
+  const at = from.indexOf(item)
+  return [...rest.slice(0, at), item, ...rest.slice(at)]
 }
 
 // One of a plan's kept values (see PLAN_KEYS), as read.
