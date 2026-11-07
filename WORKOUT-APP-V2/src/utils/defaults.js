@@ -9,8 +9,7 @@ export const GROUPS = [
   ['Stretching', [[STRETCH_ROUTINE.id, STRETCH_ROUTINE.short], ...COOL_DOWNS.map(c => [c.id, c.name])]],
 ]
 export const IDS = GROUPS.flatMap(([, rows]) => rows.map(([id]) => id))
-const nameOf = id => EXERCISE_BY_ID[id]?.name ?? STRETCH_BY_ID[id]?.name ?? id
-export const names = ids => ids.map(nameOf).join(', ')
+export const nameOf = id => EXERCISE_BY_ID[id]?.name ?? STRETCH_BY_ID[id]?.name ?? id
 
 // For the section's closed row.
 export function defaultsSummary(store) {

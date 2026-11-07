@@ -578,7 +578,12 @@ function withoutWeekOnly(s, id, keys = PLAN_KEYS) {
 
 const exerciseIds = (s, id) => exerciseIdsOf(s, id)
 const stretchIds = (s, id) => stretchesOf(s, id).map(x => x.id)
-const listDiff = (now, from) => ({ added: now.filter(x => !from.includes(x)), dropped: from.filter(x => !now.includes(x)) })
+// What `now` added to `from`, took out, and moved: each one in a different
+// spot (not counting what was added or taken out around it).
+function listDiff(now, from) {
+  const a = now.filter(x => from.includes(x)), b = from.filter(x => now.includes(x))
+  return { added: now.filter(x => !from.includes(x)), dropped: from.filter(x => !now.includes(x)), moved: a.filter((x, i) => x !== b[i]) }
+}
 
 // How this week's version of a plan differs from every week's: whether it
 // has its own, and the exercises and stretches it adds or takes out.
@@ -604,7 +609,8 @@ function originalOf(s, id) {
 }
 
 // How every week's version differs from how the app came: what it adds and
-// takes out, and whether anything's changed at all (moved around, say).
+// takes out, whether anything's changed at all (moved around, say), and
+// its lists as they are now (`lists`).
 export function defaultEditsOf(s, id) {
   const now = everyWeek(s), from = originalOf(s, id)
   const ex = [exerciseIds(now, id), exerciseIds(from, id)]
@@ -613,6 +619,7 @@ export function defaultEditsOf(s, id) {
     edited: JSON.stringify([ex[0], st[0]]) !== JSON.stringify([ex[1], st[1]]),
     exercises: listDiff(...ex),
     stretches: listDiff(...st),
+    lists: { exercises: ex[0], stretches: st[0] },
   }
 }
 
