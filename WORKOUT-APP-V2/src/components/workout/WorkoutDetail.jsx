@@ -201,9 +201,10 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
   // Times the next hold you haven't ticked off yet (split cards included),
   // from that set's seconds.
-  function startHold(exercise) {
+  // Times `picked` (a set's own clock), or the next set not done.
+  function startHold(exercise, picked) {
     const all = store.getLog(workoutId, exercise).all
-    const set = all.find(x => !x.done) ?? all[0]
+    const set = picked ?? all.find(x => !x.done) ?? all[0]
     run({
       kind: 'hold',
       title: exercise.name,
@@ -280,7 +281,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
           startRest(exercise, setsLeft)
           if (setsLeft === 0) setOpenId(null)
         }}
-        onTimer={store.getSetup(exercise).mode === 'hold' ? () => startHold(exercise) : null}
+        onTimer={store.getSetup(exercise).mode === 'hold' ? set => startHold(exercise, set) : null}
         tag={diff?.exercises.added.includes(exercise.id) && <WeekTag repeat={repeatable} />}
       />
     )

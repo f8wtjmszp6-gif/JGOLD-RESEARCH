@@ -44,7 +44,6 @@ export default function CardioTrends({ weeks, goal, logOf }) {
         <Stat value={avg ?? '–'} unit={avg === null ? '' : 'min'} label="Weekly avg" />
         <Stat value={streak} unit={streak === 1 ? 'wk' : 'wks'} label="Goal streak" good={streak > 0} />
       </div>
-      <EasyHard rows={rows} />
       <WeeklyMinutes rows={rows} goal={goal} />
       <TopActivities rows={rows} />
     </>
@@ -58,26 +57,6 @@ function Stat({ value, unit, label, good }) {
         {value}<span className="text-xs font-medium text-stone-400 ml-0.5">{unit}</span>
       </p>
       <p className="text-xs text-stone-400 truncate">{label}</p>
-    </div>
-  )
-}
-
-// What share of your cardio minutes were hard.
-function EasyHard({ rows }) {
-  const all = sum(rows.flatMap(r => (r.log ?? []).map(x => x.minutes)))
-  if (!all) return null
-  const pct = Math.round((sum(rows.flatMap(r => (r.log ?? []).filter(x => x.hard).map(x => x.minutes))) / all) * 100)
-  return (
-    <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5 mt-2">
-      <p className="text-sm font-semibold text-stone-900">{pct}% of your cardio is hard</p>
-      <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden mt-2.5" aria-hidden="true">
-        {pct < 100 && <span className="bg-emerald-200" style={{ width: `${100 - pct}%` }} />}
-        {pct > 0 && <span className="bg-emerald-600" style={{ width: `${pct}%` }} />}
-      </div>
-      <div className="flex justify-between text-xs text-stone-400 mt-1">
-        <span>Easy {100 - pct}%</span>
-        <span>Hard {pct}%</span>
-      </div>
     </div>
   )
 }

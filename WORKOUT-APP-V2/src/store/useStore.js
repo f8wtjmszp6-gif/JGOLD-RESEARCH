@@ -187,17 +187,13 @@ function makeStore(state, update) {
     })))
   }
 
-  // A hold's time is set once, in the settings sheet, for every set.
-  function setHoldTime(exercise, seconds) {
-    update(s => writeSettings(s, exercise, cur => ({ ...cur, reps: cur.reps.map(() => seconds) })))
-  }
-
   function setWeight(exercise, weight) {
     update(s => writeSettings(s, exercise, cur => ({ ...cur, weight })))
   }
 
+  // A heavier bar brings the weight up with it: it can't be less than the bar.
   function setBar(exercise, bar) {
-    update(s => writeSettings(s, exercise, cur => ({ ...cur, bar })))
+    update(s => writeSettings(s, exercise, cur => ({ ...cur, bar, weight: Math.max(cur.weight, bar) })))
   }
 
   function addSet(exercise) {
@@ -833,12 +829,16 @@ function makeStore(state, update) {
     return equipmentOf(state, exercise)
   }
 
+  // Switching to a barbell brings the weight up to the bar, at least.
   function setEquipment(exercise, equipment) {
-    update(s => ({
-      ...s,
-      equipment: { ...s.equipment, [exercise.id]: equipment },
-      assist: { ...s.assist, [exercise.id]: equipment === 'assisted' },
-    }))
+    update(s => {
+      const next = {
+        ...s,
+        equipment: { ...s.equipment, [exercise.id]: equipment },
+        assist: { ...s.assist, [exercise.id]: equipment === 'assisted' },
+      }
+      return equipment === 'barbell' ? writeSettings(next, exercise, cur => ({ ...cur, weight: Math.max(cur.weight, cur.bar ?? 0) })) : next
+    })
   }
 
   function getCustomDuration(itemId, defaultDuration) {
@@ -877,7 +877,6 @@ function makeStore(state, update) {
     getLog,
     setSetReps,
     setWeight,
-    setHoldTime,
     setBar,
     addSet,
     removeSet,

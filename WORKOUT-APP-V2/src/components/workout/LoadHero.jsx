@@ -51,8 +51,11 @@ export function LoadHero({ equipment, weight, bar, onChange }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const step = equipment === 'barbell' ? 5 : 2.5
+  // A barbell never weighs less than the bar on it.
+  const least = equipment === 'barbell' ? bar : 0
+  const set = v => onChange(Math.max(least, v))
   const perSide = equipment === 'barbell' && bar > 0 ? Math.max(0, (weight - bar) / 2) : null
-  const { plates, left } = platesFor(perSide ?? 0)
+  const { plates } = platesFor(perSide ?? 0)
   const unit = { dumbbell: 'lbs each', assisted: 'lbs help' }[equipment] ?? 'lbs'
   const note = {
     barbell: bar > 0 ? `${fmt(bar)} lb bar · ${perSide > 0 ? `${fmt(perSide)} lb each side` : 'empty bar'}` : 'Set the bar weight below',
@@ -66,14 +69,14 @@ export function LoadHero({ equipment, weight, bar, onChange }) {
   function save() {
     setEditing(false)
     const n = parseFloat(draft)
-    if (!isNaN(n) && n >= 0) onChange(Math.round(n * 100) / 100)
+    if (!isNaN(n) && n >= 0) set(Math.round(n * 100) / 100)
   }
 
   const btn = 'w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 text-2xl font-medium active:bg-stone-200 transition-colors'
   return (
     <div className="flex flex-col items-center gap-2 py-1">
       <div className="flex items-center gap-5">
-        <button onClick={() => onChange(stepTo(weight, step, -1))} className={btn} aria-label="Less weight">−</button>
+        <button onClick={() => set(stepTo(weight, step, -1))} disabled={weight <= least} className={`${btn} disabled:opacity-30`} aria-label="Less weight">−</button>
         {editing ? (
           <input
             type="number"
@@ -91,19 +94,17 @@ export function LoadHero({ equipment, weight, bar, onChange }) {
             <span className="ml-1.5 text-base font-medium text-stone-400">{unit}</span>
           </button>
         )}
-        <button onClick={() => onChange(stepTo(weight, step, 1))} className={btn} aria-label="More weight">+</button>
+        <button onClick={() => set(stepTo(weight, step, 1))} className={btn} aria-label="More weight">+</button>
       </div>
-      {perSide > 0 && (
+      {/* The bar with its plates; an empty bar is just the bar. */}
+      {perSide !== null && (
         <div className="flex items-center h-12" aria-hidden="true">
           {[...plates].reverse().map((p, i) => <span key={`l${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
           <span className="w-24 h-2 rounded-full bg-stone-400" />
           {plates.map((p, i) => <span key={`r${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
         </div>
       )}
-      <p className="text-sm text-stone-500 text-center">
-        {note}
-        {perSide > 0 && plates.length > 0 && <span className="block text-xs text-stone-400">Each side: {plates.map(fmt).join(' + ')}{left > 0 ? ` + ${fmt(left)}` : ''}</span>}
-      </p>
+      <p className="text-sm text-stone-500 text-center">{note}</p>
     </div>
   )
 }

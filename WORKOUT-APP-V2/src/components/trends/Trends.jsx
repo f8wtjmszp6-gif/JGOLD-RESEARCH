@@ -62,13 +62,19 @@ function Trends({ store }) {
   const [tabId, setTabId] = useState('upper')
   const [open, setOpen] = useState(null) // exercise shown in the detail sheet
   // Lifts by body area: upper body (chest, back, shoulders, arms), legs and
-  // core. Only lifts with sets saved show, in the bank's order.
-  const done = new Set([store.current, ...store.history].flatMap(w => Object.keys(w.lifts ?? {})))
+  // core. Only lifts with sets saved show, in the bank's order, and only
+  // ones done with weight the last time, where the goal is more: not
+  // assisted (less help is better), timed or reps alone.
+  const saved = [store.current, ...store.history]
+  const charted = id => {
+    const m = metric(saved.find(w => w.lifts?.[id])?.lifts[id])
+    return m?.unit === 'lb' && !m.assist
+  }
   const tabs = AREAS.map(([id, label, groups]) => ({
     id,
     label,
     name: label,
-    ids: EXERCISE_BANK.filter(x => done.has(x.id) && groups.includes(x.group)).map(x => x.id),
+    ids: EXERCISE_BANK.filter(x => groups.includes(x.group) && charted(x.id)).map(x => x.id),
   }))
   const tab = tabs.find(t => t.id === tabId) ?? tabs[0]
   const shown = tab.ids.map(id => EXERCISE_BY_ID[id])
@@ -115,24 +121,14 @@ function Trends({ store }) {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
       {view === 'strength' ? <>
-        {/* Fill the space: one or two exercises stack full width; an odd one
-            out at the end of a longer list spans both columns. */}
+        {/* One exercise per row. */}
         {shown.length === 0 && (
           <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you tick them.</p>
         )}
-        <div className={`grid gap-2 ${shown.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {shown.map((ex, i, list) => {
-            const wide = list.length <= 2 || (list.length % 2 === 1 && i === list.length - 1)
-            return (
-              <ExerciseTrend
-                key={ex.id}
-                exercise={ex}
-                weeks={weeks}
-                wide={wide}
-                onOpen={() => setOpen(ex)}
-              />
-            )
-          })}
+        <div className="space-y-2">
+          {shown.map(ex => (
+            <ExerciseTrend key={ex.id} exercise={ex} weeks={weeks} onOpen={() => setOpen(ex)} />
+          ))}
         </div>
 
       </> : (
@@ -244,8 +240,9 @@ function seriesFor(exercise, weeks) {
   return points
 }
 
-// A mini chart of one exercise; tap it for the detail sheet.
-function ExerciseTrend({ exercise, weeks, wide, onOpen }) {
+// One exercise on a line: its name over where it's at, and a mini chart to
+// the right. Tap it for the detail sheet.
+function ExerciseTrend({ exercise, weeks, onOpen }) {
   const points = seriesFor(exercise, weeks)
   const latest = points.at(-1)?.m
   const change = points.length > 1 ? latest.v - points[0].m.v : 0
@@ -254,22 +251,24 @@ function ExerciseTrend({ exercise, weeks, wide, onOpen }) {
   return (
     <button
       onClick={points.length ? onOpen : undefined}
-      className={`bg-white shadow-sm rounded-2xl px-3 py-2.5 min-w-0 text-left ${wide ? 'col-span-2' : ''} ${points.length ? 'active:scale-[0.98] transition-transform' : 'cursor-default'}`}
+      className={`w-full bg-white shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3 text-left ${points.length ? 'active:scale-[0.98] transition-transform' : 'cursor-default'}`}
     >
-      <p className="text-xs font-semibold text-stone-900 truncate">{exercise.name}</p>
-      {latest ? (
-        <p className="text-[11px] text-stone-500 mt-0.5">
-          {fmt(latest.v)} {latest.unit}{latest.assist ? ' assist' : ''}
-          {points.length > 1 && (
-            <span className={`ml-1 font-semibold ${change === 0 ? 'text-stone-400' : improved ? 'text-emerald-700' : 'text-stone-500'}`}>
-              {change === 0 ? 'no change' : latest.assist ? helpChange(change) : `${change > 0 ? '+' : ''}${fmt(change)} ${latest.unit}`}
-            </span>
-          )}
-        </p>
-      ) : (
-        <p className="text-[11px] text-stone-400 mt-0.5">No sets saved yet</p>
-      )}
-      <Sparkline values={points.map(p => p.m.v)} tall={wide} />
+      <span className="flex-1 min-w-0">
+        <span className="block text-[15px] font-semibold text-stone-900 truncate">{exercise.name}</span>
+        {latest ? (
+          <span className="block text-sm text-stone-500 mt-0.5 truncate">
+            {fmt(latest.v)} {latest.unit}{latest.assist ? ' assist' : ''}
+            {points.length > 1 && (
+              <span className={`ml-1 font-semibold ${change === 0 ? 'text-stone-400' : improved ? 'text-emerald-700' : 'text-stone-500'}`}>
+                {change === 0 ? 'no change' : latest.assist ? helpChange(change) : `${change > 0 ? '+' : ''}${fmt(change)} ${latest.unit}`}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="block text-sm text-stone-400 mt-0.5">No sets saved yet</span>
+        )}
+      </span>
+      <Sparkline values={points.map(p => p.m.v)} />
     </button>
   )
 }
@@ -406,14 +405,14 @@ function BigChart({ points }) {
   )
 }
 
-// Drawn at roughly the card's own proportions (narrow or full width), so the
-// stretch to fit doesn't squash the end dot.
-function Sparkline({ values, tall }) {
-  const w = tall ? 300 : 134, h = tall ? 52 : 34
-  const height = tall ? 'h-[52px]' : 'h-[34px]'
+// A small fixed-size chart at the end of a row, drawn at its own
+// proportions so the end dot isn't squashed.
+function Sparkline({ values }) {
+  const w = 96, h = 36
+  const size = 'w-24 h-9 shrink-0'
   if (values.length < 2) {
     return (
-      <div className={`${height} mt-1 flex items-center`}>
+      <div className={`${size} flex items-center justify-end`}>
         {values.length === 1
           ? <span className="w-2 h-2 rounded-full bg-orange-600" />
           : <span className="w-full border-t border-dashed border-stone-200" />}
@@ -424,7 +423,7 @@ function Sparkline({ values, tall }) {
   const y = v => (hi === lo ? h / 2 : 3 + ((hi - v) / (hi - lo)) * (h - 6))
   const x = i => 2 + (i * (w - 6)) / (values.length - 1)
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className={`w-full ${height} mt-1`} preserveAspectRatio="none" aria-hidden="true">
+    <svg viewBox={`0 0 ${w} ${h}`} className={size} aria-hidden="true">
       <polyline
         fill="none"
         stroke="#f54900"

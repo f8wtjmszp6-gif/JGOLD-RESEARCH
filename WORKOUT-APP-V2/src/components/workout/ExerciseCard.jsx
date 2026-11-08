@@ -10,15 +10,30 @@ import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
 import { EquipmentPicker, LoadHero } from './LoadHero'
 
+// Whether these settings get a chart in Trends: only reps with weight on
+// them, not assisted (see Trends), and if not, why.
+function TrendsNote({ hold, assist, weight }) {
+  const why = hold ? 'Timed sets aren’t tracked in Trends' : assist ? 'Assisted sets aren’t tracked in Trends' : weight > 0 ? null : 'Add weight to track it in Trends'
+  return (
+    <p className={`flex items-center justify-center gap-1.5 text-sm ${why ? 'text-stone-400' : 'font-medium text-emerald-700'}`}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>
+      {why ?? 'Tracked in Trends'}
+    </p>
+  )
+}
+
 // ── One set: remembered reps (or seconds) plus this round's tick ────────────
-function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
+// A hold's seconds go up and down 5 at a time, never under 5, and it has
+// its own timer (onTimer) before the tick.
+function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
+  const step = hold ? 5 : 1, least = hold ? 5 : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
   function save() {
     setEditing(false)
     const n = parseInt(draft)
-    if (!isNaN(n) && n >= 0) onChange(n)
+    if (!isNaN(n) && n >= least) onChange(n)
   }
 
   return (
@@ -29,14 +44,8 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
         {index + 1}
       </span>
 
-      {readOnly ? (
-        <span className="flex-1 text-center">
-          <span className="text-base font-bold text-stone-900">{value}</span>
-          <span className="text-xs font-medium text-stone-400">s hold</span>
-        </span>
-      ) : (<>
       <button
-        onClick={() => onChange(Math.max(0, value - 1))}
+        onClick={() => onChange(Math.max(least, value - step))}
         className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center text-stone-600 font-medium active:bg-stone-100 transition-colors shrink-0"
       >
         −
@@ -64,12 +73,21 @@ function SetRow({ index, value, done, hold, readOnly, onChange, onToggle }) {
       )}
 
       <button
-        onClick={() => onChange(value + 1)}
+        onClick={() => onChange(value + step)}
         className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center text-stone-600 font-medium active:bg-stone-100 transition-colors shrink-0"
       >
         +
       </button>
-      </>)}
+
+      {onTimer && (
+        <button
+          onClick={onTimer}
+          aria-label={`Time set ${index + 1}, ${value} seconds`}
+          className="w-7 h-7 rounded-lg bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors shrink-0"
+        >
+          <ClockIcon size={15} />
+        </button>
+      )}
 
       <button onClick={onToggle} aria-label={`${done ? 'Untick' : 'Tick'} set ${index + 1}`} className="shrink-0 active:scale-95 transition-transform ml-0.5">
         <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
@@ -105,13 +123,13 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
   const mainDone = log.sets.every(x => x.done)
   const someDone = log.sets.some(x => x.done)
   // A split starts one step lighter (more help, when assisted).
-  const lighter = w => stepTo(w, equipment === 'barbell' ? 5 : 2.5, assist ? 1 : -1)
+  // (Never under the bar.)
+  const lighter = w => Math.max(equipment === 'barbell' ? log.bar : 0, stepTo(w, equipment === 'barbell' ? 5 : 2.5, assist ? 1 : -1))
   const tickSet = (set, toggle) => {
     toggle()
     if (!set.done) onSetDone(log.all.filter(x => !x.done && x !== set).length)
   }
 
-  const holdTime = log.sets[0]?.reps ?? 0
   const summary = loadSummary(equipment, log)
 
   if (!open && !allDone) {
@@ -181,14 +199,6 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           </p>
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          {onTimer && (
-            <button
-              onClick={onTimer}
-              className="w-10 h-10 rounded-xl bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors"
-            >
-              <ClockIcon size={19} />
-            </button>
-          )}
           {/* How-to, settings and ticking every set live in •••. */}
           <MoreMenu
             label={exercise.name}
@@ -218,9 +228,9 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
             value={set.reps}
             done={set.done}
             hold={hold}
-            readOnly={hold}
             onChange={reps => store.setSetReps(exercise, set.index, reps)}
             onToggle={() => tickSet(set, () => store.toggleSet(workoutId, exercise, set.index))}
+            onTimer={onTimer && (() => onTimer(set))}
           />
         ))}
       </div>
@@ -253,46 +263,16 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
 
       {showSettings && (
         <SettingsSheet title={exercise.name} tall onClose={() => setShowSettings(false)}>
-          <EquipmentPicker value={equipment} onChange={v => store.setEquipment(exercise, v)} />
-          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} />
-          {/* Set-once settings, one row each. */}
+          {/* How the sets go: reps or timed, per side, and the rest between them. */}
           <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
-            {equipment === 'barbell' && (
-              <div className="px-4 py-2.5">
-                <StepperRow
-                  label="Bar"
-                  value={log.bar}
-                  step={BAR_STEP}
-                  min={BAR_MIN}
-                  max={BAR_MAX}
-                  editable
-                  suffix=" lbs"
-                  onChange={v => store.setBar(exercise, v)}
-                />
-              </div>
-            )}
             <div className="px-4 py-2.5">
               <Segmented
-                label="Counted in"
+                label="Sets are"
                 value={setup.mode}
-                options={[['reps', 'Reps'], ['hold', 'Hold']]}
+                options={[['reps', 'Reps'], ['hold', 'Timed']]}
                 onChange={mode => store.setSetup(exercise, { mode })}
               />
             </div>
-            {hold && (
-              <div className="px-4 py-2.5 space-y-2">
-                <StepperRow
-                  label="Hold time"
-                  value={holdTime}
-                  step={5}
-                  min={5}
-                  editable
-                  suffix="s"
-                  onChange={v => store.setHoldTime(exercise, v)}
-                />
-                <p className="text-xs text-stone-400">Tap the clock on the card to time each set — it ticks the set when time’s up.</p>
-              </div>
-            )}
             <div className="px-4 py-3">
               <ToggleRow
                 label="Per side"
@@ -323,6 +303,24 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
               </div>
             )}
           </div>
+          <TrendsNote hold={hold} assist={assist} weight={log.weight} />
+          <EquipmentPicker value={equipment} onChange={v => store.setEquipment(exercise, v)} />
+          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} />
+          {/* A barbell's own weight. */}
+          {equipment === 'barbell' && (
+            <div className="rounded-2xl bg-stone-50 px-4 py-2.5">
+              <StepperRow
+                label="Bar"
+                value={log.bar}
+                step={BAR_STEP}
+                min={BAR_MIN}
+                max={BAR_MAX}
+                editable
+                suffix=" lbs"
+                onChange={v => store.setBar(exercise, v)}
+              />
+            </div>
+          )}
         </SettingsSheet>
       )}
     </div>
@@ -336,6 +334,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           equipment={equipment}
           bar={log.bar}
           hold={hold}
+          onTimer={onTimer}
           onWeight={w => store.setPartWeight(workoutId, exercise, j, w)}
           onReps={(i, reps) => store.setPartReps(workoutId, exercise, j, i, reps)}
           onToggle={set => tickSet(set, () => store.togglePartSet(workoutId, exercise, j, set.index))}
@@ -363,10 +362,13 @@ function SplitButton({ label = 'Split', onClick }) {
 // A split card: this week's lighter sets of an exercise, under its main card.
 // Its weight is its own; everything else follows the exercise's settings.
 // `first` is how many sets come before it, so its sets carry on the count.
-function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
+function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const step = equipment === 'barbell' ? 5 : 2.5
+  // A barbell never weighs less than the bar on it.
+  const least = equipment === 'barbell' ? bar : 0
+  const setWeight = v => onWeight(Math.max(least, v))
   const unit = { dumbbell: 'lbs each', assisted: 'lbs help' }[equipment] ?? 'lbs'
   const done = part.sets.filter(x => x.done).length
   const all = done === part.sets.length
@@ -374,7 +376,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, 
   function save() {
     setEditing(false)
     const n = parseFloat(draft)
-    if (!isNaN(n) && n >= 0) onWeight(Math.round(n * 100) / 100)
+    if (!isNaN(n) && n >= 0) setWeight(Math.round(n * 100) / 100)
   }
 
   const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100'
@@ -397,7 +399,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, 
         </div>
 
         <div className="mt-2.5 flex items-center justify-between rounded-xl bg-orange-50 px-2 py-1.5">
-          <button onClick={() => onWeight(stepTo(part.weight, step, -1))} className={btn} aria-label="Less weight">−</button>
+          <button onClick={() => setWeight(stepTo(part.weight, step, -1))} disabled={part.weight <= least} className={`${btn} disabled:opacity-30`} aria-label="Less weight">−</button>
           {editing ? (
             <input
               type="number"
@@ -415,7 +417,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, 
               <span className="ml-1 text-xs font-medium text-stone-400">{unit}</span>
             </button>
           )}
-          <button onClick={() => onWeight(stepTo(part.weight, step, 1))} className={btn} aria-label="More weight">+</button>
+          <button onClick={() => setWeight(stepTo(part.weight, step, 1))} className={btn} aria-label="More weight">+</button>
         </div>
 
         <div className="mt-2 space-y-1.5">
@@ -428,6 +430,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, onWeight, onReps, 
               hold={hold}
               onChange={reps => onReps(set.index, reps)}
               onToggle={() => onToggle(set)}
+              onTimer={onTimer && (() => onTimer(set))}
             />
           ))}
         </div>
