@@ -50,8 +50,9 @@ export function ScopeSheet({ title, note, repeat, onPick, onClose }) {
 // logs that never change while open) fit what's in them. `split` ones are
 // tall with a fixed top: only the part marked data-scroll scrolls, and
 // the top takes no scrolling at all (touch-none), so a pull there only
-// moves the sheet.
-export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = false, split = false, onClose, children }) {
+// moves the sheet. `full` ones (with split) take the whole screen. `bare`:
+// no title row (what's in it brings its own, and its own way to close).
+export function SettingsSheet({ title, bare = false, subtitle, closeLabel = 'Done', tall = false, split = false, full = false, onClose, children }) {
   const panel = useRef(null)
   const { offset, dragging, fade } = useDragToClose(panel, onClose)
   // React still passes events up to the component that opened the sheet (a
@@ -69,7 +70,7 @@ export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = fal
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" style={{ opacity: fade }} />
       <div
         ref={panel}
-        className={`relative bg-white rounded-t-3xl w-full max-w-md px-5 ${split ? 'h-[88dvh] flex flex-col overflow-hidden touch-none' : `${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}`}
+        className={`relative bg-white w-full px-5 ${full ? '' : 'max-w-md rounded-t-3xl'} ${split ? `${full ? 'h-dvh' : 'h-[88dvh]'} flex flex-col overflow-hidden touch-none` : `${tall ? 'h-[88dvh]' : 'max-h-[88dvh]'} overflow-y-auto overscroll-contain touch-pan-y`}`}
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
           transform: `translateY(${offset}px)`,
@@ -78,17 +79,22 @@ export function SettingsSheet({ title, subtitle, closeLabel = 'Done', tall = fal
         onClick={e => e.stopPropagation()}
       >
         {/* The handle and title stay put while what's under them scrolls. */}
-        <div className="sticky top-0 z-10 bg-white rounded-t-3xl -mx-5 px-5 pt-3 pb-5">
-          <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
-              {subtitle && <p className="text-sm text-stone-500">{subtitle}</p>}
+        <div
+          className={`sticky top-0 z-10 bg-white -mx-5 px-5 ${bare ? 'pb-1' : 'pb-5'} ${full ? '' : 'rounded-t-3xl pt-3'}`}
+          style={full ? { paddingTop: 'calc(1rem + env(safe-area-inset-top))' } : undefined}
+        >
+          {!full && <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />}
+          {!bare && (
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
+                {subtitle && <p className="text-sm text-stone-500">{subtitle}</p>}
+              </div>
+              <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
+                {closeLabel}
+              </button>
             </div>
-            <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
-              {closeLabel}
-            </button>
-          </div>
+          )}
         </div>
         {/* `split`: what's in it stays put but for the part marked
             data-scroll, which fills the rest and scrolls. */}

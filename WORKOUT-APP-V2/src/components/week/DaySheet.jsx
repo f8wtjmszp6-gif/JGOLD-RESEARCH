@@ -3,78 +3,98 @@ import { InfoMark } from '../ui/InfoMark'
 import { SettingsSheet } from '../ui/Sheet'
 import { MonthGrid } from './CalendarSheet'
 import { weekDays, sameDay } from '../../utils/days'
-import { TABS } from '../../utils/dayKinds'
+import { TABS, tabsOf } from '../../utils/dayKinds'
 
 const firstDay = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)
   return new Date(y, m - 1, d, 12)
 }
+const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1, 12)
+const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const weekOf = days => `Week of ${days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
 
-// The picked day, opened from Activities on the week strip: the month on top
-// to move around (always the same height, so switching days doesn't make
-// it jump), then the day by tab. Show week view gives the whole week, day
-// by day under the week's totals. `goals`: the weekly goals, for those
-// totals. This week's lines can be tapped: onEdit(line.edit). Today, with
-// nothing on it yet, can be marked as a rest day (onRest); earlier days with
-// nothing on them are rest days already.
-// It always opens on today, as a day (or, with no week under way, on `at`
-// and `picked`), and moves around on its own, so the screen behind stays
-// where it was.
+// Activities, opened from the week strip: the month on top (swipe or the
+// arrows for others), then Today, today by tab, or Week, a whole week day
+// by day under its totals. Tapping a day in the month shows its week; only
+// today opens on its own. `goals`: the weekly goals, for those totals. This
+// week's lines can be tapped: onEdit(line.edit). Today, with nothing on it
+// yet, can be marked as a rest day (onRest); earlier days with nothing on
+// them are rest days already. With no week under way, Today shows `at` and
+// `picked` instead.
 export default function DaySheet({ weeks, at: startAt, picked: startPicked, goals, onEdit, onRest, onClose }) {
   const live = weeks.findIndex(w => w.live)
-  const now = new Date().getDay()
-  const [whole, setWhole] = useState(false)
-  const [at, setAt] = useState(live >= 0 ? live : startAt)
-  const [picked, setPicked] = useState(live >= 0 ? now : startPicked)
-  // Under the title, a way back to today once you've moved off it.
-  const away = whole || at !== live || picked !== now
-  const toToday = () => { setWhole(false); setAt(live); setPicked(now) }
-  const week = weeks[at]
+  const home = live >= 0 ? live : startAt
+  const picked = live >= 0 ? new Date().getDay() : startPicked
+  // Which tab: today, a week, or the month showing.
+  const [view, setView] = useState('today')
+  const whole = view === 'week'
+  // The week Week shows.
+  const [at, setAt] = useState(home)
+  const homeDays = weekDays(firstDay(weeks[home].weekStart))
+  const [month, setMonth] = useState(() => monthOf(homeDays[picked]))
+  const week = weeks[whole ? at : home]
   const days = weekDays(firstDay(week.weekStart))
   const day = days[picked]
-  const future = week.live && day > new Date() && !sameDay(day, new Date())
   const tap = week.live ? onEdit : null
+  // The Week tab names the week it shows: This week, or its days.
+  const shown = weekDays(firstDay(weeks[at].weekStart))
+  const weekName = weeks[at].live ? 'This week' : `${short(shown[0])} – ${short(shown[6])}`
+  const openWeek = i => { setAt(i); setView('week') }
+  // On Week, turning the month takes the week with it: back, to the
+  // month's last week; on, to its first (unless the week showing is in it).
+  const turnMonth = m => {
+    if (view === 'week') {
+      const touches = i => weekDays(firstDay(weeks[i].weekStart)).some(d => d.getMonth() === m.getMonth() && d.getFullYear() === m.getFullYear())
+      const ins = weeks.map((w, i) => i).filter(touches)
+      if (ins.length && !ins.includes(at)) setAt(m < month ? ins.at(-1) : ins[0])
+    }
+    setMonth(m)
+  }
+  // Looking at another week (or month), Today says Go to today.
+  const away = (view === 'week' && at !== home) || (view === 'month' && +month !== +monthOf(homeDays[picked]))
 
   return (
     <SettingsSheet
       title={whole ? weekOf(days) : day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-      subtitle={live >= 0 && away ? (
-        <button onClick={toToday} className="font-semibold text-accent-500 active:opacity-70">Go to today</button>
-      ) : undefined}
-      closeLabel="Done"
+      // The month is the header, Done by its arrows.
+      bare
       split
+      full
       onClose={onClose}
     >
       <MonthGrid
         weeks={weeks}
-        at={at}
-        picked={picked}
-        compact
-        // On a day, a link to its week; on the week, how to get back to a
-        // day.
-        aside={whole ? (
-          <span className="text-xs text-stone-400 whitespace-nowrap">Tap a day</span>
-        ) : (
-          <button onClick={() => setWhole(true)} className="text-xs font-semibold text-accent-500 whitespace-nowrap active:opacity-70">
-            Show week view
-          </button>
-        )}
-        onPick={(w, d) => {
-          setWhole(false)
-          setAt(weeks.indexOf(w))
-          setPicked(d)
-        }}
-        // The arrows keep the week view if it's showing.
-        onWeek={(w, d) => {
-          setAt(weeks.indexOf(w))
-          setPicked(d)
-        }}
+        // Today shades this week, Week the one it shows, Month none.
+        at={view === 'week' ? at : view === 'today' ? home : -1}
+        picked={view === 'today' ? picked : null}
+        big
+        month={month}
+        onMonth={turnMonth}
+        extra={<button onClick={onClose} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>}
+        onPick={w => openWeek(weeks.indexOf(w))}
       />
+      <div className="flex gap-1.5 rounded-xl bg-stone-100 p-[3px]">
+        {[['today', away ? 'Go to today' : 'Today'], ['week', weekName], ['month', month.toLocaleDateString('en-US', { month: 'long' })]].map(([v, name]) => (
+          <button
+            key={v}
+            onClick={() => {
+              // Today also turns the month back to this one.
+              if (v === 'today') { setAt(home); setMonth(monthOf(homeDays[picked])) }
+              setView(v)
+            }}
+            aria-pressed={view === v}
+            className={`flex-1 rounded-[9px] py-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${view === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
       {/* Out to the sheet's right edge, so the scrollbar sits in the margin
           and not over the counts. */}
-      <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 -ml-2 pl-2 -mr-5 pr-5">
-        {whole ? (
+      <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain border-t border-stone-100 -mx-5 px-5">
+        {view === 'month' ? (
+          <MonthList weeks={weeks} month={month} goals={goals} onWeek={openWeek} />
+        ) : whole ? (
           <WeekList
             dayLines={week.dayLines}
             days={days}
@@ -86,7 +106,7 @@ export default function DaySheet({ weeks, at: startAt, picked: startPicked, goal
         ) : (
           <DayList
             lines={week.dayLines?.[picked]}
-            empty={future ? 'Nothing yet' : week.dayLines ? 'Nothing logged' : 'Not recorded'}
+            empty={week.live ? 'Nothing yet' : week.dayLines ? 'Nothing logged' : 'Not recorded'}
             onEdit={tap}
             onRest={week.live && sameDay(day, new Date()) ? onRest : null}
           />
@@ -201,6 +221,76 @@ function WeekList({ dayLines, days, empty, totals, goals, onEdit }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// The month showing: how many of its days had gym, cardio, stretching or
+// rest (as the dots show them), each with what it added up to (workouts,
+// cardio minutes, stretches), then each of its weeks by days the same way,
+// and whether it reached the workout goal. Tap a week to open it.
+function MonthList({ weeks, month, goals, onWeek }) {
+  const inMonth = d => d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear()
+  const today = new Date()
+  const rows = weeks
+    .map((w, i) => ({ w, i, days: weekDays(firstDay(w.weekStart)) }))
+    .filter(r => r.days.some(inMonth) && r.days[0] <= today)
+  // Days with each tab, among those `keep` lets in.
+  const daysOf = (list, keep) => {
+    const n = Object.fromEntries(TABS.map(([k]) => [k, 0]))
+    list.forEach(({ w, days }) => days.forEach((d, i) => {
+      if (keep(d)) tabsOf(w.dayLog?.[i] ?? []).forEach(k => { n[k]++ })
+    }))
+    return n
+  }
+  const sum = daysOf(rows, inMonth)
+  // What the month's days added up to: cardio as the week counts it (hard
+  // minutes twice).
+  const total = { gym: 0, cardio: 0, stretch: 0 }
+  rows.forEach(({ w, days }) => days.forEach((d, i) => {
+    const lines = w.dayLines?.[i]
+    if (!lines || !inMonth(d)) return
+    total.gym += TABS.flatMap(([k]) => lines[k] ?? []).filter(x => x.workout).length
+    total.cardio += (lines.cardio ?? []).reduce((m, x) => m + (x.counted ?? x.minutes ?? 0), 0)
+    total.stretch += (lines.stretch ?? []).filter(x => x.status === 'done').length
+  }))
+  const totalText = { gym: plural(total.gym, 'workout', 'workouts'), cardio: `${total.cardio} min`, stretch: plural(total.stretch, 'stretch', 'stretches') }
+  const goal = goals?.workouts?.min
+  if (!rows.length) return <p className="pt-3 text-sm text-stone-400">Nothing logged</p>
+  return (
+    <div className="pt-3 space-y-5">
+      <div className="grid grid-cols-4 gap-2">
+        {TABS.map(([k, label, dot]) => (
+          <div key={k} className="min-w-0 rounded-2xl bg-stone-50 px-2 pt-2 pb-2.5">
+            <p className="flex items-center gap-1.5 text-xs text-stone-500"><span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{label}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-stone-900">{sum[k]}<span className="ml-1 text-[11px] font-medium text-stone-400">{sum[k] === 1 ? 'day' : 'days'}</span></p>
+            <p className="text-[11px] text-stone-500 whitespace-nowrap">{totalText[k] ?? '\u00a0'}</p>
+          </div>
+        ))}
+      </div>
+      <div>
+        <p className="pb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">Days each week</p>
+        <div className="divide-y divide-stone-100">
+          {rows.map(row => {
+            const { w, i, days } = row
+            const n = daysOf([row], () => true)
+            const met = goal && w.totals.workouts >= goal
+            return (
+              <button key={w.weekStart} onClick={() => onWeek(i)} className="w-full flex items-center gap-3 py-2.5 text-left active:bg-stone-50">
+                <span className="flex-1 min-w-0 text-[15px] text-stone-900">{w.live ? 'This week' : `${short(days[0])} – ${short(days[6])}`}</span>
+                <span className="flex gap-2.5 text-[13px] tabular-nums text-stone-500">
+                  {TABS.map(([k, , dot]) => (
+                    <span key={k} className="flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{n[k]}</span>
+                  ))}
+                </span>
+                {goal ? (
+                  <span className={`w-9 text-right text-sm font-bold tabular-nums ${met ? 'text-emerald-600' : w.live ? 'text-stone-400' : 'text-red-600'}`}>{met ? '✓' : `${w.totals.workouts}/${goal}`}</span>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
