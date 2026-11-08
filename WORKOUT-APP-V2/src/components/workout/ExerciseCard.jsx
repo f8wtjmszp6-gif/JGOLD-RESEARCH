@@ -290,7 +290,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
               />
             </div>
             {setup.restOn && (
-              <div className="px-4 py-2.5 space-y-2">
+              <div className="px-4 py-2.5">
                 <StepperRow
                   label="Rest length"
                   value={setup.rest}
@@ -299,7 +299,6 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
                   format={s => fmtClock(s * 1000)}
                   onChange={rest => store.setSetup(exercise, { rest })}
                 />
-                <p className="text-xs text-stone-400">Starts automatically each time you tick a set.</p>
               </div>
             )}
           </div>
