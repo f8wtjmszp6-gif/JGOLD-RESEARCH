@@ -28,10 +28,11 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
 // have saved (or this week) can be tapped: onPick(week, day). Each shows a
 // dot for every tab it covered, like the week strip. The week showing is
 // shaded and `picked` circled. `compact`: just the week showing, with an
-// arrow under it for the whole month. `aside`: goes on the key's line, after
-// a divider (as on the week strip).
+// arrow under it for the whole month, and arrows either side to move a week
+// (onWeek(week, day), onPick unless given). `aside`: goes on the key's line,
+// after a divider (as on the week strip).
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
-export function MonthGrid({ weeks, at, picked = null, compact = false, aside, onPick }) {
+export function MonthGrid({ weeks, at, picked = null, compact = false, aside, onPick, onWeek = onPick }) {
   const [open, setOpen] = useState(!compact)
   const today = new Date()
   const byKey = Object.fromEntries(weeks.map(w => [w.weekStart, w]))
@@ -55,32 +56,58 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, aside, on
   const cells = Array.from({ length: folded ? 7 : 42 }, (_, i) => addDays(start, i))
     .filter((d, i, all) => folded || i < 35 || all.slice(35).some(x => x.getMonth() === month.getMonth()))
   const label = folded
-    ? [...new Set([cells[0], cells[6]].map(d => d.toLocaleDateString('en-US', { month: 'long' })))].join(' – ') + ` ${cells[6].getFullYear()}`
+    ? [...new Set([cells[0], cells[6]].map(d => d.toLocaleDateString('en-US', { month: 'short' })))].join(' – ') + ` ${cells[6].getFullYear()}`
     : month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const liveShowing = folded && sameDay(addDays(weekFrom, today.getDay()), today)
   // Unfolding opens the month of the day picked.
   const toggle = () => {
     if (!open && showing) setMonth(monthOf(addDays(new Date(`${showing}T12:00:00`), picked ?? 0)))
     setOpen(!open)
   }
 
-  const step = n => setMonth(new Date(month.getFullYear(), month.getMonth() + n, 1, 12))
-  const canBack = month > earliest
-  const canNext = month < thisMonth
+  // Folded, the arrows move a week (to the same weekday, but not past
+  // today); open, a month.
+  const weekBy = n => weekFrom && byKey[weekKey(addDays(weekFrom, 7 * n))]
+  const step = n => {
+    if (!folded) return setMonth(new Date(month.getFullYear(), month.getMonth() + n, 1, 12))
+    const w = weekBy(n)
+    onWeek(w, w.live ? Math.min(picked ?? 0, today.getDay()) : picked ?? 0)
+  }
+  const canBack = folded ? !!weekBy(-1) : month > earliest
+  const canNext = folded ? !!weekBy(1) : month < thisMonth
 
-  // Folded, it's tighter: the month arrows are hidden, so their row shrinks.
+  // Back and forward: a month's beside its name; folded, a week's either
+  // side of the days, like the week strip on Today (each fades out at the
+  // end it can't go past).
+  const arrow = n => (
+    <button
+      onClick={() => step(n)}
+      disabled={n < 0 ? !canBack : !canNext}
+      aria-label={`${n < 0 ? 'Previous' : 'Next'} ${folded ? 'week' : 'month'}`}
+      className={folded
+        ? 'w-7 shrink-0 flex items-center justify-center text-stone-400 rounded-2xl active:bg-stone-100 disabled:opacity-0 transition-opacity'
+        : 'w-9 h-9 rounded-lg flex items-center justify-center text-stone-500 active:bg-stone-100 disabled:opacity-25'}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d={n < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} /></svg>
+    </button>
+  )
+
   return (
     <div className={folded ? 'space-y-2' : 'space-y-3'}>
-      <div className={`flex items-center justify-between ${folded ? '[&>button]:h-6' : ''}`}>
-        <button onClick={() => step(-1)} disabled={!canBack || folded} aria-label="Previous month" className={`w-9 h-9 rounded-lg flex items-center justify-center text-stone-500 active:bg-stone-100 ${folded ? 'disabled:opacity-0' : 'disabled:opacity-25'}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-        </button>
-        <p className="font-semibold text-stone-900">{label}</p>
-        <button onClick={() => step(1)} disabled={!canNext || folded} aria-label="Next month" className={`w-9 h-9 rounded-lg flex items-center justify-center text-stone-500 active:bg-stone-100 ${folded ? 'disabled:opacity-0' : 'disabled:opacity-25'}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-        </button>
-      </div>
+      {folded ? (
+        <p className="text-center text-xs font-bold tracking-wider text-stone-500 uppercase">{label}</p>
+      ) : (
+        <div className="flex items-center justify-between">
+          {arrow(-1)}
+          <p className="font-semibold text-stone-900">{label}</p>
+          {arrow(1)}
+        </div>
+      )}
+      <div className={folded ? 'flex items-stretch' : 'space-y-3'}>
+      {folded && arrow(-1)}
+      <div className={folded ? 'flex-1 min-w-0 space-y-1' : 'space-y-3'}>
       <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-stone-400">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i}>{d}</span>)}
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} className={liveShowing && i === today.getDay() ? 'text-accent-500' : ''}>{d}</span>)}
       </div>
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map(d => {
@@ -90,8 +117,11 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, aside, on
           const future = d > today && !sameDay(d, today)
           const open = !!week && !future
           const isToday = sameDay(d, today)
-          const shaded = key === showing
-          const circled = shaded && picked === d.getDay() && !isToday
+          // The week showing is shaded in the month (one week alone needs
+          // no shading, like the strip on Today).
+          const inWeek = key === showing
+          const shaded = inWeek && !folded
+          const circled = inWeek && picked === d.getDay() && !isToday
           const items = week?.dayLog?.[d.getDay()] ?? []
           return (
             <button
@@ -114,6 +144,9 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, aside, on
             </button>
           )
         })}
+      </div>
+      </div>
+      {folded && arrow(1)}
       </div>
       {compact && weekFrom && (
         <button onClick={toggle} aria-label={open ? 'Show one week' : 'Show the whole month'} aria-expanded={open} className="w-full -my-1 py-1 flex justify-center text-stone-400 rounded-lg active:bg-stone-100">

@@ -18,15 +18,16 @@ const weekOf = days => `Week of ${days[0].toLocaleDateString('en-US', { month: '
 // totals. This week's lines can be tapped: onEdit(line.edit). Today, with
 // nothing on it yet, can be marked as a rest day (onRest); earlier days with
 // nothing on them are rest days already.
-// It opens on `at` (a week) and `picked` (a day of it) and moves around on
-// its own, so the screen behind stays where it was.
+// It always opens on today, as a day (or, with no week under way, on `at`
+// and `picked`), and moves around on its own, so the screen behind stays
+// where it was.
 export default function DaySheet({ weeks, at: startAt, picked: startPicked, goals, onEdit, onRest, onClose }) {
-  const [whole, setWhole] = useState(false)
-  const [at, setAt] = useState(startAt)
-  const [picked, setPicked] = useState(startPicked)
-  // Under the title, a way back to today once you've moved off it.
   const live = weeks.findIndex(w => w.live)
   const now = new Date().getDay()
+  const [whole, setWhole] = useState(false)
+  const [at, setAt] = useState(live >= 0 ? live : startAt)
+  const [picked, setPicked] = useState(live >= 0 ? now : startPicked)
+  // Under the title, a way back to today once you've moved off it.
   const away = whole || at !== live || picked !== now
   const toToday = () => { setWhole(false); setAt(live); setPicked(now) }
   const week = weeks[at]
@@ -61,6 +62,11 @@ export default function DaySheet({ weeks, at: startAt, picked: startPicked, goal
         )}
         onPick={(w, d) => {
           setWhole(false)
+          setAt(weeks.indexOf(w))
+          setPicked(d)
+        }}
+        // The arrows keep the week view if it's showing.
+        onWeek={(w, d) => {
           setAt(weeks.indexOf(w))
           setPicked(d)
         }}

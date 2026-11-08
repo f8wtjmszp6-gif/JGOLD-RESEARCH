@@ -68,7 +68,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   // Tapping a logged line asks what to do first (see LineMenu).
   const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
-  // The picked day's pop-up, opened from Activities on the strip. Tapping a
+  // The day pop-up, opened from Activities on the strip (on today). Tapping a
   // line there opens its workout, or asks what to do with it (over the
   // pop-up), as on the cards.
   const [dayOpen, setDayOpen] = useState(false)
