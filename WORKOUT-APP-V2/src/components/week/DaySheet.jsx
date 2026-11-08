@@ -37,18 +37,16 @@ export default function DaySheet({ weeks, at: startAt, picked: startPicked, goal
   const day = days[picked]
   const tap = week.live ? onEdit : null
   // The Week tab names the week it shows: This week, or its days.
-  const shown = weekDays(firstDay(weeks[at].weekStart))
-  const weekName = weeks[at].live ? 'This week' : `${short(shown[0])} – ${short(shown[6])}`
+  // (None picked yet, after turning to another month: Select a week.)
+  const shown = at == null ? null : weekDays(firstDay(weeks[at].weekStart))
+  const weekName = at == null ? 'Select a week' : weeks[at].live ? 'This week' : `${short(shown[0])} – ${short(shown[6])}`
   const openWeek = i => { setAt(i); setView('week') }
-  // On Week, turning the month takes the week with it: back, to the
-  // month's last week; on, to its first (unless the week showing is in it).
+  // Turning the month shows it on the Month tab. The week tab then asks for
+  // a week (tap a day for one), but for this month, which has this week.
   const turnMonth = m => {
-    if (view === 'week') {
-      const touches = i => weekDays(firstDay(weeks[i].weekStart)).some(d => d.getMonth() === m.getMonth() && d.getFullYear() === m.getFullYear())
-      const ins = weeks.map((w, i) => i).filter(touches)
-      if (ins.length && !ins.includes(at)) setAt(m < month ? ins.at(-1) : ins[0])
-    }
+    setAt(+m === +monthOf(homeDays[picked]) ? home : null)
     setMonth(m)
+    setView('month')
   }
   // Looking at another week (or month), Today says Go to today.
   const away = (view === 'week' && at !== home) || (view === 'month' && +month !== +monthOf(homeDays[picked]))
@@ -77,13 +75,14 @@ export default function DaySheet({ weeks, at: startAt, picked: startPicked, goal
         {[['today', away ? 'Go to today' : 'Today'], ['week', weekName], ['month', month.toLocaleDateString('en-US', { month: 'long' })]].map(([v, name]) => (
           <button
             key={v}
+            disabled={v === 'week' && at == null}
             onClick={() => {
               // Today also turns the month back to this one.
               if (v === 'today') { setAt(home); setMonth(monthOf(homeDays[picked])) }
               setView(v)
             }}
             aria-pressed={view === v}
-            className={`flex-1 rounded-[9px] py-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${view === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+            className={`flex-1 rounded-[9px] py-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${view === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 disabled:text-stone-400 disabled:font-medium'}`}
           >
             {name}
           </button>
