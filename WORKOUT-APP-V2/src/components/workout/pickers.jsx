@@ -4,10 +4,9 @@ import { EXERCISE_BANK, EXERCISE_BY_ID, SUGGESTED_GROUPS, fitsPlan, isCore, rati
 import { openDemo } from '../../data/howto'
 import { STRETCH_BANK, STRETCH_AREAS, SUGGESTED_AREAS, stretchRating } from '../../data/stretches'
 import { MUSCLE_LABEL, fitsEquipment } from '../../data/targeted'
-import { GearIcon, InfoIcon } from '../ui/glyphs'
-import { ExercisePage } from '../ExerciseBank'
-import { StretchPage } from '../StretchBank'
+import { InfoIcon } from '../ui/glyphs'
 import { SettingsSheet } from '../ui/Sheet'
+import { ChoiceMenu } from '../ui/ChoiceMenu'
 
 // The stretches for the list and not in it yet, by body area, best first,
 // starting with the areas this workout works. A list with exercises goes by
@@ -30,7 +29,6 @@ export function StretchPicker({ listId, store, onPick, onClose }) {
   return (
     <BankPicker
       gap={gap}
-      store={store}
       title="Add a stretch"
       noun="stretches"
       kind="stretch"
@@ -87,7 +85,6 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
       gap={gap}
       off={off}
       elsewhere={elsewhere}
-      store={store}
       title={core ? 'Add a core exercise' : 'Add an exercise'}
       noun="exercises"
       kind="exercise"
@@ -118,11 +115,11 @@ const TIERS = [
 ]
 const SEARCH_TIERS = { 3: 'Recommended', 2: 'Also works', 1: 'Less direct' }
 
-function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, gap, off = [], elsewhere = () => null, store, onPick, onClose }) {
+function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, gap, off = [], elsewhere = () => null, onPick, onClose }) {
   const [query, setQuery] = useState('')
   const [more, setMore] = useState(false)
   const [showOff, setShowOff] = useState(false)
-  const [details, setDetails] = useState(null) // an exercise's page, from its gear
+  const [tabMenu, setTabMenu] = useState(false)
   const skip = new Set([...exclude, ...off.map(x => x.id)])
   const q = query.trim().toLowerCase()
   const rank = x => (first.includes(x.id) ? first.indexOf(x.id) : first.length)
@@ -165,15 +162,6 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
           ) : (
             <button onClick={() => onPick(x.id)} className="flex-1 min-w-0 flex items-center pl-3.5 pr-1 py-2.5 text-left text-sm text-stone-800 active:bg-stone-100">
               {name}
-            </button>
-          )}
-          {store && (
-            <button
-              onClick={() => setDetails(x.id)}
-              aria-label={`${x.name} details`}
-              className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-stone-400 active:bg-stone-100"
-            >
-              <GearIcon />
             </button>
           )}
           <button
@@ -295,16 +283,18 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
       )}
       {!q && tabs.length > 1 && (
         <div className="relative rounded-xl border border-stone-200 bg-white pl-3 pr-2.5 py-1.5 flex items-center gap-1">
-          <span className="flex-1 min-w-0">
+          <button onClick={() => setTabMenu(true)} aria-label="Muscle group" aria-haspopup="listbox" className="absolute inset-0 w-full rounded-xl active:bg-stone-50" />
+          <span className="relative flex-1 min-w-0 pointer-events-none">
             <span className="block text-[11px] font-semibold text-stone-400">{sections === MUSCLE_GROUPS ? 'Muscle group' : 'Area'}</span>
             <span className="block truncate text-[15px] font-semibold text-stone-900">
               {sec?.label} <span className="font-normal text-stone-400">· {current.filter(x => sectionOf(x) === sec?.id).length} {countLabel}</span>
             </span>
           </span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="shrink-0 text-stone-400" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-          <select value={sec?.id} onChange={e => pickTab(e.target.value)} aria-label="Muscle group" className="absolute inset-0 opacity-0 w-full text-base">
-            {tabs.map(t => <option key={t.id} value={t.id}>{t.label} · {current.filter(x => sectionOf(x) === t.id).length} {countLabel}</option>)}
-          </select>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="relative shrink-0 text-stone-400 pointer-events-none" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          {tabMenu && (
+            <ChoiceMenu title={sections === MUSCLE_GROUPS ? 'Muscle group' : 'Area'} value={sec?.id} onPick={pickTab} onClose={() => setTabMenu(false)}
+              options={tabs.map(t => [t.id, `${t.label} · ${current.filter(x => sectionOf(x) === t.id).length} ${countLabel}`])} />
+          )}
         </div>
       )}
       {!q && gap && (
@@ -318,11 +308,6 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
         </div>
       )}
       {body}
-      {details && bank.concat(current).find(x => x.id === details) && (
-        kind === 'stretch'
-          ? <StretchPage store={store} popup stretch={bank.concat(current).find(x => x.id === details)} onClose={() => setDetails(null)} />
-          : <ExercisePage store={store} popup exercise={bank.concat(current).find(x => x.id === details)} onClose={() => setDetails(null)} />
-      )}
     </SettingsSheet>
   )
 }

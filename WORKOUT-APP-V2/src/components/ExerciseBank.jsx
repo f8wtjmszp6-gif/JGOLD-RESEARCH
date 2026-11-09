@@ -7,6 +7,7 @@ import { fmt, fmtSecs } from '../utils/format'
 import { ConfirmSheet, ScopeSheet, SettingsSheet } from './ui/Sheet'
 import { Segmented, StepperRow, ToggleRow } from './ui/controls'
 import { InfoIcon } from './ui/glyphs'
+import { ChoiceMenu } from './ui/ChoiceMenu'
 
 // Settings › Exercises: every exercise in the bank, to look up and add to a
 // plan. Search, or narrow by muscle group, what it targets and what it's
@@ -124,18 +125,17 @@ export function ExerciseBank({ store, onClose }) {
 
 // A dropdown: the phone's own picker over a box showing what's picked.
 export function Picker({ label, value, options, shown, info, blank, locked, onChange }) {
+  const [open, setOpen] = useState(false)
   return (
     <div className={`relative min-w-0 rounded-xl border border-stone-200 bg-white pl-2.5 pr-2 py-1.5 flex items-center gap-1 ${locked ? 'pointer-events-none' : ''}`}>
-      <span className="flex-1 min-w-0">
+      <button onClick={() => setOpen(true)} disabled={locked} aria-label={label} aria-haspopup="listbox" className="absolute inset-0 w-full rounded-xl active:bg-stone-50" />
+      <span className="relative flex-1 min-w-0 pointer-events-none">
         <span className="block text-[11px] font-semibold text-stone-400">{label}</span>
         <span className={`block truncate text-[15px] font-semibold ${blank ? 'text-stone-300' : 'text-stone-900'}`}>{blank ? 'Pick one' : shown}</span>
       </span>
       {info && <span className="relative z-10">{info}</span>}
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="shrink-0 text-stone-400" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-      <select value={blank ? '' : value} onChange={e => onChange(e.target.value)} aria-label={label} disabled={locked} className="absolute inset-0 opacity-0 w-full text-base">
-        {blank && <option value="" disabled>Pick one</option>}
-        {options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}
-      </select>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="relative shrink-0 text-stone-400 pointer-events-none" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+      {open && <ChoiceMenu title={label} value={blank ? null : value} options={options} onPick={onChange} onClose={() => setOpen(false)} />}
     </div>
   )
 }

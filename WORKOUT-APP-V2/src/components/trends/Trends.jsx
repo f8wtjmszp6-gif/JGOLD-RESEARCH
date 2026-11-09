@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { workouts, GYM_ORDER } from '../../data/workout'
 import { calendarWeekOf } from '../../store/weeks'
 import { goalLevel } from '../../utils/goal'
-import { EXERCISE_BANK, EXERCISE_BY_ID } from '../../data/exercises'
+import { EXERCISE_BANK, EXERCISE_BY_ID, primaryOf } from '../../data/exercises'
 import { metric } from '../../utils/lifts'
 import CardioTrends from './CardioTrends'
 
@@ -14,6 +14,26 @@ const AREAS = [
   ['legs', 'Legs', ['legs']],
   ['core', 'Core', ['core']],
 ]
+
+// The headings in each tab, and what goes under them: upper body by muscle
+// group, legs and core by the muscle a lift mainly works (inner thighs with
+// quads, outer thighs with glutes, as Build a Workout pairs them).
+const SECTIONS = {
+  upper: [['Chest', ex => ex.group === 'chest'], ['Back', ex => ex.group === 'back'],
+    ['Shoulders', ex => ex.group === 'shoulders'], ['Arms', ex => ex.group === 'arms']],
+  legs: [['Quads', ex => ['quads', 'inner-thighs'].includes(primaryOf(ex)[0])],
+    ['Glutes', ex => ['glutes', 'outer-thighs'].includes(primaryOf(ex)[0])],
+    ['Hamstrings', ex => primaryOf(ex)[0] === 'hamstrings'], ['Calves', ex => primaryOf(ex)[0] === 'calves']],
+  core: [['Abs', ex => primaryOf(ex)[0] !== 'obliques'], ['Obliques', ex => primaryOf(ex)[0] === 'obliques']],
+}
+
+// `list` under its tab's headings, each lift once (anything that fits none
+// goes under the last), empty headings left out.
+function sectioned(tabId, list) {
+  const secs = SECTIONS[tabId]
+  const at = ex => { const i = secs.findIndex(([, fits]) => fits(ex)); return i < 0 ? secs.length - 1 : i }
+  return secs.map(([label], i) => [label, list.filter(ex => at(ex) === i)]).filter(([, l]) => l.length)
+}
 
 const DAY = 86400000
 
@@ -125,9 +145,15 @@ function Trends({ store }) {
         {shown.length === 0 && (
           <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you tick them.</p>
         )}
-        <div className="space-y-2">
-          {shown.map(ex => (
-            <ExerciseTrend key={ex.id} exercise={ex} weeks={weeks} best={bestOf(ex.id)} />
+        {/* Each tab's lifts under headings by muscle. */}
+        <div className="space-y-4">
+          {sectioned(tab.id, shown).map(([label, list]) => (
+            <section key={label} className="space-y-2">
+              <h3 className="px-1 text-xs uppercase tracking-wider font-medium text-stone-400">{label}</h3>
+              {list.map(ex => (
+                <ExerciseTrend key={ex.id} exercise={ex} weeks={weeks} best={bestOf(ex.id)} />
+              ))}
+            </section>
           ))}
         </div>
 
