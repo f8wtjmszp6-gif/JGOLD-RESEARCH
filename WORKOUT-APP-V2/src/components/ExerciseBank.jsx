@@ -132,7 +132,7 @@ export function Picker({ label, value, options, shown, info, blank, locked, onCh
       </span>
       {info && <span className="relative z-10">{info}</span>}
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="shrink-0 text-stone-400" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-      <select value={blank ? '' : value} onChange={e => onChange(e.target.value)} aria-label={label} disabled={locked} className="absolute inset-0 opacity-0 w-full">
+      <select value={blank ? '' : value} onChange={e => onChange(e.target.value)} aria-label={label} disabled={locked} className="absolute inset-0 opacity-0 w-full text-base">
         {blank && <option value="" disabled>Pick one</option>}
         {options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}
       </select>

@@ -302,7 +302,7 @@ function BankPicker({ title, noun, kind, sections, sectionOf, bank, exclude, cur
             </span>
           </span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="shrink-0 text-stone-400" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-          <select value={sec?.id} onChange={e => pickTab(e.target.value)} aria-label="Muscle group" className="absolute inset-0 opacity-0 w-full">
+          <select value={sec?.id} onChange={e => pickTab(e.target.value)} aria-label="Muscle group" className="absolute inset-0 opacity-0 w-full text-base">
             {tabs.map(t => <option key={t.id} value={t.id}>{t.label} · {current.filter(x => sectionOf(x) === t.id).length} {countLabel}</option>)}
           </select>
         </div>
