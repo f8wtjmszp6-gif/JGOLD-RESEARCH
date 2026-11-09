@@ -45,21 +45,6 @@ export function CoveragePill({ list, area }) {
 
 const listOf = xs => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`).toLowerCase()
 
-// An orange row for each area the list is missing; tapping it opens the bank,
-// where exercises that fill the gap come first.
-export function GapRows({ list, area, onAdd }) {
-  return coverage(list, area).filter(a => !a.covered).map(a => (
-    <button
-      key={a.id}
-      onClick={onAdd}
-      className="w-full flex items-center gap-2 rounded-2xl border-[1.5px] border-dashed border-orange-300 bg-orange-50 px-4 py-3 text-left active:opacity-70"
-    >
-      <span className="text-orange-700 text-xl leading-none">+</span>
-      <span className="font-semibold text-orange-700">Add an exercise for {a.label.toLowerCase()}</span>
-    </button>
-  ))
-}
-
 // A dashed "+ Add …" row at the end of a list.
 export function AddRow({ label, note, onClick }) {
   return (

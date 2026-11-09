@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FULL_BODY, TARGETED } from '../../data/workout'
-import { TARGET_AREAS, TARGET_EQUIPMENT, exerciseTotal, stretchTotal, equipmentName } from '../../data/targeted'
+import { TARGET_AREAS, TARGET_EQUIPMENT, MIN_MUSCLES, muscleCount, stretchTotal, equipmentName } from '../../data/targeted'
 import { SettingsSheet } from '../ui/Sheet'
 import { BodyFigure } from '../week/MuscleMap'
 import { CardHead, CARD } from './cards'
@@ -22,9 +22,8 @@ function progressOf(store, id) {
   return { done, total, exercises, stretches: stretches.length + toPick, stretched, complete, underWay: begun && !complete, warmup: w.on ? w.sets : null }
 }
 
-// Full-body days are built like the rest now (every area); one begun
-// before that still shows here until it's done.
-const IDS = [...FULL_BODY.map(p => p.id), TARGETED.id]
+// The built one (Full Body has its own card).
+const IDS = [TARGETED.id]
 const ALL = TARGET_AREAS.map(a => a.id)
 
 // One card for working out any day, as often as you like: a full-body day,
@@ -91,9 +90,9 @@ export function BuildSheet({ store, onPick, onClose }) {
     setFull(all(next))
     setAreas(all(next) ? [] : next)
   }
-  const ready = full || areas.length > 0
-
-  const exercises = exerciseTotal(full ? ALL.length : areas.length)
+  // One exercise per muscle in what's picked, and at least four of them.
+  const exercises = muscleCount(full ? ALL : areas)
+  const ready = exercises >= MIN_MUSCLES
   const stretches = stretchTotal(full ? ALL.length : areas.length)
 
   function start() {
@@ -135,7 +134,9 @@ export function BuildSheet({ store, onPick, onClose }) {
           </p>
         </div>
       ) : (
-        <p className="text-sm text-stone-500">Pick one area or more. Fewer areas get more exercises each.</p>
+        <p className="text-sm text-stone-500">
+          {exercises ? `${exercises} muscle${exercises > 1 ? 's' : ''} so far. ` : ''}Pick areas that add up to at least {MIN_MUSCLES} muscles: one exercise each.
+        </p>
       )}
       <button
         onClick={start}

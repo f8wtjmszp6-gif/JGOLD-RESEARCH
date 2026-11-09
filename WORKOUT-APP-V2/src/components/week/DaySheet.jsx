@@ -227,7 +227,7 @@ function WeekList({ dayLines, days, empty, totals, goals, onEdit }) {
 // The month showing: how many of its days had gym, cardio, stretching or
 // rest (as the dots show them), each with what it added up to (workouts,
 // cardio minutes, stretches), then each of its weeks by days the same way,
-// and whether it reached the workout goal. Tap a week to open it.
+// with a tick by each goal it reached. Tap a week to open it.
 function MonthList({ weeks, month, goals, onWeek }) {
   const inMonth = d => d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear()
   const today = new Date()
@@ -254,7 +254,6 @@ function MonthList({ weeks, month, goals, onWeek }) {
     total.stretch += (lines.stretch ?? []).filter(x => x.status === 'done').length
   }))
   const totalText = { gym: plural(total.gym, 'workout', 'workouts'), cardio: `${total.cardio} min`, stretch: plural(total.stretch, 'stretch', 'stretches') }
-  const goal = goals?.workouts?.min
   if (!rows.length) return <p className="pt-3 text-sm text-stone-400">Nothing logged</p>
   return (
     <div className="pt-3 space-y-5">
@@ -268,23 +267,28 @@ function MonthList({ weeks, month, goals, onWeek }) {
         ))}
       </div>
       <div>
-        <p className="pb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">Days each week</p>
+        <p className="pb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">Week by week</p>
         <div className="divide-y divide-stone-100">
           {rows.map(row => {
             const { w, i, days } = row
             const n = daysOf([row], () => true)
-            const met = goal && w.totals.workouts >= goal
+            // Each goal that week gets a tick by its count if reached, a red
+            // cross if missed (this week, only once reached: it's not over).
+            const made = {
+              gym: goals?.workouts ? w.totals.workouts >= goals.workouts.min : null,
+              cardio: goals?.cardio && w.totals.cardio != null ? w.totals.cardio >= goals.cardio.min : null,
+              stretch: goals?.stretch ? w.totals.stretch >= goals.stretch.min : null,
+            }
             return (
-              <button key={w.weekStart} onClick={() => onWeek(i)} className="w-full flex items-center gap-3 py-2.5 text-left active:bg-stone-50">
+              <button key={w.weekStart} onClick={() => onWeek(i)} className="w-full flex items-center gap-2 py-2.5 text-left active:bg-stone-50">
                 <span className="flex-1 min-w-0 text-[15px] text-stone-900">{w.live ? 'This week' : `${short(days[0])} – ${short(days[6])}`}</span>
-                <span className="flex gap-2.5 text-[13px] tabular-nums text-stone-500">
-                  {TABS.map(([k, , dot]) => (
-                    <span key={k} className="flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{n[k]}</span>
-                  ))}
-                </span>
-                {goal ? (
-                  <span className={`w-9 text-right text-sm font-bold tabular-nums ${met ? 'text-emerald-600' : w.live ? 'text-stone-400' : 'text-red-600'}`}>{met ? '✓' : `${w.totals.workouts}/${goal}`}</span>
-                ) : null}
+                {TABS.map(([k, , dot]) => (
+                  <span key={k} className="w-11 shrink-0 flex items-center gap-1 text-[13px] tabular-nums text-stone-500">
+                    <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{n[k]}
+                    {made[k] === true && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600" aria-label="goal reached"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
+                    {made[k] === false && !w.live && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" className="text-red-500" aria-label="goal missed"><path d="M6 6l12 12M18 6L6 18" /></svg>}
+                  </span>
+                ))}
               </button>
             )
           })}

@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { fmt } from '../../utils/format'
+import { fmt, secsParts } from '../../utils/format'
 
 // ── A −/+ row used inside the settings menu ──────────────────────────────────
-export function StepperRow({ label, value, step, min = 0, max = Infinity, editable, suffix = '', format = fmt, onChange }) {
+export function StepperRow({ label, value, step, min = 0, max = Infinity, editable, suffix = '', format = fmt, seconds = false, onChange }) {
+  // `seconds`: a timer's length, in seconds under a minute and minutes from 60.
+  const [shown, unit] = seconds ? secsParts(value) : [format(value), suffix]
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -40,7 +42,7 @@ export function StepperRow({ label, value, step, min = 0, max = Infinity, editab
             onClick={() => { if (editable) { setDraft(String(value)); setEditing(true) } }}
             className={`w-16 text-center text-xl font-bold text-stone-900 ${editable ? 'active:opacity-60' : ''}`}
           >
-            {format(value)}{suffix && <span className="text-xs font-medium text-stone-400">{suffix}</span>}
+            {shown}{unit && <span className="text-xs font-medium text-stone-400">{unit}</span>}
           </button>
         )}
         <button

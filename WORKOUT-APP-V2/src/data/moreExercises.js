@@ -18,7 +18,7 @@ export const MORE_EXERCISES = [
   X('archer-push-ups', 'Archer Push-Ups', '6–8', BODY, 'chest', ['chest'], { perSide: true }),
   X('knee-push-ups', 'Knee Push-Ups', '12–15', BODY, 'chest', ['chest']),
   X('hand-release-push-ups', 'Hand-Release Push-Ups', '8–12', BODY, 'chest', ['chest']),
-  X('db-floor-press', 'Dumbbell Floor Press', '8–10', B(0, 50), 'chest', ['chest', 'triceps'], { compound: true }),
+  X('db-floor-press', 'Dumbbell Floor Press', '8–10', B(0, 50), 'chest', ['chest', 'triceps']),
   X('db-squeeze-press', 'Dumbbell Squeeze Press', '10–12', B(0, 35), 'chest', ['chest']),
   X('single-arm-db-press', 'Single-Arm Dumbbell Bench Press', '8–10', B(0, 45), 'chest', ['chest'], { perSide: true }),
   X('high-to-low-cable-fly', 'High-to-Low Cable Fly', '12–14', B(0, 20), 'chest', ['chest'], { equipment: 'cable' }),
@@ -31,7 +31,7 @@ export const MORE_EXERCISES = [
   X('table-row', 'Table Row', '8–12', BODY, 'back', ['lats']),
   X('superman-pull', 'Superman Lat Pull', '10–12', BODY, 'back', ['lats', 'lower-back']),
   X('renegade-row', 'Renegade Row', '8–10', B(0, 25), 'back', ['lats', 'abs'], { perSide: true }),
-  X('db-bent-over-row', 'Dumbbell Bent-Over Row', '8–10', B(0, 40), 'back', ['lats'], { compound: true }),
+  X('db-bent-over-row', 'Dumbbell Bent-Over Row', '8–10', B(0, 40), 'back', ['lats']),
   X('incline-db-row', 'Incline Dumbbell Row', '10–12', B(0, 35), 'back', ['lats', 'rear-delts']),
   X('db-high-pull', 'Dumbbell High Pull', '10–12', B(0, 25), 'back', ['traps', 'rear-delts']),
   X('neutral-grip-pulldown', 'Neutral-Grip Lat Pulldown', '8–10', B(0, 100), 'back', ['lats'], { equipment: 'cable' }),
@@ -48,10 +48,10 @@ export const MORE_EXERCISES = [
   X('leaning-lateral-raise', 'Leaning Lateral Raise', '12–14', B(0, 15), 'shoulders', ['side-delts'], { perSide: true }),
   X('db-z-press', 'Dumbbell Z Press', '8–10', B(0, 30), 'shoulders', ['front-delts']),
   X('db-upright-row', 'Dumbbell Upright Row', '10–12', B(0, 20), 'shoulders', ['side-delts', 'traps']),
-  X('db-push-press', 'Dumbbell Push Press', '6–8', B(0, 40), 'shoulders', ['front-delts'], { compound: true }),
+  X('db-push-press', 'Dumbbell Push Press', '6–8', B(0, 40), 'shoulders', ['front-delts']),
   X('machine-lateral-raise', 'Machine Lateral Raise', '12–14', B(0, 50), 'shoulders', ['side-delts'], { equipment: 'machine' }),
   X('cable-y-raise', 'Cable Y-Raise', '12–14', B(0, 10), 'shoulders', ['side-delts', 'rear-delts'], { equipment: 'cable' }),
-  X('smith-shoulder-press', 'Smith Machine Shoulder Press', '8–10', B(15, 65), 'shoulders', ['front-delts'], { compound: true }),
+  X('smith-shoulder-press', 'Smith Machine Shoulder Press', '8–10', B(15, 65), 'shoulders', ['front-delts']),
 
   // ── Arms ─────────────────────────────────────────────────────────────────
   X('diamond-push-ups', 'Diamond Push-Ups', '8–12', BODY, 'arms', ['triceps', 'chest']),
@@ -73,7 +73,7 @@ export const MORE_EXERCISES = [
   X('pistol-squat', 'Box Pistol Squat', '5–8', BODY, 'legs', ['quads', 'glutes'], { perSide: true }),
   X('cossack-squat', 'Cossack Squat', '6–8', BODY, 'legs', ['quads', 'inner-thighs'], { perSide: true }),
   X('bodyweight-lunge', 'Bodyweight Lunge', '10–12', BODY, 'legs', ['quads', 'glutes'], { perSide: true }),
-  X('db-front-squat', 'Dumbbell Front Squat', '10–12', B(0, 30), 'legs', ['quads'], { compound: true }),
+  X('db-front-squat', 'Dumbbell Front Squat', '10–12', B(0, 30), 'legs', ['quads']),
   X('heel-elevated-goblet-squat', 'Heel-Elevated Goblet Squat', '10–12', B(0, 35), 'legs', ['quads']),
   X('db-split-squat', 'Dumbbell Split Squat', '8–10', B(0, 25), 'legs', ['quads', 'glutes'], { perSide: true }),
   X('smith-split-squat', 'Smith Machine Split Squat', '8–10', B(15, 65), 'legs', ['quads', 'glutes'], { perSide: true }),
@@ -90,7 +90,7 @@ export const MORE_EXERCISES = [
   X('db-sumo-squat', 'Dumbbell Sumo Squat', '10–12', B(0, 45), 'legs', ['glutes', 'inner-thighs']),
   X('b-stance-rdl', 'B-Stance Romanian Deadlift', '8–10', B(0, 35), 'legs', ['glutes', 'hamstrings'], { perSide: true }),
   X('db-curtsy-lunge', 'Dumbbell Curtsy Lunge', '8–10', B(0, 20), 'legs', ['glutes', 'outer-thighs'], { perSide: true }),
-  X('smith-hip-thrust', 'Smith Machine Hip Thrust', '8–10', B(15, 95), 'legs', ['glutes'], { compound: true }),
+  X('smith-hip-thrust', 'Smith Machine Hip Thrust', '8–10', B(15, 95), 'legs', ['glutes']),
   X('cable-hip-abduction', 'Cable Hip Abduction', '12–15', B(0, 15), 'legs', ['outer-thighs', 'glutes'], { equipment: 'cable', perSide: true }),
   X('glute-kickback-machine', 'Glute Kickback Machine', '12–14', B(0, 60), 'legs', ['glutes'], { equipment: 'machine', perSide: true }),
 
@@ -102,7 +102,7 @@ export const MORE_EXERCISES = [
   X('bodyweight-single-leg-rdl', 'Bodyweight Single-Leg Deadlift', '10–12', BODY, 'legs', ['hamstrings', 'glutes'], { perSide: true }),
   X('db-stiff-leg-deadlift', 'Dumbbell Stiff-Leg Deadlift', '8–10', B(0, 40), 'legs', ['hamstrings']),
   X('db-leg-curl', 'Dumbbell Leg Curl', '10–12', B(0, 15), 'legs', ['hamstrings']),
-  X('db-deadlift', 'Dumbbell Deadlift', '8–10', B(0, 50), 'legs', ['hamstrings', 'glutes', 'lower-back'], { compound: true }),
+  X('db-deadlift', 'Dumbbell Deadlift', '8–10', B(0, 50), 'legs', ['hamstrings', 'glutes', 'lower-back']),
   X('cable-leg-curl', 'Cable Leg Curl', '10–12', B(0, 20), 'legs', ['hamstrings'], { equipment: 'cable', perSide: true }),
 
   // ── Calves ───────────────────────────────────────────────────────────────

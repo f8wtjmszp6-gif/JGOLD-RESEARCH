@@ -11,7 +11,7 @@ import { ExercisePicker } from './pickers'
 import { ConfirmSheet, SettingsSheet } from '../ui/Sheet'
 import { DayPicker } from '../ui/DayPicker'
 import { LogButton } from '../ui/LogButton'
-import { CoveragePill, GapRows, AddRow } from './coverage'
+import { CoveragePill, AddRow } from './coverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
 import { useScope } from '../../hooks/useScope'
@@ -67,7 +67,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   // What's different from every week's version: tagged, struck through, and
   // a bar to reset it. Build a Workout's are made fresh each time, so they
   // have none.
-  const diff = !targeted && !FULL_BODY_BY_ID[workoutId] && !store.past ? store.weekDiff(workoutId) : null
+  const diff = !targeted && !store.past ? store.weekDiff(workoutId) : null
 
   // Swiping an exercise away, saying so if it's the only one for an area.
   function removeExercise(ex) {
@@ -420,7 +420,6 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
             {sections.main.map(exerciseCard)}
             {offRows(false)}
             {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area !== 'core'} store={store} />}
-            <GapRows list={sections.main} area={workoutId} onAdd={() => setAdding('main')} />
             <AddRow label="Add exercise" onClick={() => setAdding('main')} />
 
             {sections.coreOn ? (
@@ -434,7 +433,6 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
                 {sections.core.map(exerciseCard)}
                 {offRows(true)}
                 {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area === 'core'} store={store} />}
-                <GapRows list={sections.core} area="core" onAdd={() => setAdding('core')} />
                 <AddRow label="Add core exercise" onClick={() => setAdding('core')} />
               </>
             ) : (

@@ -1,5 +1,5 @@
-import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, TARGETED, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, COMPOUND_LIFTS, REST_COMPOUND, REST_ACCESSORY, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS, GOAL_SETTINGS } from '../data/workout'
-import { STRETCH_BY_ID, defaultStretchIds, stretchFits } from '../data/stretches'
+import { workouts, activities, PLAN_IDS, FULL_BODY, FULL_BODY_BY_ID, TARGETED, SPORTS, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, CLASS_AREAS, REST_DEFAULT, CARDIO_DEFAULTS, cardioIsWorkout, classIsWorkout, STRETCH_WORKOUT_MINUTES, CLASS_DEFAULT, CLASS_LEGACY, GOAL_DEFAULTS, GOAL_SETTINGS } from '../data/workout'
+import { STRETCH_BY_ID, defaultStretchIds } from '../data/stretches'
 import { weekDays, sameDay } from '../utils/days'
 import { cardioMinutes } from '../utils/format'
 import { EXERCISE_BY_ID, fitsPlan, isCore, CORE_ON_BY_DEFAULT, DEFAULT_CORE, defaultEquipment } from '../data/exercises'
@@ -79,7 +79,7 @@ export function setupOf(s, exercise) {
     mode: saved?.mode ?? (exercise.isTime ? 'hold' : 'reps'),
     perSide: saved?.perSide ?? !!exercise.perSide,
     restOn: saved?.restOn ?? false,
-    rest: saved?.rest ?? (COMPOUND_LIFTS.has(exercise.id) || exercise.compound ? REST_COMPOUND : REST_ACCESSORY),
+    rest: saved?.rest ?? REST_DEFAULT,
   }
 }
 
@@ -498,7 +498,7 @@ function exerciseIdsOf(s, workoutId) {
 }
 
 export function exercisesOf(s, workoutId) {
-  return exerciseIdsOf(s, workoutId).map(id => EXERCISE_BY_ID[id])
+  return exerciseIdsOf(s, workoutId).map(id => EXERCISE_BY_ID[id]).filter(Boolean)
 }
 
 // Which list an exercise in a plan sits in.
@@ -542,18 +542,17 @@ export function writeCoreOn(s, workoutId, on, scope) {
 //   scope 'auto'   – this week's own version if there is one, else what
 //                    you've set (for moving things around, which doesn't ask)
 //   scope 'past'   – a saved week's own copy, which has nothing after it
-// Build a Workout's full-body days have no every week: each one starts as
-// it came, and a change is just for that one.
+// A plan's lists: every week's, with this week's (or, for a full-body day,
+// this time's) over them.
 export function planOf(s, key) {
-  const always = Object.fromEntries(Object.entries(s[key] ?? {}).filter(([id]) => !FULL_BODY_BY_ID[id]))
-  return { ...always, ...s.weekOnly?.[key] }
+  return { ...s[key], ...s.weekOnly?.[key] }
 }
 const everyWeek = s => ({ ...s, weekOnly: undefined })
 export const hasWeekOnly = (s, key, id) => s.weekOnly?.[key]?.[id] !== undefined
 
 function writePlan(s, key, id, read, change, scope) {
   const own = hasWeekOnly(s, key, id)
-  const to = FULL_BODY_BY_ID[id] || scope === 'week' || (scope === 'auto' && own) ? 'week' : 'always'
+  const to = scope === 'week' || (scope === 'auto' && own) ? 'week' : 'always'
   let next = s
   if (to === 'always') {
     next = { ...next, [key]: { ...s[key], [id]: change(read(everyWeek(s))) } }
@@ -735,10 +734,10 @@ export function ownStretchesOf(s) {
 
 // A list's stretches — a gym workout's or the Full Body Stretch — as you've
 // set them up from the stretch bank, or its starting stretches.
-// Only stretches that fit the list count (see stretchFits); if none of a saved
-// list does, it falls back to the starting stretches.
+// If none of a saved list's stretches are left (a deleted one of yours),
+// it falls back to the starting stretches.
 export function stretchesOf(s, listId) {
-  const pick = ids => ids.map(id => STRETCH_BY_ID[id]).filter(x => x && stretchFits(x, listId))
+  const pick = ids => ids.map(id => STRETCH_BY_ID[id]).filter(Boolean)
   const saved = pick(planOf(s, 'stretchLists')[listId] ?? [])
   return saved.length ? saved : pick(defaultStretchIds(listId))
 }

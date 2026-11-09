@@ -76,14 +76,8 @@ export const workouts = {
   },
 }
 
-// Default rest between sets when an exercise's timer is set to Rest: longer
-// for the heavy compound lifts, shorter for accessory work.
-export const COMPOUND_LIFTS = new Set([
-  'bench-press', 'overhead-press', 'dips', 'cable-squat', 'hip-thrust',
-  'barbell-rows', 'pull-ups', 'romanian-deadlift',
-])
-export const REST_COMPOUND = 150
-export const REST_ACCESSORY = 90
+// Default rest between sets when an exercise's timer is set to Rest.
+export const REST_DEFAULT = 90
 
 // A standalone full-body routine for days without a gym workout: a second
 // weekly dose for every major area, plus neck and posture. Ids from the
@@ -235,7 +229,8 @@ export const FULL_BODY = [
     label: 'With Gym Equipment',
     where: 'At the gym',
     chip: 'All equipment',
-    exercises: ['goblet-squat', 'db-rdl', 'db-bench-press', 'lat-pulldown', 'db-shoulder-press'].map(id => ({ id })),
+    // Every muscle, in as few exercises as do it well (Core: see DEFAULT_CORE).
+    exercises: ['deadlift', 'lateral-lunge', 'dips', 'chin-ups', 'arnold-press', 'y-raises', 'hip-abduction', 'standing-calf-raise'].map(id => ({ id })),
     stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'lat-stretch'],
   },
   {
@@ -245,7 +240,7 @@ export const FULL_BODY = [
     label: 'With Dumbbells',
     where: 'At home',
     chip: 'Dumbbells',
-    exercises: ['goblet-squat', 'db-rdl', 'push-ups', 'one-arm-db-row', 'db-shoulder-press'].map(id => ({ id })),
+    exercises: ['lateral-lunge', 'single-leg-rdl', 'incline-db-press', 'one-arm-db-row', 'arnold-press', 'y-raises', 'db-curl', 'overhead-tricep-extension', 'superman', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
     stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'childs-pose'],
   },
   {
@@ -255,7 +250,7 @@ export const FULL_BODY = [
     label: 'No Equipment',
     where: 'At home',
     chip: 'Bodyweight',
-    exercises: ['bodyweight-split-squat', 'single-leg-hip-thrust', 'push-ups', 'pike-push-ups', 'superman'].map(id => ({ id })),
+    exercises: ['cossack-squat', 'elevated-hamstring-bridge', 'push-ups', 'superman-pull', 'pike-push-ups', 'arm-circles', 'reverse-snow-angels', 'towel-curl', 'diamond-push-ups', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
     stretches: ['downward-dog', 'pigeon-pose', 'childs-pose', 'cat-cow', 'hip-flexor'],
   },
 ]

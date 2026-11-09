@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SPORTS, TARGETED } from '../data/workout'
-import { STRETCH_BY_ID, stretchFits } from '../data/stretches'
-import { EXERCISE_BY_ID, fitsPlan } from '../data/exercises'
+import { STRETCH_BY_ID, applyCustomStretches, applyStretchEdits } from '../data/stretches'
+import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession } from './state'
@@ -11,7 +11,19 @@ import { cardioMinutes } from '../utils/format'
 // The store every screen reads and changes: this week's state plus the
 // functions that change it (see makeStore), saved on every change.
 export function useStore() {
-  const [state, setState] = useState(loadState)
+  // A new exercise left without Save (the app closed on it) is dropped,
+  // and any without a name.
+  const [state, setState] = useState(() => {
+    const s = loadState()
+    const t = (s.customExercises ?? []).filter(c => c.draft || !c.name?.trim()).reduce((t, c) => withoutCustom(t, c.id), s)
+    return (t.customStretches ?? []).filter(c => c.draft || !c.name?.trim()).reduce((u, c) => withoutCustomStretch(u, c.id), t)
+  })
+  // Your own exercises and your changes, over the bank, before anything
+  // reads it.
+  applyCustomExercises(state.customExercises)
+  applyExerciseEdits(state.exerciseEdits)
+  applyCustomStretches(state.customStretches)
+  applyStretchEdits(state.stretchEdits)
   // Everything as it was just before the last reset, for Undo. Not saved.
   const [undoSnapshot, setUndoSnapshot] = useState(null)
 
@@ -180,6 +192,105 @@ function makeStore(state, update) {
     return { bar, weight, sets: all.filter(x => x.part < 0), parts, all }
   }
 
+  // An exercise's numbers as they stand (sets, reps, weight, bar), the same
+  // in every plan it's in.
+  function getNumbers(exercise) {
+    return settingsOf(state, exercise)
+  }
+
+  // Everything saved for one exercise (its numbers, setup, equipment and
+  // your changes to it), to put back with restoreExercise, as Cancel does.
+  const EXERCISE_KEYS = ['exerciseSettings', 'setup', 'equipment', 'assist', 'exerciseEdits']
+  function exerciseSnapshot(id) {
+    return Object.fromEntries(EXERCISE_KEYS.map(k => [k, state[k]?.[id]]))
+  }
+  function restoreExercise(id, snap) {
+    update(s => {
+      const next = { ...s }
+      for (const k of EXERCISE_KEYS) {
+        const rest = { ...s[k] }
+        if (snap[k] === undefined) delete rest[id]
+        else rest[id] = snap[k]
+        next[k] = rest
+      }
+      return next
+    })
+  }
+
+  // Your own exercises: a new one starts blank (a chest exercise with
+  // dumbbells, 3 × 8) and is filled in on its page; it's gone again if
+  // that's cancelled. Returns its id.
+  function addCustomExercise() {
+    const id = `custom-${Date.now().toString(36)}`
+    update(s => ({
+      ...s,
+      customExercises: [...(s.customExercises ?? []), {
+        id, name: '', group: 'chest', covers: [], equipment: 'dumbbell', draft: true,
+        sets: 3, reps: '8', weight: { bar: 45, value: 20 },
+      }],
+    }))
+    return id
+  }
+  function renameCustomExercise(id, name) {
+    update(s => ({ ...s, customExercises: (s.customExercises ?? []).map(c => (c.id === id ? { ...c, name } : c)) }))
+  }
+  // Takes it out of the bank and out of every plan's lists.
+  function deleteCustomExercise(id) {
+    update(s => withoutCustom(s, id))
+  }
+  // A new one's a draft until it's saved.
+  function saveCustomExercise(id) {
+    update(s => ({ ...s, customExercises: (s.customExercises ?? []).map(c => (c.id === id ? { ...c, draft: undefined } : c)) }))
+  }
+
+  // Your changes to an exercise's group, targets or rating (see
+  // applyExerciseEdits).
+  // Your own stretches, the same way: a new one starts blank and is filled
+  // in on its page. Returns its id.
+  function addCustomStretch() {
+    const id = `custom-stretch-${Date.now().toString(36)}`
+    update(s => ({
+      ...s,
+      customStretches: [...(s.customStretches ?? []), { id, name: '', area: 'back', muscles: [], duration: 30, perSide: true, draft: true }],
+    }))
+    return id
+  }
+  function renameCustomStretch(id, name) {
+    update(s => ({ ...s, customStretches: (s.customStretches ?? []).map(c => (c.id === id ? { ...c, name } : c)) }))
+  }
+  function saveCustomStretch(id) {
+    update(s => ({ ...s, customStretches: (s.customStretches ?? []).map(c => (c.id === id ? { ...c, draft: undefined } : c)) }))
+  }
+  function deleteCustomStretch(id) {
+    update(s => withoutCustomStretch(s, id))
+  }
+  // A stretch's area and muscles (see applyStretchEdits).
+  function setStretchEdit(id, patch) {
+    update(s => ({ ...s, stretchEdits: { ...s.stretchEdits, [id]: { ...s.stretchEdits?.[id], ...patch } } }))
+  }
+  // Everything about a stretch you can change on its page, to put back with
+  // restoreStretch (Cancel).
+  const STRETCH_KEYS = ['stretchEdits', 'customDurations', 'perSide', 'stretchSets', 'stretchRest']
+  function stretchSnapshot(id) {
+    return Object.fromEntries(STRETCH_KEYS.map(k => [k, state[k]?.[id]]))
+  }
+  function restoreStretch(id, snap) {
+    update(s => {
+      const next = { ...s }
+      for (const k of STRETCH_KEYS) {
+        const rest = { ...s[k] }
+        if (snap[k] === undefined) delete rest[id]
+        else rest[id] = snap[k]
+        next[k] = rest
+      }
+      return next
+    })
+  }
+
+  function setExerciseEdit(id, patch) {
+    update(s => ({ ...s, exerciseEdits: { ...s.exerciseEdits, [id]: { ...s.exerciseEdits?.[id], ...patch } } }))
+  }
+
   function setSetReps(exercise, index, value) {
     update(s => writeSettings(s, exercise, cur => ({
       ...cur,
@@ -326,7 +437,8 @@ function makeStore(state, update) {
 
   // The plan's two lists, and whether Core is on.
   function getExerciseSections(workoutId) {
-    const ex = section => listIds(state, workoutId, section).map(id => EXERCISE_BY_ID[id])
+    // (A past week can name an exercise of yours that's since been deleted.)
+    const ex = section => listIds(state, workoutId, section).map(id => EXERCISE_BY_ID[id]).filter(Boolean)
     return { main: ex('main'), core: ex('core'), coreOn: coreOnOf(state, workoutId) }
   }
 
@@ -435,7 +547,7 @@ function makeStore(state, update) {
   function addStretch(listId, id, scope) {
     update(s => {
       const ids = stretchesOf(s, listId).map(x => x.id)
-      if (ids.includes(id) || !STRETCH_BY_ID[id] || !stretchFits(STRETCH_BY_ID[id], listId)) return s
+      if (ids.includes(id) || !STRETCH_BY_ID[id]) return s
       return writeStretchList(s, listId, list => (list.includes(id) ? list : [...list, id]), listScope(listId, scope))
     })
   }
@@ -875,6 +987,21 @@ function makeStore(state, update) {
 
   return {
     getLog,
+    getNumbers,
+    setExerciseEdit,
+    exerciseSnapshot,
+    addCustomExercise,
+    renameCustomExercise,
+    deleteCustomExercise,
+    saveCustomExercise,
+    restoreExercise,
+    addCustomStretch,
+    renameCustomStretch,
+    saveCustomStretch,
+    deleteCustomStretch,
+    setStretchEdit,
+    stretchSnapshot,
+    restoreStretch,
     setSetReps,
     setWeight,
     setBar,
@@ -993,5 +1120,50 @@ function makeStore(state, update) {
     setStretchSets,
     getStretchRest,
     setStretchRest,
+  }
+}
+
+// `s` without your exercise `id`: out of the bank, its settings and every
+// plan's lists.
+function withoutCustom(s, id) {
+  const drop = obj => {
+    if (!obj?.[id]) return obj
+    const rest = { ...obj }
+    delete rest[id]
+    return rest
+  }
+  const lists = obj => obj && Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => x !== id) : v]))
+  return {
+    ...s,
+    customExercises: (s.customExercises ?? []).filter(c => c.id !== id),
+    exerciseEdits: drop(s.exerciseEdits),
+    exerciseSettings: drop(s.exerciseSettings),
+    setup: drop(s.setup),
+    equipment: drop(s.equipment),
+    order: lists(s.order),
+    coreLists: lists(s.coreLists),
+    weekOnly: s.weekOnly && { ...s.weekOnly, order: lists(s.weekOnly.order), coreLists: lists(s.weekOnly.coreLists) },
+  }
+}
+
+// Your own stretch gone: out of the bank, its settings, and every list.
+function withoutCustomStretch(s, id) {
+  const drop = obj => {
+    if (!obj || !(id in obj)) return obj
+    const rest = { ...obj }
+    delete rest[id]
+    return rest
+  }
+  const lists = obj => obj && Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => x !== id) : v]))
+  return {
+    ...s,
+    customStretches: (s.customStretches ?? []).filter(c => c.id !== id),
+    stretchEdits: drop(s.stretchEdits),
+    customDurations: drop(s.customDurations),
+    perSide: drop(s.perSide),
+    stretchSets: drop(s.stretchSets),
+    stretchRest: drop(s.stretchRest),
+    stretchLists: lists(s.stretchLists),
+    weekOnly: s.weekOnly && { ...s.weekOnly, stretchLists: lists(s.weekOnly.stretchLists) },
   }
 }

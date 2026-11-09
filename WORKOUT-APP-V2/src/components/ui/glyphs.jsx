@@ -13,9 +13,9 @@ export function InfoIcon({ size = 18 }) {
   )
 }
 
-export function CheckIcon() {
+export function CheckIcon({ size = 18 }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9.5" />
       <path d="M8 12.5l2.8 2.8L16 10" />
     </svg>
@@ -32,18 +32,18 @@ export function ClockIcon({ size = 16, color = 'var(--color-accent-500)' }) {
 }
 
 // ⌄ on a closed card (tap to open), ⌃ on an open one (tap to close).
-export function Chevron({ up = false }) {
+export function Chevron({ up = false, size = 16 }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-stone-400 shrink-0" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-stone-400 shrink-0" aria-hidden="true">
       <path d={up ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
     </svg>
   )
 }
 
-export function CloseButton({ label, onClick }) {
+export function CloseButton({ label, onClick, small }) {
   return (
-    <button onClick={onClick} aria-label={`Close ${label}`} className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center active:bg-stone-200 transition-colors">
-      <Chevron up />
+    <button onClick={onClick} aria-label={`Close ${label}`} className={`${small ? 'w-7 h-7 rounded-md' : 'w-10 h-10 rounded-xl'} bg-stone-100 flex items-center justify-center active:bg-stone-200 transition-colors`}>
+      <Chevron up size={small ? 14 : 16} />
     </button>
   )
 }

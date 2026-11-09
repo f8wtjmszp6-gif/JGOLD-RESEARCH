@@ -6,6 +6,11 @@ import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/bac
 import { playBeep, setVolume } from '../utils/sound'
 import { DefaultsSettings } from './DefaultsSettings'
 import { defaultsSummary } from '../utils/defaults'
+import { ExerciseBank } from './ExerciseBank'
+import { StretchBank } from './StretchBank'
+import { SettingsSheet } from './ui/Sheet'
+import { EXERCISE_BANK } from '../data/exercises'
+import { STRETCH_BANK } from '../data/stretches'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend), timers,
@@ -18,6 +23,8 @@ export default function SettingsDrawer({ store, onClose }) {
   // One section open at a time; tap it again to close it.
   const [open, setOpen] = useState(null)
   const toggle = id => setOpen(o => (o === id ? null : id))
+  // Defaults, Exercises and Stretches open full screen over Settings.
+  const [page, setPage] = useState(null)
   return (
     // Dragging on the shade does nothing, and the panel's scroll stops at its
     // ends, so the page behind never moves.
@@ -42,7 +49,7 @@ export default function SettingsDrawer({ store, onClose }) {
             style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top))' }}
           >
             <h2 className="text-2xl font-bold text-stone-900 tracking-tight">Settings</h2>
-            <button onClick={onClose} className="text-accent-500 font-semibold active:opacity-60">Done</button>
+            <button onClick={onClose} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
           </div>
 
           <div className="space-y-3">
@@ -53,9 +60,9 @@ export default function SettingsDrawer({ store, onClose }) {
                 ))}
               </div>
             </Section>
-            <Section id="defaults" title="Defaults" summary={defaultsSummary(store)} tile="bg-orange-500" icon={ICONS.defaults} open={open} onToggle={toggle}>
-              <DefaultsSettings store={store} />
-            </Section>
+            <PageRow title="Defaults" summary={defaultsSummary(store).text} tile="bg-orange-500" icon={ICONS.defaults} onOpen={() => setPage('defaults')} />
+            <PageRow title="Exercises" summary={`${EXERCISE_BANK.length} in the bank`} tile="bg-teal-600" icon={ICONS.exercises} onOpen={() => setPage('exercises')} />
+            <PageRow title="Stretches" summary={`${STRETCH_BANK.length} in the bank`} tile="bg-violet-500" icon={ICONS.stretches} onOpen={() => setPage('stretches')} />
             <Section id="timers" title="Timers" summary={timerSummary(store.timer)} tile="bg-amber-500" icon={ICONS.timers} open={open} onToggle={toggle}>
               <TimerSettings timer={store.timer} onChange={store.setTimer} />
             </Section>
@@ -67,6 +74,19 @@ export default function SettingsDrawer({ store, onClose }) {
             </Section>
           </div>
         </div>
+        {page === 'exercises' && <ExerciseBank store={store} onClose={() => setPage(null)} />}
+        {page === 'stretches' && <StretchBank store={store} onClose={() => setPage(null)} />}
+        {page === 'defaults' && (
+          <SettingsSheet title="Defaults" bare split full onClose={() => setPage(null)}>
+            <div className="flex items-center gap-2">
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Defaults</h2>
+              <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
+            </div>
+            <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2 space-y-2">
+              <DefaultsSettings store={store} />
+            </div>
+          </SettingsSheet>
+        )}
       </aside>
     </div>
   )
@@ -159,6 +179,22 @@ function FactoryReset({ store }) {
 
 // A section's row: its icon, its name, and while it's closed what it's set
 // to. Tap to open its settings underneath.
+// A setting with a page of its own: tap to open it full screen.
+function PageRow({ title, summary, tile, icon, onOpen }) {
+  return (
+    <button onClick={onOpen} className="w-full rounded-2xl border border-stone-100 bg-white shadow-sm flex items-center gap-3 px-3.5 py-3 text-left active:bg-stone-50">
+      <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center text-white shrink-0 ${tile}`}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-base font-medium text-stone-900">{title}</span>
+        <span className="block text-[13px] leading-snug text-stone-400">{summary}</span>
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+    </button>
+  )
+}
+
 function Section({ id, title, summary, tile, icon, red, open, onToggle, children }) {
   const shown = open === id
   return (
@@ -181,6 +217,8 @@ function Section({ id, title, summary, tile, icon, red, open, onToggle, children
 const ICONS = {
   goals: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></>,
   defaults: <><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></>,
+  exercises: <path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12" />,
+  stretches: <><circle cx="12" cy="4.5" r="2" /><path d="M5 9l7 1.5L19 9M12 10.5V15l-3.5 6M12 15l3.5 6" /></>,
   timers: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M10 2h4" /></>,
   backup: <><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z" /><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5" /></>,
   reset: <><path d="M4 12a8 8 0 1 0 2.3-5.7" /><path d="M4 4v4h4" /></>,

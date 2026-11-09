@@ -1,34 +1,34 @@
 import { workouts, GYM_ORDER, MUSCLE_GROUPS } from './workout'
 import { MORE_EXERCISES } from './moreExercises'
+import { PROFILE } from './exerciseProfile'
 
 // Every exercise you can swap into a workout, by the muscle group Trends
 // files it under. The ones the workouts start with keep their ids and
 // starting numbers, so your saved weights and reps still apply; the rest are
 // common lifts with a modest starting weight — set your own the first time.
-//   compound – a heavy multi-joint lift: its rest timer defaults longer.
 
 const B = (bar, value, assist) => ({ bar, value, ...(assist ? { assist: true } : {}) })
 
 const MORE = [
   // Chest
-  { id: 'incline-db-press', name: 'Incline Dumbbell Press', sets: 3, reps: '8–10', weight: B(0, 50), group: 'chest', compound: true },
-  { id: 'db-bench-press', name: 'Dumbbell Bench Press', sets: 3, reps: '8–10', weight: B(0, 60), group: 'chest', compound: true },
-  { id: 'incline-bench-press', name: 'Incline Bench Press', sets: 3, reps: '6–8', weight: B(45, 95), group: 'chest', compound: true },
+  { id: 'incline-db-press', name: 'Incline Dumbbell Press', sets: 3, reps: '8–10', weight: B(0, 50), group: 'chest' },
+  { id: 'db-bench-press', name: 'Dumbbell Bench Press', sets: 3, reps: '8–10', weight: B(0, 60), group: 'chest' },
+  { id: 'incline-bench-press', name: 'Incline Bench Press', sets: 3, reps: '6–8', weight: B(45, 95), group: 'chest' },
   { id: 'push-ups', name: 'Push-Ups', sets: 3, reps: '10–15', weight: B(0, 0, true), group: 'chest' },
   { id: 'cable-fly', name: 'Cable Fly', sets: 3, reps: '12–14', weight: B(0, 30), group: 'chest' },
   { id: 'pec-deck', name: 'Pec Deck', sets: 3, reps: '12–14', weight: B(0, 70), group: 'chest' },
   { id: 'chest-press-machine', name: 'Chest Press Machine', sets: 3, reps: '10–12', weight: B(0, 90), group: 'chest' },
   // Back
-  { id: 'lat-pulldown', name: 'Lat Pulldown', sets: 3, reps: '8–10', weight: B(0, 100), group: 'back', compound: true },
+  { id: 'lat-pulldown', name: 'Lat Pulldown', sets: 3, reps: '8–10', weight: B(0, 100), group: 'back' },
   { id: 'seated-cable-row', name: 'Seated Cable Row', sets: 3, reps: '10–12', weight: B(0, 90), group: 'back' },
   { id: 'one-arm-db-row', name: 'One-Arm Dumbbell Row', sets: 3, reps: '8–10', weight: B(0, 40), group: 'back', perSide: true },
   { id: 'chest-supported-row', name: 'Chest-Supported Row', sets: 3, reps: '10–12', weight: B(0, 70), group: 'back' },
-  { id: 't-bar-row', name: 'T-Bar Row', sets: 3, reps: '8–10', weight: B(0, 70), group: 'back', compound: true },
-  { id: 'deadlift', name: 'Deadlift', sets: 3, reps: '5–6', weight: B(45, 155), group: 'back', compound: true },
-  { id: 'chin-ups', name: 'Chin-Ups', sets: 3, reps: '6–8', weight: B(0, 35, true), group: 'back', compound: true },
+  { id: 't-bar-row', name: 'T-Bar Row', sets: 3, reps: '8–10', weight: B(0, 70), group: 'back' },
+  { id: 'deadlift', name: 'Deadlift', sets: 3, reps: '5–6', weight: B(45, 155), group: 'back' },
+  { id: 'chin-ups', name: 'Chin-Ups', sets: 3, reps: '6–8', weight: B(0, 35, true), group: 'back' },
   { id: 'straight-arm-pulldown', name: 'Straight-Arm Pulldown', sets: 3, reps: '12–14', weight: B(0, 40), group: 'back' },
   // Shoulders
-  { id: 'db-shoulder-press', name: 'Dumbbell Shoulder Press', sets: 3, reps: '8–10', weight: B(0, 40), group: 'shoulders', compound: true },
+  { id: 'db-shoulder-press', name: 'Dumbbell Shoulder Press', sets: 3, reps: '8–10', weight: B(0, 40), group: 'shoulders' },
   { id: 'arnold-press', name: 'Arnold Press', sets: 3, reps: '8–10', weight: B(0, 30), group: 'shoulders' },
   { id: 'front-raises', name: 'Front Raises', sets: 3, reps: '12–14', weight: B(0, 12), group: 'shoulders' },
   { id: 'rear-delt-fly', name: 'Rear Delt Fly', sets: 3, reps: '12–14', weight: B(0, 10), group: 'shoulders' },
@@ -41,12 +41,12 @@ const MORE = [
   { id: 'cable-curl', name: 'Cable Curl', sets: 3, reps: '10–12', weight: B(0, 40), group: 'arms' },
   { id: 'tricep-pushdown', name: 'Tricep Pushdown', sets: 3, reps: '10–12', weight: B(0, 50), group: 'arms' },
   { id: 'skull-crushers', name: 'Skull Crushers', sets: 3, reps: '8–10', weight: B(15, 45), group: 'arms' },
-  { id: 'close-grip-bench', name: 'Close-Grip Bench Press', sets: 3, reps: '8–10', weight: B(45, 95), group: 'arms', compound: true },
+  { id: 'close-grip-bench', name: 'Close-Grip Bench Press', sets: 3, reps: '8–10', weight: B(45, 95), group: 'arms' },
   { id: 'tricep-kickbacks', name: 'Tricep Kickbacks', sets: 3, reps: '12–14', weight: B(0, 15), group: 'arms' },
   // Legs
-  { id: 'back-squat', name: 'Back Squat', sets: 3, reps: '6–8', weight: B(45, 135), group: 'legs', compound: true },
+  { id: 'back-squat', name: 'Back Squat', sets: 3, reps: '6–8', weight: B(45, 135), group: 'legs' },
   { id: 'goblet-squat', name: 'Goblet Squat', sets: 3, reps: '10–12', weight: B(0, 40), group: 'legs' },
-  { id: 'leg-press', name: 'Leg Press', sets: 3, reps: '10–12', weight: B(0, 180), group: 'legs', compound: true },
+  { id: 'leg-press', name: 'Leg Press', sets: 3, reps: '10–12', weight: B(0, 180), group: 'legs' },
   { id: 'bulgarian-split-squat', name: 'Bulgarian Split Squat', sets: 3, reps: '8–10', weight: B(0, 30), group: 'legs', perSide: true },
   { id: 'walking-lunges', name: 'Walking Lunges', sets: 3, reps: '10–12', weight: B(0, 30), group: 'legs', perSide: true },
   { id: 'step-ups', name: 'Step-Ups', sets: 3, reps: '10–12', weight: B(0, 25), group: 'legs', perSide: true },
@@ -73,23 +73,23 @@ const MORE = [
 // cable, machine, bodyweight) so most programs can be built from the bank.
 const EVEN_MORE = [
   // Chest
-  { id: 'decline-bench-press', name: 'Decline Bench Press', sets: 3, reps: '6–8', weight: B(45, 115), group: 'chest', compound: true },
+  { id: 'decline-bench-press', name: 'Decline Bench Press', sets: 3, reps: '6–8', weight: B(45, 115), group: 'chest' },
   { id: 'decline-db-press', name: 'Decline Dumbbell Press', sets: 3, reps: '8–10', weight: B(0, 50), group: 'chest' },
   { id: 'db-fly', name: 'Dumbbell Fly', sets: 3, reps: '10–12', weight: B(0, 20), group: 'chest' },
   { id: 'incline-db-fly', name: 'Incline Dumbbell Fly', sets: 3, reps: '10–12', weight: B(0, 20), group: 'chest' },
   { id: 'low-to-high-cable-fly', name: 'Low-to-High Cable Fly', sets: 3, reps: '12–14', weight: B(0, 20), group: 'chest' },
   { id: 'landmine-press', name: 'Landmine Press', sets: 3, reps: '8–10', weight: B(0, 45), group: 'chest' },
-  { id: 'smith-bench-press', name: 'Smith Machine Bench Press', sets: 3, reps: '8–10', weight: B(15, 95), group: 'chest', compound: true },
-  { id: 'smith-incline-press', name: 'Smith Machine Incline Press', sets: 3, reps: '8–10', weight: B(15, 85), group: 'chest', compound: true },
+  { id: 'smith-bench-press', name: 'Smith Machine Bench Press', sets: 3, reps: '8–10', weight: B(15, 95), group: 'chest' },
+  { id: 'smith-incline-press', name: 'Smith Machine Incline Press', sets: 3, reps: '8–10', weight: B(15, 85), group: 'chest' },
   { id: 'incline-chest-press-machine', name: 'Incline Chest Press Machine', sets: 3, reps: '10–12', weight: B(0, 80), group: 'chest' },
-  { id: 'weighted-dips', name: 'Weighted Dips', sets: 3, reps: '6–8', weight: B(0, 25), group: 'chest', compound: true },
+  { id: 'weighted-dips', name: 'Weighted Dips', sets: 3, reps: '6–8', weight: B(0, 25), group: 'chest' },
   { id: 'incline-push-ups', name: 'Incline Push-Ups', sets: 3, reps: '12–15', weight: B(0, 0, true), group: 'chest' },
   { id: 'db-pullover', name: 'Dumbbell Pullover', sets: 3, reps: '10–12', weight: B(0, 35), group: 'chest' },
   { id: 'svend-press', name: 'Svend Press', sets: 3, reps: '12–14', weight: B(0, 20), group: 'chest' },
   // Back
-  { id: 'pendlay-row', name: 'Pendlay Row', sets: 3, reps: '6–8', weight: B(45, 115), group: 'back', compound: true },
-  { id: 'rack-pull', name: 'Rack Pull', sets: 3, reps: '5–6', weight: B(45, 185), group: 'back', compound: true },
-  { id: 'trap-bar-deadlift', name: 'Trap Bar Deadlift', sets: 3, reps: '5–6', weight: B(55, 185), group: 'back', compound: true },
+  { id: 'pendlay-row', name: 'Pendlay Row', sets: 3, reps: '6–8', weight: B(45, 115), group: 'back' },
+  { id: 'rack-pull', name: 'Rack Pull', sets: 3, reps: '5–6', weight: B(45, 185), group: 'back' },
+  { id: 'trap-bar-deadlift', name: 'Trap Bar Deadlift', sets: 3, reps: '5–6', weight: B(55, 185), group: 'back' },
   { id: 'inverted-row', name: 'Inverted Row', sets: 3, reps: '8–12', weight: B(0, 0, true), group: 'back' },
   { id: 'machine-row', name: 'Machine Row', sets: 3, reps: '10–12', weight: B(0, 90), group: 'back' },
   { id: 'close-grip-pulldown', name: 'Close-Grip Lat Pulldown', sets: 3, reps: '8–10', weight: B(0, 100), group: 'back' },
@@ -103,8 +103,8 @@ const EVEN_MORE = [
   { id: 'reverse-hyper', name: 'Reverse Hyperextension', sets: 3, reps: '12–14', weight: B(0, 0, true), group: 'back' },
   // Shoulders
   { id: 'machine-shoulder-press', name: 'Machine Shoulder Press', sets: 3, reps: '10–12', weight: B(0, 60), group: 'shoulders' },
-  { id: 'seated-db-press', name: 'Seated Dumbbell Press', sets: 3, reps: '8–10', weight: B(0, 35), group: 'shoulders', compound: true },
-  { id: 'push-press', name: 'Push Press', sets: 3, reps: '5–6', weight: B(45, 75), group: 'shoulders', compound: true },
+  { id: 'seated-db-press', name: 'Seated Dumbbell Press', sets: 3, reps: '8–10', weight: B(0, 35), group: 'shoulders' },
+  { id: 'push-press', name: 'Push Press', sets: 3, reps: '5–6', weight: B(45, 75), group: 'shoulders' },
   { id: 'landmine-shoulder-press', name: 'Landmine Shoulder Press', sets: 3, reps: '8–10', weight: B(0, 35), group: 'shoulders', perSide: true },
   { id: 'cable-front-raise', name: 'Cable Front Raise', sets: 3, reps: '12–14', weight: B(0, 20), group: 'shoulders' },
   { id: 'reverse-pec-deck', name: 'Reverse Pec Deck', sets: 3, reps: '12–14', weight: B(0, 50), group: 'shoulders' },
@@ -131,13 +131,13 @@ const EVEN_MORE = [
   { id: 'wrist-curl', name: 'Wrist Curl', sets: 3, reps: '12–15', weight: B(0, 15), group: 'arms' },
   { id: 'reverse-wrist-curl', name: 'Reverse Wrist Curl', sets: 3, reps: '12–15', weight: B(0, 10), group: 'arms' },
   // Legs
-  { id: 'front-squat', name: 'Front Squat', sets: 3, reps: '6–8', weight: B(45, 95), group: 'legs', compound: true },
-  { id: 'hack-squat', name: 'Hack Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs', compound: true },
-  { id: 'smith-squat', name: 'Smith Machine Squat', sets: 3, reps: '8–10', weight: B(15, 95), group: 'legs', compound: true },
-  { id: 'box-squat', name: 'Box Squat', sets: 3, reps: '6–8', weight: B(45, 115), group: 'legs', compound: true },
-  { id: 'pendulum-squat', name: 'Pendulum Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs', compound: true },
-  { id: 'belt-squat', name: 'Belt Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs', compound: true },
-  { id: 'sumo-deadlift', name: 'Sumo Deadlift', sets: 3, reps: '5–6', weight: B(45, 155), group: 'legs', compound: true },
+  { id: 'front-squat', name: 'Front Squat', sets: 3, reps: '6–8', weight: B(45, 95), group: 'legs' },
+  { id: 'hack-squat', name: 'Hack Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs' },
+  { id: 'smith-squat', name: 'Smith Machine Squat', sets: 3, reps: '8–10', weight: B(15, 95), group: 'legs' },
+  { id: 'box-squat', name: 'Box Squat', sets: 3, reps: '6–8', weight: B(45, 115), group: 'legs' },
+  { id: 'pendulum-squat', name: 'Pendulum Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs' },
+  { id: 'belt-squat', name: 'Belt Squat', sets: 3, reps: '8–10', weight: B(0, 90), group: 'legs' },
+  { id: 'sumo-deadlift', name: 'Sumo Deadlift', sets: 3, reps: '5–6', weight: B(45, 155), group: 'legs' },
   { id: 'db-rdl', name: 'Dumbbell Romanian Deadlift', sets: 3, reps: '8–10', weight: B(0, 40), group: 'legs' },
   { id: 'reverse-lunge', name: 'Reverse Lunge', sets: 3, reps: '8–10', weight: B(0, 30), group: 'legs', perSide: true },
   { id: 'lateral-lunge', name: 'Lateral Lunge', sets: 3, reps: '8–10', weight: B(0, 20), group: 'legs', perSide: true },
@@ -181,6 +181,53 @@ const starting = GYM_ORDER.flatMap(id => workouts[id].exercises).map(x => ({ ...
 
 export const EXERCISE_BANK = [...starting, ...MORE, ...EVEN_MORE, ...MORE_EXERCISES]
 export const EXERCISE_BY_ID = Object.fromEntries(EXERCISE_BANK.map(x => [x.id, x]))
+
+// Each one's group, targets and ratings (see exerciseProfile).
+for (const x of EXERCISE_BANK) {
+  const p = PROFILE[x.id]
+  if (!p) continue
+  x.group = p.group
+  x.baseCovers = [...p.primary, ...p.secondary]
+  x.basePrimary = p.primary
+  x.baseRatings = p.ratings
+}
+
+// Exercises you've added (Settings › Exercises › +), joined to the bank
+// each time the app draws, after the built-in ones: { id, name, group,
+// covers, rating, equipment, sets, reps, weight }.
+export function applyCustomExercises(list = []) {
+  for (let i = EXERCISE_BANK.length - 1; i >= 0; i--) {
+    if (EXERCISE_BANK[i].custom) {
+      delete EXERCISE_BY_ID[EXERCISE_BANK[i].id]
+      EXERCISE_BANK.splice(i, 1)
+    }
+  }
+  for (const c of list) {
+    const x = { ...c, baseGroup: c.group, custom: true }
+    EXERCISE_BANK.push(x)
+    EXERCISE_BY_ID[x.id] = x
+  }
+}
+
+// Your changes to an exercise's muscle group, what it targets (and which of
+// those are primary) and how good it is for each of them (Settings ›
+// Exercises), laid over the bank: { [id]: { group, covers, primary, ratings } }
+// (ratings: { [muscle]: 1–3 }).
+// Called with what's saved each time the app draws, so taking one away puts
+// the bank's back.
+const BANK_GROUP = Object.fromEntries(EXERCISE_BANK.map(x => [x.id, x.group]))
+export function applyExerciseEdits(edits = {}) {
+  for (const x of EXERCISE_BANK) {
+    const e = edits[x.id]
+    x.group = e?.group ?? BANK_GROUP[x.id] ?? x.baseGroup
+    if (e?.covers) x.coversEdit = e.covers
+    else delete x.coversEdit
+    if (e?.ratings) x.ratingsEdit = e.ratings
+    else delete x.ratingsEdit
+    if (e?.primary) x.primaryEdit = e.primary
+    else delete x.primaryEdit
+  }
+}
 
 // Which plans each exercise fits — what the plan is for, nothing else. An
 // exercise can fit more than one plan when it trains what each is for (hip
@@ -240,7 +287,7 @@ FITS.fullGym = [...new Set([PUSH, QUAD, PULL, POST].flatMap(k => FITS[k]))]
 
 // The second bank (moreExercises.js) isn't listed above: those fit a plan
 // when what they mainly work is one of the plan's areas.
-const fitsByArea = (exercise, planId) => !!exercise.covers?.length && (PLAN_AREAS[planId] ?? []).some(([id]) => id === exercise.covers[0])
+const fitsByArea = (exercise, planId) => !!exercise.covers?.length && (PLAN_AREAS[planId] ?? []).some(([id]) => primaryOf(exercise).includes(id))
 const inPlans = exercise => FITS.fullGym.includes(exercise.id) || (!isCore(exercise) && !!exercise.covers)
 
 // Whether an exercise belongs in a plan's main list, or in its Core section.
@@ -263,9 +310,9 @@ export const DEFAULT_CORE = {
   legsQuad: ['plank', 'dead-bugs', 'side-plank'],
   pull: ['hanging-leg-raises', 'pallof-press'],
   legsPost: ['woodchoppers', 'ab-wheel'],
-  fullGym: ['plank', 'pallof-press'],
-  fullHomeDb: ['plank', 'russian-twists'],
-  fullHome: ['plank', 'side-plank'],
+  fullGym: ['hanging-leg-raises', 'woodchoppers'],
+  fullHomeDb: ['bicycle-crunch'],
+  fullHome: ['bicycle-crunch'],
 }
 
 // Which plans start with their Core section on: the ones that had core work.
@@ -300,7 +347,26 @@ const OKAY = {
 }
 
 // 3, 2 or 1 for an exercise in a plan (pass 'core' for the Core section).
+// How good an exercise is for one muscle (1–3): what you gave it, or,
+// for a primary you haven't rated, its best rating in any plan; a secondary
+// you haven't rated isn't counted (0).
+export function ratingOn(exercise, muscle) {
+  const r = ratingsOf(exercise)[muscle]
+  if (r) return r
+  return primaryOf(exercise).includes(muscle) ? Math.max(...RATED_PLANS.map(p => ratingFor(exercise, p))) : 0
+}
+const RATED_PLANS = ['push', 'legsQuad', 'pull', 'legsPost', 'core']
+
+// Its rating for each muscle: the bank's, with yours over them.
+export const ratingsOf = exercise => ({ ...exercise.baseRatings, ...exercise.ratingsEdit })
+
+// How good it is for a plan: its best primary's rating. Without ratings (one
+// of yours you haven't rated), what it was given, else the plan's lists.
 export function ratingFor(exercise, planId) {
+  const r = ratingsOf(exercise)
+  const mine = primaryOf(exercise).map(m => r[m]).filter(Boolean)
+  if (mine.length) return Math.max(...mine)
+  if (exercise.rating) return exercise.rating
   if (BEST[planId]?.includes(exercise.id)) return 3
   if (OKAY[planId]?.includes(exercise.id)) return 1
   return 2
@@ -384,13 +450,20 @@ const COVERS = {
 }
 
 export function coversOf(exercise) {
-  return COVERS[exercise.id] ?? exercise.covers ?? []
+  return exercise.coversEdit ?? exercise.baseCovers ?? COVERS[exercise.id] ?? exercise.covers ?? []
 }
 
-// Each of a list's areas, and whether one of its exercises covers it.
-// `section` is the plan id, or 'core' for the Core section.
+// The muscles an exercise mainly works: yours if you've set them, else the
+// first it covers.
+export function primaryOf(exercise) {
+  return exercise.primaryEdit ?? exercise.basePrimary ?? coversOf(exercise).slice(0, 1)
+}
+
+// Each of a list's areas, and whether one of its exercises mainly works it
+// (a primary; a secondary doesn't count). `section` is the plan id, or
+// 'core' for the Core section.
 export function coverage(list, section) {
-  const covered = new Set(list.flatMap(coversOf))
+  const covered = new Set(list.flatMap(primaryOf))
   return (PLAN_AREAS[section] ?? []).map(([id, label]) => ({ id, label, covered: covered.has(id) }))
 }
 

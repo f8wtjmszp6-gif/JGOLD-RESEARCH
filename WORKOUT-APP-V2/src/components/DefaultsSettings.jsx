@@ -20,7 +20,6 @@ export function DefaultsSettings({ store }) {
 
   return (
     <>
-      <p className="px-1 text-xs text-stone-500 leading-relaxed">To change one, open it and pick Every week.</p>
       {GROUPS.map(([title, rows]) => (
         <div key={title} className="space-y-1">
           <p className="px-1 pt-1 text-xs text-stone-400 uppercase tracking-wider font-medium">{title}</p>

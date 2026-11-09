@@ -1,10 +1,8 @@
 import { useState } from 'react'
-import { fmtClock } from '../../hooks/timing'
 import { BAR_MIN, BAR_MAX, BAR_STEP } from '../../data/workout'
 import { openDemo } from '../../data/howto'
-import { fmt, stepTo, loadSummary } from '../../utils/format'
+import { fmt, fmtSecs, secsParts, stepTo, loadSummary } from '../../utils/format'
 import { GearIcon, InfoIcon, CheckIcon, ClockIcon, Chevron, CloseButton } from '../ui/glyphs'
-import { MoreMenu } from '../ui/MoreMenu'
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
@@ -67,8 +65,8 @@ function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
           onClick={() => { setDraft(String(value)); setEditing(true) }}
           className="flex-1 text-center active:opacity-60"
         >
-          <span className="text-base font-bold text-stone-900">{value}</span>
-          <span className="text-xs font-medium text-stone-400">{hold ? 's' : ' reps'}</span>
+          <span className="text-base font-bold text-stone-900">{hold ? secsParts(value)[0] : value}</span>
+          <span className="text-xs font-medium text-stone-400">{hold ? secsParts(value)[1] : ' reps'}</span>
         </button>
       )}
 
@@ -138,9 +136,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
         <DragHandle name={exercise.name} {...grip} />
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-stone-900 truncate">{exercise.name}</span>
-            {/* The tag goes by what's been done, where it's never cut off. */}
-            <span className={`block text-sm ${assist ? 'text-stone-400' : 'text-stone-600'}`}>{summary}{tag}</span>
+            <span className="block font-semibold text-stone-900 leading-snug">{exercise.name}{tag}</span>
           </span>
           <span className="flex gap-1 shrink-0" role="img" aria-label={`${log.all.filter(x => x.done).length} of ${log.all.length} sets done`}>
             {log.all.map((x, i) => (
@@ -154,26 +150,14 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
   }
 
   if (!open) {
-    // With a split, each weight is followed by its sets: "105 lbs · 6, 6 · 95 lbs · 8".
-    const done = hold && !log.parts.length
-      ? `${log.sets.length} × ${log.sets[0]?.reps ?? 0}s`
-      : [{ weight: log.weight, sets: log.sets }, ...log.parts]
-        .filter(p => p.sets.length)
-        .map(p => `${p.weight > 0 || log.parts.length ? `${fmt(p.weight)} lbs · ` : ''}${p.sets.map(x => `${x.reps}${hold ? 's' : ''}`).join(', ')}`)
-        .join(' · ')
+    // Done: its name and every dot filled, like an unfinished row.
     return (
       <div className="flex items-center rounded-2xl bg-accent-50 border border-accent-200">
         <DragHandle name={exercise.name} {...grip} />
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
-          <span className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </span>
-          {/* Name above what was done, like an unfinished row, so long names fit. */}
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-accent-600 leading-snug">{exercise.name}{tag}</span>
-            <span className="block text-sm text-stone-500">{done}</span>
+          <span className="min-w-0 flex-1 block font-semibold text-accent-600 leading-snug">{exercise.name}{tag}</span>
+          <span className="flex gap-1 shrink-0" role="img" aria-label={`All ${log.all.length} sets done`}>
+            {log.all.map((_, i) => <span key={i} className="w-2 h-2 rounded-full bg-accent-500" />)}
           </span>
           <Chevron />
         </button>
@@ -186,38 +170,34 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
     <div className={`rounded-2xl p-4 transition-all ${
       allDone ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
-      {/* Name + actions */}
-      <div className="flex items-start justify-between gap-2">
-        <button onClick={onClose} className="min-w-0 text-left active:opacity-70">
+      {/* Name with its buttons; under it the weight, per side and rest. */}
+      <div className="flex items-center gap-2">
+        <button onClick={onClose} className="flex-1 min-w-0 text-left active:opacity-70">
           <p className={`font-semibold leading-tight ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
-            {setup.perSide && <span className="text-stone-400 font-normal text-sm ml-1">(per side)</span>}
             {tag}
           </p>
-          <p className={`mt-1 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
-            {summary}
-          </p>
         </button>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* How-to, settings and ticking every set live in •••. */}
-          <MoreMenu
-            label={exercise.name}
-            size="w-10 h-10 rounded-xl"
-            items={[
-              { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => openDemo(exercise.name, 'exercise') },
-              { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
-              allDone
-                ? { label: 'Untick all sets', icon: <CheckIcon />, onClick: () => store.toggleExercise(workoutId, exercise) }
-                : { label: 'Mark all sets done', icon: <CheckIcon />, onClick: () => { store.toggleExercise(workoutId, exercise); onClose() } },
-            ].filter(Boolean)}
-          />
-          <CloseButton label={exercise.name} onClick={onClose} />
+        {/* How-to, settings and ticking every set, then collapse. */}
+        <div className="flex items-center gap-1 shrink-0">
+          <IconBtn label={`How to do ${exercise.name}`} onClick={() => openDemo(exercise.name, 'exercise')}><InfoIcon size={14} /></IconBtn>
+          <IconBtn label={`${exercise.name} settings`} onClick={() => setShowSettings(true)}><GearIcon size={14} /></IconBtn>
+          <IconBtn
+            label={allDone ? 'Untick all sets' : 'Mark all sets done'}
+            on={allDone}
+            onClick={() => { store.toggleExercise(workoutId, exercise); if (!allDone) onClose() }}
+          >
+            <CheckIcon size={14} />
+          </IconBtn>
+          <CloseButton small label={exercise.name} onClick={onClose} />
         </div>
       </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <p className={`min-w-0 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
+          {[summary, setup.perSide && 'Per side', setup.restOn && `Rest ${fmtSecs(setup.rest)}`].filter(Boolean).join(' · ')}
+        </p>
+      </div>
 
-      {setup.restOn && (
-        <span className="inline-block mt-1.5 text-xs font-medium text-accent-600 bg-accent-50 px-1.5 py-0.5 rounded-md">Rest {fmtClock(setup.rest * 1000)}</span>
-      )}
 
       {/* Sets */}
       <div className="mt-2.5 space-y-1.5">
@@ -296,7 +276,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
                   value={setup.rest}
                   step={15}
                   min={15}
-                  format={s => fmtClock(s * 1000)}
+                  seconds
                   onChange={rest => store.setSetup(exercise, { rest })}
                 />
               </div>
@@ -444,5 +424,15 @@ function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight,
         </div>
       </div>
     </div>
+  )
+}
+
+// A small square icon button for the open card's header.
+function IconBtn({ label, on, onClick, children }) {
+  return (
+    <button onClick={onClick} aria-label={label}
+      className={`w-7 h-7 rounded-md flex items-center justify-center active:bg-stone-200 transition-colors ${on ? 'bg-accent-100 text-accent-600' : 'bg-stone-100 text-stone-500'}`}>
+      {children}
+    </button>
   )
 }

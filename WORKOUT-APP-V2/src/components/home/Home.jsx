@@ -7,6 +7,7 @@ import { LogClassSheet, AddCardioSheet, AddStretchSheet } from './logSheets'
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { BuildCard, BuildSheet } from './buildWorkout'
+import { FullBodyCard, FullBodySheet } from './fullBody'
 import { LineMenu } from './lineMenu'
 import { upNextOf } from '../../utils/upNext'
 
@@ -29,9 +30,43 @@ function savedTab() {
 // saved before weeks kept their details: then `entry` has its totals only.
 // `dayFocus`: { day } from the calendar, to start with that day open (App
 // remounts Home for each pick).
+// On Gym, a switch in the header picks the weekly plans or your own
+// workouts (Build a Workout, classes); remembered like the tab.
+const GYM_KEY = 'workout-v2-gym-view'
+function savedGymView() {
+  try {
+    return sessionStorage.getItem(GYM_KEY) === 'custom' ? 'custom' : 'plans'
+  } catch {
+    return 'plans'
+  }
+}
+
 export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, dayFocus }) {
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
+  const [gymView, setGymViewState] = useState(savedGymView)
+  function setGymView(v) {
+    setGymViewState(v)
+    try {
+      sessionStorage.setItem(GYM_KEY, v)
+    } catch {
+      // Private browsing: it just isn't remembered.
+    }
+  }
+  const gymSwitch = (
+    <div className="flex shrink-0 rounded-full bg-stone-200/70 p-[3px]">
+      {[['plans', 'Plans'], ['custom', 'Custom']].map(([v, name]) => (
+        <button
+          key={v}
+          onClick={() => setGymView(v)}
+          aria-pressed={gymView === v}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${gymView === v ? 'bg-stone-900 text-white' : 'text-stone-500 active:text-stone-700'}`}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  )
   // The day tapped on the strip, shown in the bar under it: today to start.
   // Changing weeks keeps the weekday, but not past today.
   const [picked, setPicked] = useState(dayFocus?.day ?? new Date().getDay())
@@ -127,7 +162,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
 
       <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
         {tab === 'gym' && <>
-          <Section title="Workout plans" note="Each plan can be completed once a week">
+          {gymView === 'plans' ? <Section title="Workout plans" note="Each plan can be completed once a week" aside={gymSwitch}>
             {/* Under way first, then up next; complete ones last. */}
             {[...GYM_ORDER].sort((a, b) => rank(a) - rank(b)).map(id => (
               <WorkoutCard
@@ -141,14 +176,15 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
                 onOpen={() => onOpenWorkout(id)}
               />
             ))}
-          </Section>
-
-          {/* Any day, as often as you like: a workout built from full body or
-              just the areas you pick, at the gym or at home, and classes. */}
-          <Section title="More workouts">
-            <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
-            <ClassCard activity={byId('class')} onAdd={() => open('class')} />
-          </Section>
+          </Section> : (
+            // Any day, as often as you like: a workout built from full body
+            // or just the areas you pick, at the gym or at home, and classes.
+            <Section title="Custom workouts" note="Any day, as often as you like" aside={gymSwitch}>
+              <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('fullBody'))} />
+              <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
+              <ClassCard activity={byId('class')} onAdd={() => open('class')} />
+            </Section>
+          )}
         </>}
 
         {tab === 'cardio' && (
@@ -174,6 +210,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       {sheet?.type === 'other' && <AddCardioSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'fullBody' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'full' && <BuildSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'menu' && <LineMenu store={store} item={sheet.edit} onEdit={item => open(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={onOpenWorkout} onClose={close} />}
@@ -236,11 +273,17 @@ const OTHER_CARDIO = {
 }
 
 // `note`: a short grey line under the title.
-function Section({ title, note, children }) {
+// `aside`: goes at the right of the title and note.
+function Section({ title, note, aside, children }) {
   return (
     <section className="mb-6">
-      <p className={`text-xs text-stone-400 uppercase tracking-wider font-medium px-1 ${note ? 'mb-0.5' : 'mb-2'}`}>{title}</p>
-      {note && <p className="text-xs text-stone-400 mb-2 px-1">{note}</p>}
+      <div className="flex items-center gap-3 px-1 mb-2">
+        <div className="flex-1 min-w-0">
+          <p className={`text-xs text-stone-400 uppercase tracking-wider font-medium ${note ? 'mb-0.5' : ''}`}>{title}</p>
+          {note && <p className="text-xs text-stone-400">{note}</p>}
+        </div>
+        {aside}
+      </div>
       <div className="space-y-2.5">{children}</div>
     </section>
   )

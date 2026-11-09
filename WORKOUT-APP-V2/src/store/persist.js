@@ -1,4 +1,4 @@
-import { workouts } from '../data/workout'
+import { workouts, FULL_BODY } from '../data/workout'
 
 // Loading and saving the app's state on this device, and bringing older saves
 // up to date.
@@ -17,7 +17,20 @@ export function migrate(s) {
     }
   }
   const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
-  return toSundayWeeks(next)
+  return freshFullBody(toSundayWeeks(next))
+}
+
+// Full-body days used to keep no lists of their own; any left over from
+// then go, once, so they start from their new defaults (and from now on
+// keep what you change for every time).
+function freshFullBody(s) {
+  if (s.fullBodyLists) return s
+  const next = { ...s, fullBodyLists: true }
+  for (const key of ['order', 'coreLists', 'coreOn', 'stretchLists']) {
+    if (!s[key]) continue
+    next[key] = Object.fromEntries(Object.entries(s[key]).filter(([id]) => !FULL_BODY.some(p => p.id === id)))
+  }
+  return next
 }
 
 // Weeks used to run Monday to Sunday and were filed under their Monday; now

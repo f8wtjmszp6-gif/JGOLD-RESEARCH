@@ -3,6 +3,11 @@
 // 12 → "12", 2.5 → "2.5", 1/3 → "0.33"
 export const fmt = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
 
+// A timer's length: seconds under a minute, minutes from 60 on.
+// 45 → ["45", "s"], 90 → ["1:30", ""]; fmtSecs joins them: "45s", "1:30".
+export const secsParts = s => (s < 60 ? [fmt(s), 's'] : [`${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`, ''])
+export const fmtSecs = s => secsParts(s).join('')
+
 // − / + move to the next round number: 5s on a barbell, 2.5s otherwise.
 export const stepTo = (v, step, dir) => Math.max(0, (dir > 0 ? Math.floor(v / step + 1e-9) + 1 : Math.ceil(v / step - 1e-9) - 1) * step)
 

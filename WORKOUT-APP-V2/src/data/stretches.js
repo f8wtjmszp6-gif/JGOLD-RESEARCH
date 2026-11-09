@@ -1,5 +1,6 @@
-import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID, FULL_BODY_BY_ID, TARGETED } from './workout'
+import { workouts, STRETCH_ROUTINE, COOL_DOWNS, COOL_DOWN_BY_ID } from './workout'
 import { MORE_STRETCHES } from './moreStretches'
+import { STRETCH_MUSCLES } from './stretchProfile'
 
 const S = (id, name, duration, perSide, area) => ({ id, name, duration, perSide, area })
 
@@ -97,6 +98,36 @@ const MORE = [
 
 export const STRETCH_BANK = [...ORIGINAL, ...MORE, ...MORE_STRETCHES]
 export const STRETCH_BY_ID = Object.fromEntries(STRETCH_BANK.map(x => [x.id, x]))
+// The muscles each reaches, the one it stretches most first (see
+// stretchProfile).
+for (const x of STRETCH_BANK) x.muscles = x.baseMuscles = STRETCH_MUSCLES[x.id] ?? []
+
+// Your own stretches, added to the bank: { id, name, area, muscles,
+// duration, perSide }. Called with what's saved each time the app draws.
+export function applyCustomStretches(list = []) {
+  for (let i = STRETCH_BANK.length - 1; i >= 0; i--) {
+    if (STRETCH_BANK[i].custom) {
+      delete STRETCH_BY_ID[STRETCH_BANK[i].id]
+      STRETCH_BANK.splice(i, 1)
+    }
+  }
+  for (const c of list) {
+    const x = { ...c, baseArea: c.area, baseMuscles: c.muscles ?? [], custom: true }
+    STRETCH_BANK.push(x)
+    STRETCH_BY_ID[x.id] = x
+  }
+}
+
+// Your changes to a stretch's area and the muscles it reaches, laid over
+// the bank: { [id]: { area, muscles } }.
+const BANK_AREA = Object.fromEntries(STRETCH_BANK.map(x => [x.id, x.area]))
+export function applyStretchEdits(edits = {}) {
+  for (const x of STRETCH_BANK) {
+    const e = edits[x.id]
+    x.area = e?.area ?? BANK_AREA[x.id] ?? x.baseArea
+    x.muscles = e?.muscles ?? x.baseMuscles
+  }
+}
 
 // A list's starting stretches: each gym workout's own, a cool-down's, or the
 // Full Body Stretch.
@@ -121,59 +152,35 @@ export const SUGGESTED_AREAS = {
   coolRow: ['back', 'legs', 'hips'],
 }
 
-// Which stretches fit each plan — the muscles it trains, nothing else. The
-// Full Body Stretch, the cool-downs and the full-body days take any stretch.
-const STRETCH_FITS = {
-  // Chest, front and side shoulders, triceps, upper traps and neck
-  push: ['chin-to-chest', 'scalene-stretch', 'neck-extension', 'shoulder-rolls', 'floor-pec', 'reverse-prayer',
-    'wall-angels', 'cow-face-arms', 'overhead-reach', 'tricep-wall', 'doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'puppy-pose', 'sleeper-stretch',
-    'overhead-tricep-stretch', 'upper-trap', 'levator-scapulae', 'lateral-neck-tilts', 'neck-rotations', 'chin-tucks'],
-  // Hip flexors, quads, glutes, inner and outer thighs
-  legsQuad: ['standing-figure-4', 'adductor-rock-back', 'low-lunge-twist', 'cow-face-legs', 'outer-hip-cross',
-    'heel-sit', 'spiderman-lunge', 'hip-flexor', 'couch-stretch', 'lunge-hip-flexor', 'quad-stretch', 'kneeling-quad', 'side-lying-quad',
-    'figure-4', 'pigeon-pose', '90-90', 'seated-glute', 'lizard-pose', 'butterfly', 'frog-stretch', 'side-lunge',
-    'happy-baby', 'deep-squat-hold', 'worlds-greatest'],
-  // Lats, upper and mid back, traps, rear shoulders, biceps, forearms
-  pull: ['open-book', 'upper-back-hug', 'side-childs-pose', 'doorway-lat', 'eagle-arms', 'finger-stretch',
-    'thumb-stretch', 'forearm-wall', 'shoulder-rolls', 'lat-stretch', 'childs-pose', 'puppy-pose', 'thread-the-needle', 'cross-body-shoulder', 'cat-cow',
-    'spinal-twist', 'seated-twist', 'bicep-wall', 'wrist-flexor', 'wrist-extensor', 'prayer-wrist',
-    'levator-scapulae', 'upper-trap', 'downward-dog'],
-  // Hamstrings, glutes, lower back, calves and feet
-  legsPost: ['half-split', 'doorway-hamstring', 'ragdoll', 'knee-drops', 'standing-figure-4', 'kneeling-shin',
-    'walking-dog', 'towel-calf', 'hamstring-stretch', 'standing-hamstring', 'seated-forward-fold', 'standing-forward-fold', 'pyramid-pose',
-    'wide-leg-fold', 'pigeon-pose', 'figure-4', 'seated-glute', 'happy-baby', 'knees-to-chest', 'childs-pose',
-    'cat-cow', 'spinal-twist', 'wall-calf-stretch', 'bent-knee-calf', 'step-calf-drop', 'downward-dog',
-    'plantar-fascia', 'ankle-circles'],
-}
-
-export function stretchFits(stretch, listId) {
-  return listId === STRETCH_ROUTINE.id || listId === TARGETED.id || !!COOL_DOWN_BY_ID[listId] || !!FULL_BODY_BY_ID[listId] || !!STRETCH_FITS[listId]?.includes(stretch.id)
-}
-
-// How well a stretch suits a list: 3 best, 2 good (anything not listed), 1
-// okay. For the plans, how directly it stretches what that plan trained; for
-// the Full Body Stretch, how much of the body it reaches.
+// How well a stretch suits a list with no muscles of its own to go by (the
+// Full Body Stretch, a cool-down): 3 best, 2 good (anything not listed), 1
+// okay. For the Full Body Stretch, how much of the body it reaches.
 const STRETCH_BEST = {
-  push: ['doorway-pec', 'wall-pec', 'behind-back-clasp', 'cross-body-shoulder', 'overhead-tricep-stretch'],
-  legsQuad: ['hip-flexor', 'couch-stretch', 'quad-stretch', 'kneeling-quad', 'figure-4', 'pigeon-pose', '90-90', 'butterfly'],
-  pull: ['lat-stretch', 'childs-pose', 'thread-the-needle', 'cross-body-shoulder', 'bicep-wall'],
-  legsPost: ['hamstring-stretch', 'standing-hamstring', 'pyramid-pose', 'pigeon-pose', 'figure-4', 'knees-to-chest',
-    'wall-calf-stretch', 'bent-knee-calf', 'step-calf-drop'],
   routine: ['worlds-greatest', 'downward-dog', 'sun-salutation', 'inchworm', 'cat-cow', 'hip-flexor', 'pigeon-pose',
     'hamstring-stretch', 'childs-pose', 'spinal-twist', 'doorway-pec', 'deep-squat-hold'],
   // A cool-down's best are its starting stretches.
   ...Object.fromEntries(COOL_DOWNS.map(c => [c.id, c.stretches])),
 }
 const STRETCH_OKAY = {
-  push: ['sleeper-stretch', 'neck-rotations', 'chin-tucks', 'lateral-neck-tilts', 'puppy-pose'],
-  legsQuad: ['happy-baby', 'deep-squat-hold', 'worlds-greatest', 'frog-stretch'],
-  pull: ['cat-cow', 'spinal-twist', 'seated-twist', 'prayer-wrist', 'downward-dog', 'upper-trap'],
-  legsPost: ['plantar-fascia', 'ankle-circles', 'happy-baby', 'wide-leg-fold', 'standing-forward-fold', 'cat-cow'],
   routine: ['ankle-circles', 'plantar-fascia', 'prayer-wrist', 'wrist-extensor', 'wrist-flexor', 'neck-rotations', 'sleeper-stretch'],
 }
 
-export function stretchRating(stretch, listId) {
+function listRating(stretch, listId) {
   if (STRETCH_BEST[listId]?.includes(stretch.id)) return 3
   if (STRETCH_OKAY[listId]?.includes(stretch.id)) return 1
   return 2
+}
+
+// What a list's stretches are for: the muscles its exercises mainly work
+// (`trained`, a Set). A stretch for the muscle it reaches most is
+// Recommended (3), one that reaches it at all Also stretches (2), and one
+// for the areas the list suggests that reaches none Less directly (1);
+// anything else doesn't fit. Without exercises (the Full Body Stretch, a
+// cool-down), every stretch fits, rated from its lists.
+export function stretchRating(stretch, listId, trained) {
+  if (!trained?.size) return listRating(stretch, listId)
+  const m = stretch.muscles ?? []
+  if (trained.has(m[0])) return 3
+  if (m.some(x => trained.has(x))) return 2
+  return (SUGGESTED_AREAS[listId] ?? []).includes(stretch.area) ? 1 : 0
 }

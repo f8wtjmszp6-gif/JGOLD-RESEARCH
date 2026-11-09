@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { fmtClock } from '../../hooks/timing'
 import { openDemo } from '../../data/howto'
 import { StretchPicker } from './pickers'
 import { AddRow } from './coverage'
@@ -158,7 +157,7 @@ function StretchCard({ stretch, tag, grip, checked, onToggle, onTimer, customDur
             step={5}
             min={5}
             editable
-            suffix="s"
+            seconds
             onChange={onDurationChange}
           />
           <StepperRow
@@ -176,7 +175,7 @@ function StretchCard({ stretch, tag, grip, checked, onToggle, onTimer, customDur
               value={rest}
               step={5}
               min={5}
-              format={s => fmtClock(s * 1000)}
+              seconds
               onChange={onRestChange}
             />
           )}
