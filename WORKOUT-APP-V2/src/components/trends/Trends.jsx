@@ -61,13 +61,10 @@ export default function TrendsScreen({ store, onBack }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 pt-6 pb-4 bg-stone-50 shrink-0">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-accent-500 mb-4 active:opacity-70">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          <span className="text-sm font-medium">Today</span>
-        </button>
-        <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Trends</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Trends</h1>
+          <button onClick={onBack} className="text-accent-500 text-sm font-semibold active:opacity-70">Done</button>
+        </div>
         <p className="text-stone-400 text-sm mt-1">Updates as you go, this week included</p>
       </div>
       <Trends store={store} />
@@ -119,28 +116,28 @@ function Trends({ store }) {
           </button>
         ))}
       </div>
-      {/* On Strength, the plan tiles and the area tabs stay put too. */}
-      {view === 'strength' && <>
-        <Balance weeks={weeks} />
-        <div className="bg-stone-100 rounded-xl p-1 grid mb-3" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTabId(t.id)}
-              aria-label={t.name}
-              className={`py-1.5 rounded-lg text-[11px] font-semibold truncate transition-colors ${
-                tab.id === t.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </>}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
       {view === 'strength' ? <>
+        {/* The plan tiles scroll away; the area tabs stick at the top. */}
+        <Balance weeks={weeks} />
+        <div className="sticky top-0 z-10 bg-stone-50 pb-3">
+          <div className="bg-stone-100 rounded-xl p-1 grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTabId(t.id)}
+                aria-label={t.name}
+                className={`py-1.5 rounded-lg text-[11px] font-semibold truncate transition-colors ${
+                  tab.id === t.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {/* One exercise per row. */}
         {shown.length === 0 && (
           <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you tick them.</p>
