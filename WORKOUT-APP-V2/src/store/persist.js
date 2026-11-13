@@ -1,4 +1,5 @@
-import { workouts, FULL_BODY } from '../data/workout'
+import { workouts, FULL_BODY, GYM_ORDER, STRETCH_ROUTINE, COOL_DOWNS } from '../data/workout'
+import { EXERCISE_BY_ID, DEFAULT_CORE } from '../data/exercises'
 
 // Loading and saving the app's state on this device, and bringing older saves
 // up to date.
@@ -17,7 +18,81 @@ export function migrate(s) {
     }
   }
   const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
-  return freshFullBody(toSundayWeeks(next))
+  return freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next)))))
+}
+
+// The four gym plans used to keep core in a Core section of its own (on or
+// off); now it's part of the main list. Once, each plan's saved lists (every
+// week's, this week's own, and each past week's) become one list: the main
+// list, then Core if it was on.
+const OLD_CORE = { push: [], legsQuad: ['plank', 'dead-bugs', 'side-plank'], pull: ['hanging-leg-raises', 'pallof-press'], legsPost: ['woodchoppers', 'ab-wheel'] }
+const OLD_CORE_ON = { push: false, legsQuad: true, pull: true, legsPost: true }
+const OLD_KEYS = ['order', 'coreLists', 'coreOn']
+function mergeCore(s) {
+  return s.coreMerged ? s : mergeCoreOf(s, GYM_ORDER, OLD_CORE, OLD_CORE_ON, 'coreMerged')
+}
+
+// The full-body days did the same later: their Core section (on unless
+// switched off) joins the end of the main list, once.
+function mergeFullBodyCore(s) {
+  return s.fullBodyCoreMerged ? s : mergeCoreOf(s, FULL_BODY.map(p => p.id), DEFAULT_CORE, Object.fromEntries(FULL_BODY.map(p => [p.id, true])), 'fullBodyCoreMerged')
+}
+
+function mergeCoreOf(s, plans, OLD_CORE, OLD_CORE_ON, flag) {
+  const groupOf = id => EXERCISE_BY_ID[id]?.group ?? s.customExercises?.find(c => c.id === id)?.group
+  const isCore = id => groupOf(id) === 'core'
+  // One plan's merged list, read from `get(key)` as the app used to.
+  const merged = (id, get) => {
+    const order = get('order')
+    const main = (order ?? workouts[id].exercises.map(e => e.id)).filter(x => !isCore(x))
+    const core = get('coreLists') ?? (order?.some(isCore) ? order.filter(isCore) : OLD_CORE[id])
+    const on = get('coreOn') ?? OLD_CORE_ON[id]
+    return [...main, ...(on ? core.filter(isCore) : [])]
+  }
+  const without = (map, id) => (map ? Object.fromEntries(Object.entries(map).filter(([x]) => x !== id)) : map)
+  // A saved state (or a past week's): every week's lists, then this week's own.
+  const level = x => {
+    let next = { ...x }
+    for (const id of plans) {
+      const own = OLD_KEYS.some(k => x.weekOnly?.[k]?.[id] !== undefined)
+      // With a week of its own, every week's is kept as it was too, so the
+      // new starting lists don't show up as taken out this week.
+      if (own || OLD_KEYS.some(k => x[k]?.[id] !== undefined)) {
+        next.order = { ...next.order, [id]: merged(id, k => x[k]?.[id]) }
+      }
+      if (own) {
+        const week = merged(id, k => x.weekOnly?.[k]?.[id] ?? x[k]?.[id])
+        next.weekOnly = { ...next.weekOnly, order: { ...next.weekOnly.order, [id]: week } }
+        next.weekOnly.coreLists = without(next.weekOnly.coreLists, id)
+        next.weekOnly.coreOn = without(next.weekOnly.coreOn, id)
+      }
+      next.coreLists = without(next.coreLists, id)
+      next.coreOn = without(next.coreOn, id)
+    }
+    return next
+  }
+  return {
+    ...level(s),
+    [flag]: true,
+    ...(s.history && { history: s.history.map(e => (e.details ? { ...e, details: level(e.details) } : e)) }),
+  }
+}
+
+// The gym and Full Body plans' starting stretches changed to cover what
+// each plan now works (one stretch per muscle, or per muscle group for Full
+// Body), the Full Body Stretch's to cover every muscle, and each
+// cool-down's to five. Once, their saved stretch lists (every week's and this week's own)
+// go, so they start from the new ones.
+function freshStretches(s) {
+  if (s.stretchDefaults6) return s
+  const plans = [...GYM_ORDER, ...FULL_BODY.map(p => p.id), STRETCH_ROUTINE.id, ...COOL_DOWNS.map(c => c.id)]
+  const drop = map => (map ? Object.fromEntries(Object.entries(map).filter(([id]) => !plans.includes(id))) : map)
+  return {
+    ...s,
+    stretchDefaults6: true,
+    ...(s.stretchLists && { stretchLists: drop(s.stretchLists) }),
+    ...(s.weekOnly?.stretchLists && { weekOnly: { ...s.weekOnly, stretchLists: drop(s.weekOnly.stretchLists) } }),
+  }
 }
 
 // Full-body days used to keep no lists of their own; any left over from

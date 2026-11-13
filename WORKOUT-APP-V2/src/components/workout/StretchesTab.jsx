@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { openDemo } from '../../data/howto'
 import { StretchPicker } from './pickers'
-import { AddRow } from './coverage'
+import { AddRow, CoveragePill } from './coverage'
+import { stretchAreas } from '../../utils/stretchCoverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
-import { GearIcon, InfoIcon, ClockIcon } from '../ui/glyphs'
-import { MoreMenu } from '../ui/MoreMenu'
+import { GearIcon, InfoIcon, ClockIcon, Chevron } from '../ui/glyphs'
+import { fmtSecs } from '../../utils/format'
+import { SetRow } from './ExerciseCard'
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
@@ -13,6 +15,7 @@ import { useScope } from '../../hooks/useScope'
 import { WeekTag, OffRow } from './weekDiff'
 import { SlotRows } from './slots'
 import { STRETCH_BY_ID } from '../../data/stretches'
+import { StretchPage } from '../StretchBank'
 
 // Seconds → "6m 30s" / "6m" / "45s"
 function fmtDuration(totalSeconds) {
@@ -34,11 +37,19 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
   const [ask, scopeSheet] = useScope(store, workout.id)
   const listRef = useRef(null)
   const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
+  // One open at a time; open, just it and the ones either side, greyed.
+  const [openId, setOpenId] = useState(null)
+  const openStretch = list.some(x => x.id === openId) ? openId : null
+  const at = list.findIndex(x => x.id === openStretch)
+  const shown = openStretch ? list.slice(Math.max(0, at - 1), at + 2) : list
+  const areas = stretchAreas(store, workout.id, list)
+  const doneCount = list.filter(x => store.getStretchDone(workout.id, x.id)).length
+  const holdsOf = x => store.getStretchSets(x.id, x.sets) * (store.getPerSide(x.id, x.perSide) ? 2 : 1)
   const totalStretchSeconds = list.reduce(
     (sum, s) => {
-      const sets = store.getStretchSets(s.id)
+      const sets = store.getStretchSets(s.id, s.sets)
       const hold = store.getCustomDuration(s.id, s.duration) * (store.getPerSide(s.id, s.perSide) ? 2 : 1)
-      return sum + hold * sets + store.getStretchRest(s.id) * (sets - 1)
+      return sum + hold * sets + store.getStretchRest(s.id, s.rest) * (sets - 1)
     },
     0,
   )
@@ -53,40 +64,62 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
         <span className="text-accent-600 font-bold">{fmtDuration(totalStretchSeconds)}</span>
       </div>
 
-      <div ref={listRef} className="space-y-2">
-      {list.map(stretch => (
-        <div key={stretch.id} data-row={stretch.id} style={drag.style(stretch.id)} className={drag.dragging === stretch.id ? 'rounded-2xl shadow-lg' : ''}>
-        <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => ask(`Remove ${stretch.name}?`, scope => store.removeStretch(workout.id, stretch.id, scope)) : null}>
-        <StretchCard
-          stretch={stretch}
-          tag={diff?.stretches.added.includes(stretch.id) && <WeekTag repeat={repeat} />}
-          grip={drag.handlers(stretch.id)}
-          checked={store.getStretchDone(workout.id, stretch.id)}
-          onToggle={() => store.toggleStretch(workout.id, stretch.id)}
-          customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
-          onDurationChange={s => store.setCustomDuration(stretch.id, s)}
-          perSide={store.getPerSide(stretch.id, stretch.perSide)}
-          onPerSideChange={v => store.setPerSide(stretch.id, v)}
-          sets={store.getStretchSets(stretch.id)}
-          onSetsChange={n => store.setStretchSets(stretch.id, n)}
-          rest={store.getStretchRest(stretch.id)}
-          onRestChange={n => store.setStretchRest(stretch.id, n)}
-          onTimer={() => onTimer({
-            ...stretch,
-            duration: store.getCustomDuration(stretch.id, stretch.duration),
-            perSide: store.getPerSide(stretch.id, stretch.perSide),
-            sets: store.getStretchSets(stretch.id),
-            rest: store.getStretchRest(stretch.id),
-          })}
-        />
-        </SwipeRow>
-        </div>
-      ))}
-      {diff?.stretches.dropped.map(id => <OffRow key={id} name={STRETCH_BY_ID[id].name} repeat={repeat} />)}
-      {/* A built workout's stretches still to pick. */}
-      {workout.id === 'targeted' && <SlotRows kind="stretch" slots={store.targeted.stretchSlots} store={store} />}
+      <div className="flex items-baseline justify-between gap-3 px-1 pt-3">
+        <span className="flex items-baseline gap-2">
+          <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Stretches</p>
+          <CoveragePill given={areas} noun="stretch" />
+        </span>
+        <span className={`text-xs font-semibold ${doneCount === list.length ? 'text-accent-500' : 'text-stone-400'}`}>{doneCount} of {list.length} Completed</span>
       </div>
-      <AddRow label="Add stretch" onClick={() => setAdding(true)} />
+
+      <div ref={listRef} className="space-y-2">
+      {shown.map(stretch => {
+        const faded = openStretch && stretch.id !== openStretch
+        const card = (
+          <StretchCard
+            store={store}
+            stretch={stretch}
+            tag={diff?.stretches.added.includes(stretch.id) && <WeekTag repeat={repeat} />}
+            grip={openStretch ? null : drag.handlers(stretch.id)}
+            open={stretch.id === openStretch}
+            onOpen={() => setOpenId(stretch.id)}
+            onClose={() => setOpenId(null)}
+            done={store.getStretchDone(workout.id, stretch.id)}
+            holdsDone={store.getStretchHolds(workout.id, stretch.id, holdsOf(stretch))}
+            onToggleAll={() => store.toggleStretch(workout.id, stretch.id)}
+            onToggleHold={i => store.toggleStretchHold(workout.id, stretch.id, i, holdsOf(stretch))}
+            customDuration={store.getCustomDuration(stretch.id, stretch.duration)}
+            onDurationChange={s => store.setCustomDuration(stretch.id, s)}
+            perSide={store.getPerSide(stretch.id, stretch.perSide)}
+            onPerSideChange={v => store.setPerSide(stretch.id, v)}
+            sets={store.getStretchSets(stretch.id, stretch.sets)}
+            onSetsChange={n => store.setStretchSets(stretch.id, n)}
+            rest={store.getStretchRest(stretch.id, stretch.rest)}
+            onRestChange={n => store.setStretchRest(stretch.id, n)}
+            onTimer={i => onTimer({
+              ...stretch,
+              duration: store.getCustomDuration(stretch.id, stretch.duration),
+              perSide: false,
+              sets: 1,
+              rest: 0,
+              hold: i,
+              holds: holdsOf(stretch),
+            })}
+          />
+        )
+        return faded ? <div key={stretch.id} className="opacity-50">{card}</div> : (
+          <div key={stretch.id} data-row={stretch.id} style={drag.style(stretch.id)} className={drag.dragging === stretch.id ? 'rounded-2xl shadow-lg' : ''}>
+            {openStretch ? card : (
+              <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => (diff?.stretches.added.includes(stretch.id) ? store.removeStretch(workout.id, stretch.id, 'week') : ask(`Remove ${stretch.name}?`, scope => store.removeStretch(workout.id, stretch.id, scope))) : null}>{card}</SwipeRow>
+            )}
+          </div>
+        )
+      })}
+      {!openStretch && diff?.stretches.dropped.map(id => <OffRow key={id} name={STRETCH_BY_ID[id].name} repeat={repeat} onUndo={() => store.putBackWeek(workout.id, 'stretches', id)} />)}
+      {/* A built workout's stretches still to pick. */}
+      {!openStretch && workout.id === 'targeted' && <SlotRows kind="stretch" slots={store.targeted.stretchSlots} store={store} />}
+      </div>
+      {!openStretch && <AddRow label="Add stretch" onClick={() => setAdding(true)} />}
 
       {adding && (
         <StretchPicker
@@ -105,86 +138,107 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
 }
 
 // ── Stretch card ─────────────────────────────────────────────────────────────
-// One line per stretch: tick, name, a timer that shows the hold (×2 when it
-// runs per side, more with extra sets) and ••• for how-to and settings.
-// Removing is a swipe.
-function StretchCard({ stretch, tag, grip, checked, onToggle, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
+// Like an exercise card. Folded: its name and a dot per hold; tap to open.
+// Open: name and hold, how-to, settings and close, then one row per hold
+// (Left / Right when per side) with its own seconds, timer and tick.
+function StretchCard({ store, stretch, tag, grip, open, onOpen, onClose, done, holdsDone, onToggleAll, onToggleHold, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
-  const runs = (perSide ? 2 : 1) * sets
+  const [showPage, setShowPage] = useState(false) // its page in the Stretches bank
+  const sides = perSide ? 2 : 1
+  const holds = holdsDone.map((d, i) => ({
+    i,
+    done: d,
+    set: Math.floor(i / sides),
+    side: i % sides,
+  }))
+  const next = holds.find(h => !h.done)
+  const label = h => (!perSide ? null : `${sets > 1 ? `${h.set + 1} ` : ''}${h.side ? 'Right' : 'Left'}`)
+  const total = customDuration * holds.length + rest * (sets - 1)
 
-  return (
-    <div className={`rounded-2xl pl-4 pr-2.5 py-2 transition-all ${
-      checked ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
-    }`}>
-      <div className="flex items-center gap-2">
-        {grip && <span className="-ml-3.5 -mr-1 -my-2 self-stretch flex"><DragHandle name={stretch.name} {...grip} /></span>}
-        <button onClick={onToggle} className="shrink-0 active:scale-95 transition-transform" aria-label={checked ? `Untick ${stretch.name}` : `Tick ${stretch.name}`}>
-          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-            checked ? 'border-accent-500 bg-accent-500' : 'border-stone-200'
-          }`}>
-            {checked && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </div>
-        </button>
-        <p className={`flex-1 min-w-0 text-[15px] font-semibold leading-snug ${checked ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}{tag}</p>
-        <button
-          onClick={onTimer}
-          aria-label={`Time ${stretch.name}, ${customDuration} seconds${runs > 1 ? `, ${runs} times` : ''}`}
-          className="w-[88px] h-8 shrink-0 rounded-lg bg-accent-100 flex items-center pl-2 pr-1 active:bg-accent-200 transition-colors"
-        >
-          <ClockIcon size={14} />
-          <span className="flex-1 text-center text-[13px] font-semibold text-accent-600 tabular-nums whitespace-nowrap">
-            {customDuration}s{runs > 1 ? ` ×${runs}` : ''}
+  if (!open) {
+    return (
+      <div className={`flex items-center rounded-2xl ${done ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'}`}>
+        {grip ? <DragHandle name={stretch.name} {...grip} /> : <span className="w-4 shrink-0" />}
+        <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
+          <span className={`min-w-0 flex-1 block font-semibold leading-snug ${done ? 'text-accent-600' : 'text-stone-900'}`}>{stretch.name}{tag}</span>
+          <span className="flex gap-1 shrink-0" role="img" aria-label={`${holdsDone.filter(Boolean).length} of ${holdsDone.length} holds done`}>
+            {holdsDone.map((d, i) => <span key={i} className={`w-2 h-2 rounded-full ${d ? 'bg-accent-500' : 'bg-stone-200'}`} />)}
           </span>
+          <Chevron />
         </button>
-        <MoreMenu
-          label={stretch.name}
-          items={[
-            { label: 'How to do it', icon: <InfoIcon size={18} />, onClick: () => openDemo(stretch.name, 'stretch') },
-            { label: 'Settings', icon: <GearIcon size={18} />, onClick: () => setShowSettings(true) },
-          ].filter(Boolean)}
-        />
+      </div>
+    )
+  }
+
+  const btn = 'w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200'
+  return (
+    <div className={`rounded-2xl p-4 ${done ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'}`}>
+      <div className="flex items-start gap-1.5">
+        <button onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
+          <p className={`text-lg font-bold leading-tight text-balance ${done ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}{tag}</p>
+          <p className="mt-0.5 text-sm text-stone-500">{[`${fmtSecs(customDuration)} hold`, perSide && 'per side'].filter(Boolean).join(' · ')}</p>
+        </button>
+        <button onClick={() => openDemo(stretch.name, 'stretch')} aria-label={`How to do ${stretch.name}`} className={btn}><InfoIcon size={16} /></button>
+        <button onClick={() => setShowSettings(true)} aria-label={`${stretch.name} settings`} className={btn}><GearIcon size={16} /></button>
+        <button onClick={onClose} aria-label={`Close ${stretch.name}`} className={btn}><Chevron up size={16} /></button>
+      </div>
+
+      {/* Today's holds and how long they take, in one strip. */}
+      <div className="mt-3 flex rounded-xl border border-stone-200 divide-x divide-stone-200">
+        {[['Today', `${holds.length} × ${fmtSecs(customDuration)}`], ['Time', fmtSecs(total)]].map(([k, v]) => (
+          <div key={k} className="flex-1 min-w-0 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-stone-500">{k}</p>
+            <p className="truncate text-[15px] font-bold text-stone-900">{v}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 space-y-1">
+        {holds.map(h => (
+          <div key={h.i} className="space-y-1">
+            {/* Between holds: switch sides, or the rest between sets. */}
+            {h.i > 0 && (h.side > 0 || rest > 0) && (
+              <div className="flex items-center gap-2 px-3">
+                <span className="flex-1 h-px bg-stone-200" />
+                <span className="text-[11px] font-semibold text-stone-400">{h.side > 0 ? 'switch sides' : `${fmtSecs(rest)} rest`}</span>
+                <span className="flex-1 h-px bg-stone-200" />
+              </div>
+            )}
+            <SetRow
+              index={perSide ? h.i : h.set}
+              label={label(h)}
+              value={customDuration}
+              done={h.done}
+              next={h === next}
+              hold
+              onChange={onDurationChange}
+              onToggle={() => { onToggleHold(h.i); if (!h.done && holds.every(x => x.done || x === h)) onClose() }}
+              onTimer={() => onTimer(h.i)}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mt-2">
+        {sets < 4 && <button onClick={() => onSetsChange(sets + 1)} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>}
+        {sets > 1 && <button onClick={() => onSetsChange(sets - 1)} className="text-xs font-medium text-stone-400 active:text-stone-600">− Remove set</button>}
+        <button onClick={() => { onToggleAll(); if (!done) onClose() }} className="ml-auto text-xs font-semibold text-accent-500 active:opacity-60">
+          {done ? 'Untick all' : 'Complete all'}
+        </button>
       </div>
 
       {showSettings && (
         <SettingsSheet title={stretch.name} tall onClose={() => setShowSettings(false)}>
-          <StepperRow
-            label="Duration"
-            value={customDuration}
-            step={5}
-            min={5}
-            editable
-            seconds
-            onChange={onDurationChange}
-          />
-          <StepperRow
-            label="Sets"
-            value={sets}
-            step={1}
-            min={1}
-            max={4}
-            editable
-            onChange={n => onSetsChange(Math.round(n))}
-          />
-          {sets > 1 && (
-            <StepperRow
-              label="Rest between sets"
-              value={rest}
-              step={5}
-              min={5}
-              seconds
-              onChange={onRestChange}
-            />
-          )}
-          <ToggleRow
-            label="Per side"
-            detail="Hold each side — the timer runs twice"
-            on={perSide}
-            onChange={onPerSideChange}
-          />
+          {/* Its page in the Stretches bank: stretch group and targets. */}
+          <button onClick={() => setShowPage(true)} className="w-full rounded-2xl bg-stone-50 px-4 py-3.5 flex items-center justify-between text-left active:bg-stone-100">
+            <span className="text-base text-stone-800">Additional details</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
+          <StepperRow label="Duration" value={customDuration} step={5} min={5} editable seconds onChange={onDurationChange} />
+          <StepperRow label="Sets" value={sets} step={1} min={1} max={4} editable onChange={n => onSetsChange(Math.round(n))} />
+          {sets > 1 && <StepperRow label="Rest between sets" value={rest} step={5} min={5} seconds onChange={onRestChange} />}
+          <ToggleRow label="Per side" detail="Hold each side — the timer runs twice" on={perSide} onChange={onPerSideChange} />
+          {showPage && <StretchPage store={store} popup stretch={STRETCH_BY_ID[stretch.id] ?? stretch} onClose={() => setShowPage(false)} />}
         </SettingsSheet>
       )}
     </div>

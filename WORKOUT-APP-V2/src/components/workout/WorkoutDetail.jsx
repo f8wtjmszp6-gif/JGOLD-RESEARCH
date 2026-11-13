@@ -70,10 +70,13 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const diff = !targeted && !store.past ? store.weekDiff(workoutId) : null
 
   // Swiping an exercise away, saying so if it's the only one for an area.
+  // One added just this week goes without asking.
   function removeExercise(ex) {
     const { main, core } = store.getExerciseSections(workoutId)
     const inCore = core.some(x => x.id === ex.id)
     const list = inCore ? core : main
+    // Added just this week: nothing to ask, it just goes.
+    if (diff?.exercises.added.includes(ex.id)) return store.removeExercise(workoutId, ex.id, 'week')
     const gaps = gapsAfter(list, list.filter(x => x.id !== ex.id), inCore ? 'core' : workoutId)
     ask(
       `Remove ${ex.name}?`,
@@ -143,8 +146,11 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
       if (left === 0) setOpenId(id => (id === a.exercise.id ? null : id))
     }
     if (a.kind === 'warmup') store.setWarmupDone(workoutId, true)
-    if (a.kind === 'stretch' && !store.getStretchDone(workoutId, a.stretchId)) {
-      store.toggleStretch(workoutId, a.stretchId)
+    if (a.kind === 'stretch') {
+      // One hold timed from its row ticks just that hold.
+      if (a.hold != null) {
+        if (!store.getStretchHolds(workoutId, a.stretchId, a.holds)[a.hold]) store.toggleStretchHold(workoutId, a.stretchId, a.hold, a.holds)
+      } else if (!store.getStretchDone(workoutId, a.stretchId)) store.toggleStretch(workoutId, a.stretchId)
     }
 
     setActive({ ...a, phase: 'over' })
@@ -231,6 +237,8 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
       sets: stretch.sets,
       rest: stretch.rest,
       stretchId: stretch.id,
+      hold: stretch.hold,
+      holds: stretch.holds,
     })
   }
 
@@ -266,14 +274,30 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
   const slotsIn = core => (targeted ? store.targeted.slots.filter(x => (x.area === 'core') === core).length : 0)
   const partDone = (list, core) => list.length > 0 && !slotsIn(core) && list.every(finished)
   const partProgress = (list, core) => `${list.filter(finished).length} of ${list.length + slotsIn(core)} Completed`
-  const exerciseCard = exercise => {
+  // One exercise open: just it, under the warm-up and its part's heading.
+  const focused = tab === 'exercises' && !!openExercise
+  const focusCore = focused && !sections.main.some(x => x.id === openExercise)
+  // The open one between the ones just before and after it, greyed out.
+  const stacked = list => {
+    const i = list.findIndex(x => x.id === openExercise)
+    if (i < 0) return null
+    return (
+      <div key="stack" className="space-y-2">
+        {i > 0 && <div className="opacity-50">{exerciseCard(list[i - 1], true)}</div>}
+        {exerciseCard(list[i])}
+        {i < list.length - 1 && <div className="opacity-50">{exerciseCard(list[i + 1], true)}</div>}
+      </div>
+    )
+  }
+  // `faded`: one shown beside the open one, which can't be dragged.
+  const exerciseCard = (exercise, faded) => {
     const open = exercise.id === openExercise
     const card = (
       <ExerciseCard
         exercise={exercise}
         workoutId={workoutId}
         store={store}
-        grip={exerciseDrag.handlers(exercise.id)}
+        grip={faded ? null : exerciseDrag.handlers(exercise.id)}
         open={open}
         onOpen={() => setOpenId(exercise.id)}
         onClose={() => setOpenId(null)}
@@ -303,8 +327,8 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
   // Taken out just for now, in their own list (main or Core).
   const offRows = core => (diff?.exercises.dropped ?? [])
-    .filter(id => isCore(EXERCISE_BY_ID[id]) === core)
-    .map(id => <OffRow key={id} name={EXERCISE_BY_ID[id].name} repeat={repeatable} />)
+    .filter(id => (isCore(EXERCISE_BY_ID[id]) && !sections.coreInMain) === core)
+    .map(id => <OffRow key={id} name={EXERCISE_BY_ID[id].name} repeat={repeatable} onUndo={() => store.putBackWeek(workoutId, 'exercises', id)} />)
 
   const exerciseList = store.getExercises(workoutId)
   const exerciseDone = exerciseList.filter(e => store.getLog(workoutId, e).all.every(x => x.done)).length
@@ -403,9 +427,10 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
 
       {/* Content */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-5 space-y-2 pb-6">
-        {diff?.differs && <DiffBar repeat={repeatable} onReset={() => store.resetWeek(workoutId)} />}
+        {diff?.differs && !(tab === 'exercises' && openExercise) && <DiffBar repeat={repeatable} onReset={() => store.resetWeek(workoutId)} />}
         {/* The plan in three parts: an optional warm-up, the main workout,
-            and an optional Core section. */}
+            and an optional Core section (the gym plans have core in the
+            main workout instead). */}
         {tab === 'exercises' && (
           <>
             <PartHead title="Warm-up" right={store.getWarmup(workoutId).on && store.getWarmupDone(workoutId) ? 'Done ✓' : null} done />
@@ -417,12 +442,21 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
               right={partProgress(sections.main, false)}
               done={partDone(sections.main, false)}
             />
-            {sections.main.map(exerciseCard)}
+            {/* With one open, it's the only exercise shown. */}
+            {focusCore ? null : focused ? stacked(sections.main) : sections.main.map(x => exerciseCard(x))}
+            {!focused && <>
             {offRows(false)}
             {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area !== 'core'} store={store} />}
             <AddRow label="Add exercise" onClick={() => setAdding('main')} />
+            </>}
+            {focusCore && (
+              <>
+                <PartHead title="Core" />
+                {stacked(sections.core)}
+              </>
+            )}
 
-            {sections.coreOn ? (
+            {focused || sections.coreInMain ? null : sections.coreOn ? (
               <>
                 <PartHead
                   title="Core"
@@ -430,7 +464,7 @@ export default function WorkoutDetail({ workoutId, store, onBack, onSwitch }) {
                   right={sections.core.length + slotsIn(true) ? partProgress(sections.core, true) : null}
                   done={partDone(sections.core, true)}
                 />
-                {sections.core.map(exerciseCard)}
+                {sections.core.map(x => exerciseCard(x))}
                 {offRows(true)}
                 {targeted && <SlotRows kind="exercise" slots={store.targeted.slots} show={x => x.area === 'core'} store={store} />}
                 <AddRow label="Add core exercise" onClick={() => setAdding('core')} />

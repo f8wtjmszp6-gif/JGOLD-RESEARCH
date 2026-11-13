@@ -12,4 +12,4 @@ export const MUSCLES = {
 export const ALL_MUSCLES = Object.values(MUSCLES).flat()
 export const muscleName = m => MUSCLE_LABEL[m] ?? m.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())
 // A web search, for the ⓘ links.
-export const google = q => `https://www.google.com/search?q=${encodeURIComponent(q)}`
+export const google = q => `https://www.google.com/search?udm=50&q=${encodeURIComponent(q)}`

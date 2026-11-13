@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { BAR_MIN, BAR_MAX, BAR_STEP } from '../../data/workout'
 import { openDemo } from '../../data/howto'
 import { fmt, fmtSecs, secsParts, stepTo, loadSummary } from '../../utils/format'
-import { GearIcon, InfoIcon, CheckIcon, ClockIcon, Chevron, CloseButton } from '../ui/glyphs'
+import { GearIcon, InfoIcon, ClockIcon, Chevron } from '../ui/glyphs'
 import { SettingsSheet } from '../ui/Sheet'
 import { StepperRow, Segmented, ToggleRow } from '../ui/controls'
 import { DragHandle } from '../ui/DragHandle'
-import { EquipmentPicker, LoadHero } from './LoadHero'
+import { LoadHero } from './LoadHero'
+import { ExercisePage } from '../ExerciseBank'
+import { EXERCISE_BY_ID } from '../../data/exercises'
+import { ExerciseTrendSheet } from '../trends/Trends'
 
 // Whether these settings get a chart in Trends: only reps with weight on
 // them, not assisted (see Trends), and if not, why.
@@ -23,7 +25,7 @@ function TrendsNote({ hold, assist, weight }) {
 // ── One set: remembered reps (or seconds) plus this round's tick ────────────
 // A hold's seconds go up and down 5 at a time, never under 5, and it has
 // its own timer (onTimer) before the tick.
-function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
+export function SetRow({ index, label, value, done, next, hold, onChange, onToggle, onTimer }) {
   const step = hold ? 5 : 1, least = hold ? 5 : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -36,10 +38,10 @@ function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
 
   return (
     <div className={`flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors ${
-      done ? 'bg-accent-100/70' : 'bg-stone-50'
+      done ? 'bg-accent-100/70' : next ? 'bg-accent-50' : 'bg-stone-50'
     }`}>
-      <span className={`text-xs font-semibold w-4 shrink-0 ${done ? 'text-accent-500' : 'text-stone-400'}`}>
-        {index + 1}
+      <span className={`text-xs font-semibold shrink-0 ${label ? 'w-9' : 'w-4'} ${done || next ? 'text-accent-500' : 'text-stone-400'}`}>
+        {label ?? index + 1}
       </span>
 
       <button
@@ -89,7 +91,7 @@ function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
 
       <button onClick={onToggle} aria-label={`${done ? 'Untick' : 'Tick'} set ${index + 1}`} className="shrink-0 active:scale-95 transition-transform ml-0.5">
         <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
-          done ? 'border-accent-500 bg-accent-500' : 'border-stone-200 bg-white'
+          done ? 'border-accent-500 bg-accent-500' : next ? 'border-accent-500 bg-white' : 'border-stone-200 bg-white'
         }`}>
           {done && (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
@@ -109,6 +111,8 @@ function SetRow({ index, value, done, hold, onChange, onToggle, onTimer }) {
 // for this week.
 export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone, tag }) {
   const [showSettings, setShowSettings] = useState(false)
+  const [showTrend, setShowTrend] = useState(false)
+  const [showPage, setShowPage] = useState(false) // its page in the Exercises bank
 
   const log = store.getLog(workoutId, exercise)
   const equipment = store.getEquipment(exercise)
@@ -118,22 +122,33 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
 
   // Done means every set, split cards included.
   const allDone = log.all.every(x => x.done)
+  // Today's sets, as Last time shows them: "3 × 8", or each when they differ.
+  const one = r => (hold ? fmtSecs(r) : String(r))
+  const reps = log.all.map(x => x.reps)
+  const today = reps.length ? (reps.every(r => r === reps[0]) ? `${reps.length} × ${one(reps[0])}` : reps.map(one).join(', ')) : null
+  // The first set not yet ticked, tinted so you know where you are.
+  const nextSet = log.all.find(x => !x.done)
+  // Complete all ticks every set left, so it sits on the last card.
+  const completeAll = (
+    <button onClick={() => { store.toggleExercise(workoutId, exercise); if (!allDone) onClose() }}
+      className="ml-auto text-xs font-semibold text-accent-500 active:opacity-60">
+      {allDone ? 'Untick all' : 'Complete all'}
+    </button>
+  )
   const mainDone = log.sets.every(x => x.done)
   const someDone = log.sets.some(x => x.done)
-  // A split starts one step lighter (more help, when assisted).
-  // (Never under the bar.)
-  const lighter = w => Math.max(equipment === 'barbell' ? log.bar : 0, stepTo(w, equipment === 'barbell' ? 5 : 2.5, assist ? 1 : -1))
   const tickSet = (set, toggle) => {
     toggle()
     if (!set.done) onSetDone(log.all.filter(x => !x.done && x !== set).length)
   }
 
   const summary = loadSummary(equipment, log)
+  const past = pastOf(store.history ?? [], exercise.id) // none when looking at a past week
 
   if (!open && !allDone) {
     return (
       <div className="flex items-center rounded-2xl bg-white shadow-sm">
-        <DragHandle name={exercise.name} {...grip} />
+        {grip ? <DragHandle name={exercise.name} {...grip} /> : <span className="w-4 shrink-0" />}
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1">
             <span className="block font-semibold text-stone-900 leading-snug">{exercise.name}{tag}</span>
@@ -153,7 +168,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
     // Done: its name and every dot filled, like an unfinished row.
     return (
       <div className="flex items-center rounded-2xl bg-accent-50 border border-accent-200">
-        <DragHandle name={exercise.name} {...grip} />
+        {grip ? <DragHandle name={exercise.name} {...grip} /> : <span className="w-4 shrink-0" />}
         <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 pr-4 py-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1 block font-semibold text-accent-600 leading-snug">{exercise.name}{tag}</span>
           <span className="flex gap-1 shrink-0" role="img" aria-label={`All ${log.all.length} sets done`}>
@@ -170,59 +185,71 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
     <div className={`rounded-2xl p-4 transition-all ${
       allDone ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
-      {/* Name with its buttons; under it the weight, per side and rest. */}
-      <div className="flex items-center gap-2">
-        <button onClick={onClose} className="flex-1 min-w-0 text-left active:opacity-70">
-          <p className={`font-semibold leading-tight ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
+      {/* Name and its weight, with how-to, settings and collapse. */}
+      <div className="flex items-start gap-1.5">
+        <button onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
+          <p className={`text-lg font-bold leading-tight text-balance ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
             {tag}
           </p>
+          <p className="mt-0.5 text-sm text-stone-500">{[summary, setup.perSide && 'per side'].filter(Boolean).join(' · ')}</p>
         </button>
-        {/* How-to, settings and ticking every set, then collapse. */}
-        <div className="flex items-center gap-1 shrink-0">
-          <IconBtn label={`How to do ${exercise.name}`} onClick={() => openDemo(exercise.name, 'exercise')}><InfoIcon size={14} /></IconBtn>
-          <IconBtn label={`${exercise.name} settings`} onClick={() => setShowSettings(true)}><GearIcon size={14} /></IconBtn>
-          <IconBtn
-            label={allDone ? 'Untick all sets' : 'Mark all sets done'}
-            on={allDone}
-            onClick={() => { store.toggleExercise(workoutId, exercise); if (!allDone) onClose() }}
-          >
-            <CheckIcon size={14} />
-          </IconBtn>
-          <CloseButton small label={exercise.name} onClick={onClose} />
-        </div>
+        {store.current && (
+          <button onClick={() => setShowTrend(true)} aria-label={`${exercise.name} trend`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>
+          </button>
+        )}
+        <button onClick={() => openDemo(exercise.name, 'exercise')} aria-label={`How to do ${exercise.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><InfoIcon size={16} /></button>
+        <button onClick={() => setShowSettings(true)} aria-label={`${exercise.name} settings`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><GearIcon size={16} /></button>
+        <button onClick={onClose} aria-label={`Close ${exercise.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><Chevron up size={16} /></button>
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        <p className={`min-w-0 text-sm font-medium ${assist ? 'text-stone-400' : 'text-stone-600'}`}>
-          {[summary, setup.perSide && 'Per side', setup.restOn && `Rest ${fmtSecs(setup.rest)}`].filter(Boolean).join(' · ')}
-        </p>
+      {/* Your best, last time and today, in one strip. */}
+      <div className="mt-3 flex rounded-xl border border-stone-200 divide-x divide-stone-200">
+        {[['PR', past.pr], ['Last time', past.last], ['Today', today]].map(([k, v]) => (
+          <div key={k} className="flex-1 min-w-0 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-stone-500">{k}</p>
+            <p className={`truncate text-[15px] font-bold ${v ? 'text-stone-900' : 'text-stone-300'}`}>{v ?? '—'}</p>
+          </div>
+        ))}
       </div>
-
 
       {/* Sets */}
-      <div className="mt-2.5 space-y-1.5">
+      <div className="mt-3 space-y-1">
         {log.sets.map((set, i) => (
+          <div key={set.index} className="space-y-1">
+          {/* With rest on, a thin line with the rest between each set. */}
+          {setup.restOn && i > 0 && (
+            <div className="flex items-center gap-2 px-3" aria-label={`Rest ${fmtSecs(setup.rest)}`}>
+              <span className="flex-1 h-px bg-stone-200" />
+              <span className="text-[11px] font-semibold text-stone-400">{fmtSecs(setup.rest)} rest</span>
+              <span className="flex-1 h-px bg-stone-200" />
+            </div>
+          )}
           <SetRow
-            key={set.index}
             index={i}
             value={set.reps}
             done={set.done}
+            next={set === nextSet}
             hold={hold}
             onChange={reps => store.setSetReps(exercise, set.index, reps)}
             onToggle={() => tickSet(set, () => store.toggleSet(workoutId, exercise, set.index))}
             onTimer={onTimer && (() => onTimer(set))}
           />
+          </div>
         ))}
       </div>
 
+      {/* Split, its sets are set: adding or taking one away is on the split. */}
       <div className="flex items-center gap-3 mt-2">
+        {!log.parts.length && (
         <button
           onClick={() => store.addSet(exercise)}
           className="text-xs font-semibold text-accent-500 active:opacity-60"
         >
           + Add set
         </button>
-        {log.sets.length > 1 && (
+        )}
+        {!log.parts.length && log.sets.length > 1 && (
           <button
             onClick={() => store.removeSet(exercise)}
             className="text-xs font-medium text-stone-400 active:text-stone-600"
@@ -230,19 +257,21 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
             − Remove set
           </button>
         )}
-        {/* Once some sets are ticked, the rest can move to a lighter card. */}
+        {/* Once some sets are ticked, the rest can move to their own card (same weight; change it there). */}
         {someDone && !mainDone && (
-          <SplitButton onClick={() => store.splitSets(workoutId, exercise, -1, lighter(log.weight))} />
+          <SplitButton onClick={() => store.splitSets(workoutId, exercise, -1, log.weight)} />
         )}
-        {someDone && !mainDone && (
-          <span className="text-xs text-stone-400 ml-auto">
-            {log.sets.filter(x => x.done).length}/{log.sets.length} done
-          </span>
-        )}
+        {!log.parts.length && completeAll}
       </div>
 
+      {showTrend && <ExerciseTrendSheet store={store} exercise={exercise} onClose={() => setShowTrend(false)} />}
       {showSettings && (
         <SettingsSheet title={exercise.name} tall onClose={() => setShowSettings(false)}>
+          {/* Its page in the Exercises bank: muscle group, muscles, equipment. */}
+          <button onClick={() => setShowPage(true)} className="w-full rounded-2xl bg-stone-50 px-4 py-3.5 flex items-center justify-between text-left active:bg-stone-100">
+            <span className="text-base text-stone-800">Additional details</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
           {/* How the sets go: reps or timed, per side, and the rest between them. */}
           <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
             <div className="px-4 py-2.5">
@@ -282,24 +311,9 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
               </div>
             )}
           </div>
+          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} onBar={v => store.setBar(exercise, v)} onEquipment={v => store.setEquipment(exercise, v)} />
           <TrendsNote hold={hold} assist={assist} weight={log.weight} />
-          <EquipmentPicker value={equipment} onChange={v => store.setEquipment(exercise, v)} />
-          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} />
-          {/* A barbell's own weight. */}
-          {equipment === 'barbell' && (
-            <div className="rounded-2xl bg-stone-50 px-4 py-2.5">
-              <StepperRow
-                label="Bar"
-                value={log.bar}
-                step={BAR_STEP}
-                min={BAR_MIN}
-                max={BAR_MAX}
-                editable
-                suffix=" lbs"
-                onChange={v => store.setBar(exercise, v)}
-              />
-            </div>
-          )}
+          {showPage && <ExercisePage store={store} popup exercise={EXERCISE_BY_ID[exercise.id] ?? exercise} onClose={() => setShowPage(false)} />}
         </SettingsSheet>
       )}
     </div>
@@ -319,8 +333,11 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           onToggle={set => tickSet(set, () => store.togglePartSet(workoutId, exercise, j, set.index))}
           onAdd={() => store.addPartSet(workoutId, exercise, j)}
           onRemove={() => store.removePartSet(workoutId, exercise, j)}
-          onSplit={() => store.splitSets(workoutId, exercise, j, lighter(p.weight))}
+          onSplit={() => store.splitSets(workoutId, exercise, j, p.weight)}
           onClose={() => store.unsplit(workoutId, exercise, j)}
+          next={nextSet}
+          last={j === log.parts.length - 1}
+          completeAll={j === log.parts.length - 1 && completeAll}
         />
       ))}
     </div>
@@ -338,10 +355,10 @@ function SplitButton({ label = 'Split', onClick }) {
   )
 }
 
-// A split card: this week's lighter sets of an exercise, under its main card.
+// A split card: this week's sets split off of an exercise, under its main card.
 // Its weight is its own; everything else follows the exercise's settings.
 // `first` is how many sets come before it, so its sets carry on the count.
-function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
+function SplitCard({ name, first, part, equipment, bar, hold, next, last, completeAll, onTimer, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const step = equipment === 'barbell' ? 5 : 2.5
@@ -406,6 +423,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight,
               index={first + set.index}
               value={set.reps}
               done={set.done}
+              next={set === next}
               hold={hold}
               onChange={reps => onReps(set.index, reps)}
               onToggle={() => onToggle(set)}
@@ -415,12 +433,13 @@ function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight,
         </div>
 
         <div className="flex items-center gap-3 mt-2">
-          <button onClick={onAdd} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>
-          {part.sets.length > 1 && (
+          {/* Only the last card adds or takes away sets. */}
+          {last && <button onClick={onAdd} className="text-xs font-semibold text-accent-500 active:opacity-60">+ Add set</button>}
+          {last && part.sets.length > 1 && (
             <button onClick={onRemove} className="text-xs font-medium text-stone-400 active:text-stone-600">− Remove set</button>
           )}
           {done > 0 && !all && <SplitButton label="Split again" onClick={onSplit} />}
-          {done > 0 && !all && <span className="text-xs text-stone-400 ml-auto">{done}/{part.sets.length} done</span>}
+          {completeAll}
         </div>
       </div>
     </div>
@@ -428,11 +447,23 @@ function SplitCard({ name, first, part, equipment, bar, hold, onTimer, onWeight,
 }
 
 // A small square icon button for the open card's header.
-function IconBtn({ label, on, onClick, children }) {
-  return (
-    <button onClick={onClick} aria-label={label}
-      className={`w-7 h-7 rounded-md flex items-center justify-center active:bg-stone-200 transition-colors ${on ? 'bg-accent-100 text-accent-600' : 'bg-stone-100 text-stone-500'}`}>
-      {children}
-    </button>
-  )
+// From saved weeks (newest first): your best — the most weight, the least
+// help when assisted, the longest hold — and the latest week's sets.
+function pastOf(history, id) {
+  const logged = history.map(e => e.lifts?.[id]).filter(Boolean)
+  if (!logged.length) return {}
+  const setsOf = l => [...l.sets, ...(l.splits ?? []).flatMap(p => p.sets)]
+  const one = (l, r) => (l.mode === 'hold' ? fmtSecs(r) : String(r))
+  const last = logged[0]
+  const reps = setsOf(last)
+  const lastText = reps.length && (reps.every(r => r === reps[0]) ? `${reps.length} × ${one(last, reps[0])}` : reps.map(r => one(last, r)).join(', '))
+  let pr = null
+  if (last.mode === 'hold') {
+    const best = Math.max(...logged.filter(l => l.mode === 'hold').flatMap(setsOf))
+    if (best > 0) pr = fmtSecs(best)
+  } else {
+    const ws = logged.filter(l => l.mode === 'reps').map(l => l.weight).filter(w => w > 0)
+    if (ws.length) pr = `${fmt(last.assist ? Math.min(...ws) : Math.max(...ws))} lbs${last.assist ? ' assist' : ''}`
+  }
+  return { pr, last: lastText || null }
 }

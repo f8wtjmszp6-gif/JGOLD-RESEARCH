@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { BAR_MAX, BAR_MIN, BAR_STEP, FULL_BODY, FULL_BODY_BY_ID, GYM_ORDER, MUSCLE_GROUPS, TARGETED, workouts } from '../data/workout'
+import { BAR_MAX, BAR_MIN, BAR_STEP, FULL_BODY, GYM_ORDER, MUSCLE_GROUPS, workouts } from '../data/workout'
 import { EQUIPMENT, EXERCISE_BANK, EXERCISE_BY_ID, coversOf, fitsPlan, isCore, primaryOf, ratingFor, ratingsOf } from '../data/exercises'
 import { ALL_MUSCLES, MUSCLES, google, muscleName } from '../utils/muscles'
-import { demoUrl } from '../data/howto'
+import { demoUrl, openDemo } from '../data/howto'
 import { fmt, fmtSecs } from '../utils/format'
-import { ConfirmSheet, ScopeSheet, SettingsSheet } from './ui/Sheet'
+import { ConfirmSheet, SettingsSheet } from './ui/Sheet'
 import { Segmented, StepperRow, ToggleRow } from './ui/controls'
 import { InfoIcon } from './ui/glyphs'
 import { ChoiceMenu } from './ui/ChoiceMenu'
@@ -84,11 +84,11 @@ export function ExerciseBank({ store, onClose }) {
       </label>
       {!q && (
         <div className="grid grid-cols-3 gap-1.5">
-          <Picker label="Muscle group" value={group} onChange={pickGroup}
+          <Picker label="Muscle group" sheet value={group} onChange={pickGroup}
             options={[['', `All (${EXERCISE_BANK.length})`], ...MUSCLE_GROUPS.map(g => [g.id, `${g.label} (${EXERCISE_BANK.filter(x => x.group === g.id).length})`])]} shown={groupLabel} />
-          <Picker label="Targets" value={target} onChange={setTarget}
+          <Picker label="Targets" sheet value={target} onChange={setTarget}
             options={[['', 'Any'], ...targets.map(m => [m, muscleName(m)])]} shown={target ? muscleName(target) : 'Any'} />
-          <Picker label="Equipment" value={gear} onChange={setGear}
+          <Picker label="Equipment" sheet value={gear} onChange={setGear}
             options={[['', 'Any'], ...gears.map(e => [e.id, e.label])]} shown={gear ? gearName(gear) : 'Any'} />
         </div>
       )}
@@ -124,18 +124,38 @@ export function ExerciseBank({ store, onClose }) {
 }
 
 // A dropdown: the phone's own picker over a box showing what's picked.
-export function Picker({ label, value, options, shown, info, blank, locked, onChange }) {
+export function Picker({ label, value, options, shown, info, blank, blankText = 'Pick one', plain, sheet, locked, onChange, onOpen }) {
   const [open, setOpen] = useState(false)
   return (
     <div className={`relative min-w-0 rounded-xl border border-stone-200 bg-white pl-2.5 pr-2 py-1.5 flex items-center gap-1 ${locked ? 'pointer-events-none' : ''}`}>
-      <button onClick={() => setOpen(true)} disabled={locked} aria-label={label} aria-haspopup="listbox" className="absolute inset-0 w-full rounded-xl active:bg-stone-50" />
+      <button onClick={() => (onOpen ? onOpen() : setOpen(true))} disabled={locked} aria-label={label} aria-haspopup="listbox" className="absolute inset-0 w-full rounded-xl active:bg-stone-50" />
       <span className="relative flex-1 min-w-0 pointer-events-none">
-        <span className="block text-[11px] font-semibold text-stone-400">{label}</span>
-        <span className={`block truncate text-[15px] font-semibold ${blank ? 'text-stone-300' : 'text-stone-900'}`}>{blank ? 'Pick one' : shown}</span>
+        {plain ? <span className="block py-2 text-[15px] font-semibold text-stone-900">{label}</span> : (
+          <>
+            <span className="block text-[11px] font-semibold text-stone-400">{label}</span>
+            <span className={`block truncate text-[15px] font-semibold ${blank ? 'text-stone-300' : 'text-stone-900'}`}>{blank ? blankText : shown}</span>
+          </>
+        )}
       </span>
       {info && <span className="relative z-10">{info}</span>}
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className="relative shrink-0 text-stone-400 pointer-events-none" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-      {open && <ChoiceMenu title={label} value={blank ? null : value} options={options} onPick={onChange} onClose={() => setOpen(false)} />}
+      {open && !sheet && <ChoiceMenu title={label} value={blank ? null : value} options={options} onPick={onChange} onClose={() => setOpen(false)} />}
+      {open && sheet && (
+        <SettingsSheet title={label} closeLabel="Done" onClose={() => setOpen(false)}>
+          <div className="rounded-xl bg-stone-50 overflow-hidden divide-y divide-stone-100" role="listbox" aria-label={label}>
+            {options.map(([v, text]) => {
+              const on = !blank && v === value
+              return (
+                <button key={v} role="option" aria-selected={on} onClick={() => { onChange(v); setOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3.5 py-3 text-left text-sm text-stone-800 active:bg-stone-100">
+                  <span className={`flex-1 ${on ? 'font-semibold' : ''}`}>{text}</span>
+                  <span className="w-4 text-center font-bold text-accent-500">{on ? '✓' : ''}</span>
+                </button>
+              )
+            })}
+          </div>
+        </SettingsSheet>
+      )}
     </div>
   )
 }
@@ -171,8 +191,6 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
     }
     setEditing(null)
   }
-  const [picking, setPicking] = useState(false)
-  const [asking, setAsking] = useState(null) // { title, run, repeat }
   const gear = store.getEquipment(x)
   const n = store.getNumbers(x)
   const setup = store.getSetup(x)
@@ -189,24 +207,6 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
   const ratings = ratingsShown(x, rating)
   const taken = x.custom && nameTaken(x)
   const ready = !x.custom || (x.name.trim() && !taken && !blank.length && covers.length > 0 && covers.every(m => ratings[m]))
-
-  // A change to a plan asks this week or every week, like it does in the
-  // plan (a full-body day: this time or every time). Build a Workout's are
-  // made fresh, and a past week's change is just for it.
-  function change(plan, title, run) {
-    if (store.past) return run('past')
-    if (plan === TARGETED.id) return run('week')
-    setAsking({ title, run, repeat: !!FULL_BODY_BY_ID[plan] })
-  }
-  function add(plan) {
-    setPicking(false)
-    change(plan, `Add to ${name(plan)}`, scope => store.addExercise(plan, x.id, scope))
-  }
-  function remove(plan) {
-    change(plan, `Take out of ${name(plan)}`, scope => store.removeExercise(plan, x.id, scope))
-  }
-  // The main list always keeps one exercise.
-  const canRemove = plan => isCore(x) || store.getExerciseSections(plan).main.length > 1
 
   const details = [
     ['Muscle group', group],
@@ -240,7 +240,7 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
       <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2 space-y-6">
       {editing ? <DetailsEditor store={store} exercise={x} rating={rating} locked={inPlans.length > 0} blank={blank} picked={picked} /> : <Section title="Details">
         {details.map(([k, v]) => <Row key={k} label={k} value={v} />)}
-        <a href={demoUrl(x.name, 'exercise')} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between py-2.5 active:opacity-60">
+        <a href={demoUrl(x.name, 'exercise')} target="_blank" rel="noopener noreferrer" onClick={e => { e.preventDefault(); openDemo(x.name, 'exercise') }} className="flex items-center justify-between py-2.5 active:opacity-60">
           <span className="text-[15px] text-stone-600">How to do it</span>
           <span className="flex items-center gap-1 text-[15px] font-semibold text-accent-500">YouTube<ArrowOut /></span>
         </a>
@@ -253,21 +253,6 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
       <Section title="Sets / Reps / Weight">
         {editing ? <NumbersEditor store={store} exercise={x} /> : numbers.map(([k, v]) => <Row key={k} label={k} value={v} />)}
       </Section>
-      {!editing && <>
-      <Section title="In your plans">
-        {inPlans.length ? inPlans.map(p => (
-          <div key={p} className="flex items-center gap-2 py-2.5">
-            <span className="flex-1 min-w-0 text-[15px] text-stone-800">{name(p)}</span>
-            {canRemove(p) && (
-              <button onClick={() => remove(p)} className="shrink-0 rounded-lg bg-red-50 px-2.5 py-1 text-[13px] font-semibold text-red-600 active:bg-red-100">Remove</button>
-            )}
-          </div>
-        )) : <p className="py-2.5 text-[15px] text-stone-400">Not in a plan</p>}
-      </Section>
-      <button onClick={() => setPicking(true)} className="w-full py-3.5 rounded-xl bg-stone-900 text-white text-[15px] font-semibold active:bg-stone-700">
-        Add to a plan…
-      </button>
-      </>}
       {x.custom && !fresh && (
         <button onClick={() => setDeleting(true)} className="w-full py-3 rounded-xl bg-red-50 text-red-600 text-[15px] font-semibold active:bg-red-100">
           Delete exercise
@@ -275,21 +260,6 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
       )}
       </div>
 
-      {picking && (
-        <SettingsSheet title={`Add ${x.name} to…`} closeLabel="Cancel" onClose={() => setPicking(false)}>
-          <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
-            {fits.map(p => {
-              const already = inPlans.includes(p)
-              return (
-                <button key={p} disabled={already} onClick={() => add(p)} className="w-full flex items-center gap-2 py-3.5 text-left disabled:opacity-100 active:opacity-60">
-                  <span className={`flex-1 min-w-0 text-base ${already ? 'text-stone-400' : 'text-stone-900'}`}>{name(p)}</span>
-                  {already && <span className="text-[13px] text-stone-400">Already in it</span>}
-                </button>
-              )
-            })}
-          </div>
-        </SettingsSheet>
-      )}
       {deleting && (
         <ConfirmSheet
           title={`Delete ${x.name}?`}
@@ -308,14 +278,6 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
           onClose={() => setDeleting(false)}
         />
       )}
-      {asking && (
-        <ScopeSheet
-          title={asking.title}
-          repeat={asking.repeat}
-          onPick={scope => { asking.run(scope); setAsking(null) }}
-          onClose={() => setAsking(null)}
-        />
-      )}
     </SettingsSheet>
   )
 }
@@ -324,7 +286,7 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
 // targets (primary or secondary), rating, and equipment and the bar. Core work stays core, and the rest can't
 // become it (a plan keeps them in different sections).
 function DetailsEditor({ store, exercise: x, rating, locked, blank = [], picked = () => {} }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false) // the Targets pop-up
   const gear = store.getEquipment(x)
   const n = store.getNumbers(x)
   const covers = coversOf(x)
@@ -340,26 +302,27 @@ function DetailsEditor({ store, exercise: x, rating, locked, blank = [], picked 
   const noRating = noTargets || !covers.every(m => ratings[m])
   // Rating one makes the ones shown (a built-in's primaries start at its
   // rating) its own.
-  const rate = (m, v) => edit({ ratings: Object.fromEntries(Object.entries({ ...ratings, [m]: v }).filter(([, n]) => n)) })
+  const rate = (m, v) => edit({ ratings: { ...ratings, [m]: v } })
   const list = names => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0])
-  // Targets are saved primaries first; there's always at least one primary.
-  function save(all, prim) {
-    if (!prim.length) return
-    edit({ covers: [...prim, ...all.filter(m => !prim.includes(m))], primary: prim })
+  // Targets are saved primaries first.
+  function save(all, prim, ratings) {
+    edit({ covers: [...prim, ...all.filter(m => !prim.includes(m))], primary: prim, ratings })
   }
   // At most three primary and three secondary.
   const MAX = 3
   const second = covers.filter(m => !primary.includes(m))
-  const full = primary.length >= MAX && second.length >= MAX
-  function toggle(m) {
-    if (covers.includes(m)) save(covers.filter(c => c !== m), primary.filter(p => p !== m))
-    else if (!primary.length || (second.length >= MAX && primary.length < MAX)) save([...covers, m], [...primary, m])
-    else if (second.length < MAX) save([...covers, m], primary)
-  }
-  const setRole = (m, isPrimary) => {
+  // Tap Primary or Secondary to add a muscle as that (or switch it);
+  // tap the one it is to take it off.
+  // Its rating starts blank each time (it's for that role).
+  function setRole(m, isPrimary) {
+    const on = covers.includes(m)
+    const blankRating = { ...ratings, [m]: 0 }
+    if (on && primary.includes(m) === isPrimary) return save(covers.filter(c => c !== m), primary.filter(p => p !== m), blankRating)
     if (isPrimary ? primary.length >= MAX : second.length >= MAX) return
-    save(covers, isPrimary ? [...primary.filter(p => p !== m), m] : primary.filter(p => p !== m))
+    save(on ? covers : [...covers, m], isPrimary ? [...primary.filter(p => p !== m), m] : primary.filter(p => p !== m), blankRating)
   }
+  const targetsInfo = <InfoLink href={google(`${x.name} top 3 primary and top 3 secondary muscles worked (fewer if there aren't 3), from: ${ALL_MUSCLES.map(m => muscleName(m).toLowerCase()).join(', ')}`)} what={`What muscles ${x.name} targets`} />
+  const ratingsInfo = <InfoLink href={google(`${x.name} how effective for each of ${list(covers.map(m => muscleName(m).toLowerCase()))}: best, good or okay?`)} what={`How good ${x.name} is for each`} />
   return (
     <div className="space-y-2">
       {x.custom && (
@@ -377,21 +340,25 @@ function DetailsEditor({ store, exercise: x, rating, locked, blank = [], picked 
       )}
       <p className="px-1 text-xs uppercase tracking-wider font-semibold text-stone-500">Details</p>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-        <Picker label="Muscle group" value={x.group} blank={blank.includes('group')} shown={MUSCLE_GROUPS.find(g => g.id === x.group)?.label}
+        <Picker label="Muscle group" sheet value={x.group} blank={blank.includes('group')} shown={MUSCLE_GROUPS.find(g => g.id === x.group)?.label}
           options={groups.map(g => [g.id, g.label])}
           info={<InfoLink href={google(`if you had to pick one: ${x.name} muscle group chest back shoulders arms legs or core`)} what={`What muscle group ${x.name} is`} />}
-          onChange={g => { picked('group'); edit(!covers.length || covers.some(m => MUSCLES[g].includes(m)) ? { group: g } : { group: g, covers: [MUSCLES[g][0]], primary: [MUSCLES[g][0]] }) }} />
-        <div className={`min-w-0 rounded-xl border border-stone-200 bg-white ${noGroup ? 'pointer-events-none' : ''}`} aria-disabled={noGroup}>
-          <div role="button" tabIndex={noGroup ? -1 : 0} onClick={() => setOpen(!open)} aria-expanded={open} className="w-full pl-2.5 pr-2 py-1.5 flex items-center gap-1 text-left cursor-pointer">
-            <span className="flex-1 min-w-0">
-            <span className="block text-[11px] font-semibold text-stone-400">Targets</span>
-            <span className={`block truncate text-[15px] font-semibold ${covers.length ? 'text-stone-900' : 'text-stone-300'}`}>{covers.length ? 'See table below' : 'Pick one or more'}</span>
-            </span>
-            <InfoLink href={google(`${x.name} top 3 primary and top 3 secondary muscles worked (fewer if there aren't 3), from: ${ALL_MUSCLES.map(m => muscleName(m).toLowerCase()).join(', ')}`)} what={`What muscles ${x.name} targets`} />
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" className={`shrink-0 text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          onChange={g => { picked('group'); edit(!covers.length || covers.some(m => MUSCLES[g].includes(m)) ? { group: g } : { group: g, covers: [], primary: [] }) }} />
+        <Picker label="Targets" blank={!covers.length} blankText="Pick one or more" shown="See table below" locked={noGroup}
+          info={targetsInfo} onOpen={() => setOpen(true)} />
+        {!noTargets && (
+          <div className="min-w-0 rounded-xl border border-stone-200 bg-white pl-2.5 pr-2 py-1.5">
+            <div className="flex items-center gap-1">
+              <span className="flex-1 text-[11px] uppercase tracking-wider font-semibold text-stone-400">Ratings</span>
+              {ratingsInfo}
+              <span className="w-3 shrink-0" aria-hidden="true" />
+            </div>
+            <TargetsTable exercise={x} ratings={ratings} onRate={rate} />
           </div>
-          {open && (
-            <div className="max-h-72 overflow-y-auto overscroll-contain border-t border-stone-100 pb-1">
+        )}
+        {open && (
+          <SettingsSheet title="Targets" closeLabel="Done" onClose={() => setOpen(false)}>
+            <div className="rounded-xl bg-stone-50 pb-1">
               {MUSCLE_GROUPS.map(g => (
                 <div key={g.id}>
                   <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] uppercase tracking-wider font-semibold text-stone-400">{g.label}</p>
@@ -400,42 +367,28 @@ function DetailsEditor({ store, exercise: x, rating, locked, blank = [], picked 
                     const isPrimary = primary.includes(m)
                     return (
                       <div key={m} className="flex items-center gap-2.5 px-2.5 py-1.5">
-                        <button onClick={() => toggle(m)} aria-pressed={on} disabled={!on && full} className="flex-1 min-w-0 flex items-center gap-2.5 text-left active:opacity-60 disabled:opacity-35">
-                          <span className={`w-5 h-5 shrink-0 rounded-md flex items-center justify-center ${on ? 'bg-stone-900' : 'border-[1.5px] border-stone-300'}`}>
-                            {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7" /></svg>}
-                          </span>
-                          <span className="truncate text-[15px] text-stone-900">{muscleName(m)}</span>
-                        </button>
-                        {on && (
-                          <div className="shrink-0 flex rounded-lg bg-stone-100 p-0.5" role="radiogroup" aria-label={`${muscleName(m)}: primary or secondary`}>
-                            {[[true, 'Primary'], [false, 'Secondary']].map(([v, text]) => (
-                              <button key={text} role="radio" aria-checked={isPrimary === v} onClick={() => setRole(m, v)}
-                                disabled={isPrimary !== v && (v ? primary.length >= MAX : second.length >= MAX)}
-                                className={`px-2 py-1 rounded-md text-xs font-semibold ${isPrimary === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400 disabled:text-stone-300'}`}>
+                        <span className={`flex-1 min-w-0 truncate text-[15px] ${on ? 'font-semibold text-stone-900' : 'text-stone-600'}`}>{muscleName(m)}</span>
+                        <div className="shrink-0 flex rounded-lg bg-stone-100 p-0.5" role="radiogroup" aria-label={`${muscleName(m)}: primary or secondary`}>
+                          {[[true, 'Primary'], [false, 'Secondary']].map(([v, text]) => {
+                            const picked = on && isPrimary === v
+                            return (
+                              <button key={text} role="radio" aria-checked={picked} onClick={() => setRole(m, v)}
+                                disabled={!picked && (v ? primary.length >= MAX : second.length >= MAX)}
+                                className={`px-2 py-1 rounded-md text-xs font-semibold ${picked ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400 disabled:text-stone-300'}`}>
                                 {text}
                               </button>
-                            ))}
-                          </div>
-                        )}
+                            )
+                          })}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
               ))}
             </div>
-          )}
-        </div>
-        {!noTargets && (
-          <div className="min-w-0 rounded-xl border border-stone-200 bg-white pl-2.5 pr-2 py-1.5">
-            <div className="flex items-center gap-1">
-              <span className="flex-1 text-[11px] uppercase tracking-wider font-semibold text-stone-400">Ratings</span>
-              <InfoLink href={google(`${x.name} how effective for each of ${list(covers.map(m => muscleName(m).toLowerCase()))}: best, good or okay?`)} what={`How good ${x.name} is for each`} />
-              <span className="w-3 shrink-0" aria-hidden="true" />
-            </div>
-            <TargetsTable exercise={x} ratings={ratings} onRate={rate} />
-          </div>
+          </SettingsSheet>
         )}
-        <Picker label="Equipment" value={gear} shown={gearName(gear)} blank={blank.includes('equipment')} locked={noRating}
+        <Picker label="Equipment" sheet value={gear} shown={gearName(gear)} blank={blank.includes('equipment')} locked={noRating}
           options={EQUIPMENT.map(e => [e.id, e.label])}
           info={<InfoLink href={google(`if you had to pick one: most popular equipment for ${x.name}: ${EQUIPMENT.map(e => (e.id === 'bodyweight' ? e.id : e.label.toLowerCase())).join(', ')}`)} what={`What ${x.name} is usually done with`} />}
           onChange={v => { picked('equipment'); store.setEquipment(x, v) }} />
@@ -491,7 +444,7 @@ const nameTaken = x => {
 function ratingsShown(x, rating) {
   const primary = primaryOf(x)
   const r = ratingsOf(x)
-  return Object.fromEntries(coversOf(x).map(m => [m, r[m] || (!x.custom && primary.includes(m) ? rating : 0)]))
+  return Object.fromEntries(coversOf(x).map(m => [m, m in r ? r[m] : (x.basePrimary ?? []).includes(m) && primary.includes(m) ? rating : 0]))
 }
 
 // How good it is for each muscle it targets, primaries then secondaries;

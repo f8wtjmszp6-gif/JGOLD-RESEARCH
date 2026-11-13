@@ -269,7 +269,7 @@ const FITS = {
     'spider-curl', 'concentration-curl', 'reverse-curl', 'cable-hammer-curl', 'bayesian-curl', 'machine-curl',
     'wrist-curl', 'reverse-wrist-curl',
   ],
-  // Hamstrings & Calves: hamstrings, glutes, lower back, calves
+  // Hamstrings & Lower Back: hamstrings, glutes, lower back, calves
   [POST]: [
     'romanian-deadlift', 'lying-leg-curl', 'seated-leg-curl', 'standing-leg-curl', 'single-leg-rdl', 'db-rdl',
     'nordic-curl', 'glute-ham-raise', 'cable-pull-through', 'kettlebell-swing', 'good-mornings',
@@ -288,12 +288,16 @@ FITS.fullGym = [...new Set([PUSH, QUAD, PULL, POST].flatMap(k => FITS[k]))]
 // The second bank (moreExercises.js) isn't listed above: those fit a plan
 // when what they mainly work is one of the plan's areas.
 const fitsByArea = (exercise, planId) => !!exercise.covers?.length && (PLAN_AREAS[planId] ?? []).some(([id]) => primaryOf(exercise).includes(id))
-const inPlans = exercise => FITS.fullGym.includes(exercise.id) || (!isCore(exercise) && !!exercise.covers)
+// The four gym plans keep core in their main list: any core exercise fits,
+// and so does anything that mainly works one of the plan's areas.
+const mainlyWorks = (exercise, planId) => (PLAN_AREAS[planId] ?? []).some(([id]) => primaryOf(exercise).includes(id))
+// The full-body days keep core in their main list too.
+const inPlans = exercise => isCore(exercise) || FITS.fullGym.includes(exercise.id) || !!exercise.covers
 
-// Whether an exercise belongs in a plan's main list, or in its Core section.
-// A targeted workout takes anything but core work (that goes in its Core
-// section, like a plan's).
+// Whether an exercise belongs in a plan's main list. A targeted workout
+// keeps core work in its own Core section.
 export function fitsPlan(exercise, planId) {
+  if (GYM_ORDER.includes(planId)) return isCore(exercise) || !!FITS[planId]?.includes(exercise.id) || mainlyWorks(exercise, planId)
   if (planId === 'targeted') return !isCore(exercise)
   if (planId === 'fullGym') return inPlans(exercise)
   if (planId === 'fullHome') return inPlans(exercise) && defaultEquipment(exercise) === 'bodyweight' && !exercise.gear
@@ -304,19 +308,20 @@ export function isCore(exercise) {
   return exercise.group === 'core'
 }
 
-// Each plan's starting Core section — abs and obliques both covered.
+// What the gym plans start with past their own exercises (see workouts);
+// core goes last, anything else before the plan's core.
+export const PLAN_EXTRAS = { push: ['side-plank'], legsPost: ['hip-thrust-machine'] }
+
+// Each full-body day's starting core work, at the end of its list — abs and
+// obliques both covered.
 export const DEFAULT_CORE = {
-  push: [],
-  legsQuad: ['plank', 'dead-bugs', 'side-plank'],
-  pull: ['hanging-leg-raises', 'pallof-press'],
-  legsPost: ['woodchoppers', 'ab-wheel'],
   fullGym: ['hanging-leg-raises', 'woodchoppers'],
   fullHomeDb: ['bicycle-crunch'],
   fullHome: ['bicycle-crunch'],
 }
 
 // Which plans start with their Core section on: the ones that had core work.
-export const CORE_ON_BY_DEFAULT = { push: false, legsQuad: true, pull: true, legsPost: true, fullGym: true, fullHomeDb: true, fullHome: true }
+export const CORE_ON_BY_DEFAULT = { fullGym: true, fullHomeDb: true, fullHome: true }
 
 // How well each exercise targets what a plan (or the Core section) is for:
 //   3 – best: the most direct, effective choices for those muscles
@@ -367,33 +372,24 @@ export function ratingFor(exercise, planId) {
   const mine = primaryOf(exercise).map(m => r[m]).filter(Boolean)
   if (mine.length) return Math.max(...mine)
   if (exercise.rating) return exercise.rating
-  if (BEST[planId]?.includes(exercise.id)) return 3
-  if (OKAY[planId]?.includes(exercise.id)) return 1
+  // Core work is judged as core, whichever plan it's in.
+  const key = isCore(exercise) ? 'core' : planId
+  if (BEST[key]?.includes(exercise.id)) return 3
+  if (OKAY[key]?.includes(exercise.id)) return 1
   return 2
-}
-
-// Muscle groups to suggest first when adding to a workout.
-export const SUGGESTED_GROUPS = {
-  push: ['chest', 'shoulders', 'arms'],
-  legsQuad: ['legs', 'core'],
-  pull: ['back', 'arms', 'core'],
-  legsPost: ['legs', 'back', 'core'],
-  fullGym: ['legs', 'chest', 'back', 'shoulders'],
-  fullHomeDb: ['legs', 'chest', 'back', 'shoulders'],
-  fullHome: ['legs', 'chest', 'back', 'shoulders'],
 }
 
 // ── Coverage ───────────────────────────────────────────────────────────────
 // The areas each plan (and the Core section) is meant to work. A plan covers
 // an area when one of its exercises has that area as a main target.
 const PLAN_AREAS = {
-  push: [['chest', 'Chest'], ['front-delts', 'Front delts'], ['side-delts', 'Side delts'], ['triceps', 'Triceps']],
-  legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs']],
-  pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps']],
-  legsPost: [['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['lower-back', 'Lower back'], ['calves', 'Calves']],
-  fullGym: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders']],
-  fullHomeDb: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders']],
-  fullHome: [['quads', 'Quads'], ['glutes', 'Glutes'], ['chest', 'Chest'], ['lower-back', 'Back'], ['front-delts', 'Shoulders']],
+  push: [['chest', 'Chest'], ['front-delts', 'Front delts'], ['side-delts', 'Side delts'], ['triceps', 'Triceps'], ['obliques', 'Obliques']],
+  legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs'], ['calves', 'Calves'], ['abs', 'Abs']],
+  pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps'], ['abs', 'Abs']],
+  legsPost: [['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['lower-back', 'Lower back'], ['calves', 'Calves'], ['obliques', 'Obliques']],
+  fullGym: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
+  fullHomeDb: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
+  fullHome: [['quads', 'Quads'], ['glutes', 'Glutes'], ['chest', 'Chest'], ['lower-back', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
   core: [['abs', 'Abs'], ['obliques', 'Obliques']],
 }
 
@@ -459,12 +455,41 @@ export function primaryOf(exercise) {
   return exercise.primaryEdit ?? exercise.basePrimary ?? coversOf(exercise).slice(0, 1)
 }
 
-// Each of a list's areas, and whether one of its exercises mainly works it
-// (a primary; a secondary doesn't count). `section` is the plan id, or
-// 'core' for the Core section.
+// Each of a list's areas, and the exercise that covers it (`by`), if any.
+// An exercise covers an area it mainly works (a primary; a secondary
+// doesn't count), and only one area: they're paired up to cover as many as
+// can be. Where it doesn't matter, an area goes to the exercise that works
+// the fewest of these areas, then the first in the list (so Dips, which
+// works chest and triceps, is left free when Bench Press and an extension
+// cover those). `section` is the plan id, or 'core' for the Core section.
 export function coverage(list, section) {
-  const covered = new Set(list.flatMap(primaryOf))
-  return (PLAN_AREAS[section] ?? []).map(([id, label]) => ({ id, label, covered: covered.has(id) }))
+  const areas = PLAN_AREAS[section] ?? []
+  const holder = pairUp(list, areas.map(([id]) => id), x => primaryOf(x))
+  return areas.map(([id, label]) => ({ id, label, covered: holder[id] !== undefined, by: list[holder[id]] ?? null }))
+}
+
+// Pairs each area in `ids` with its own item from `list` (one area each),
+// trying items that reach fewer areas first and moving an area along to
+// another item when that makes room. Returns area id → item index.
+export function pairUp(list, ids, reaches) {
+  const works = list.map(x => reaches(x).filter(m => ids.includes(m)))
+  const order = list.map((_, i) => i).sort((a, b) => works[a].length - works[b].length || a - b)
+  const owner = {} // item index → area id
+  const holder = {} // area id → item index
+  function place(area, seen) {
+    for (const i of order) {
+      if (!works[i].includes(area) || seen.has(i)) continue
+      seen.add(i)
+      if (owner[i] === undefined || place(owner[i], seen)) {
+        owner[i] = area
+        holder[area] = i
+        return true
+      }
+    }
+    return false
+  }
+  for (const id of ids) place(id, new Set())
+  return holder
 }
 
 // The areas a change would leave uncovered that are covered now.

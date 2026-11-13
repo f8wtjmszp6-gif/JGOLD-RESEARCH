@@ -5,6 +5,7 @@ import { goalLevel } from '../../utils/goal'
 import { EXERCISE_BANK, EXERCISE_BY_ID, primaryOf } from '../../data/exercises'
 import { metric } from '../../utils/lifts'
 import CardioTrends from './CardioTrends'
+import { SettingsSheet } from '../ui/Sheet'
 
 const WEEKS = 12
 
@@ -295,6 +296,36 @@ function ExerciseTrend({ exercise, weeks, best }) {
       </div>
       <Sparkline values={points.map(p => p.m.v)} />
     </div>
+  )
+}
+
+// One exercise's trend as a pop-up (from its card in a workout): its row
+// as Trends shows it, then each week it was done, newest first.
+export function ExerciseTrendSheet({ store, exercise, onClose }) {
+  const weeks = lastWeeks(store.history, store.current)
+  const saved = [store.current, ...store.history]
+  const points = seriesFor(exercise, weeks)
+  const unit = points.at(-1)?.m.unit
+  const assist = points.at(-1)?.m.assist
+  const best = Math.max(0, ...saved.map(w => metric(w.lifts?.[exercise.id])).filter(m => m?.unit === 'lb' && !m.assist).map(m => m.v))
+  const label = { lb: assist ? 'lb help' : 'lb', s: 's', reps: 'reps' }[unit]
+  return (
+    <SettingsSheet title={`${exercise.name} trend`} closeLabel="Done" onClose={onClose}>
+      {unit === 'lb' && !assist && <ExerciseTrend exercise={exercise} weeks={weeks} best={best} />}
+      {points.length ? (
+        <div className="mt-3 rounded-2xl bg-stone-50 divide-y divide-stone-200/70">
+          {[...points].reverse().map(p => (
+            <div key={p.start.getTime()} className="flex items-center gap-2 px-4 py-2.5 text-[15px]">
+              <span className="flex-1 text-stone-600">{p.live ? 'This week' : `Week of ${short(p.start)}`}</span>
+              {p.pr && <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px">PR</span>}
+              <span className="font-semibold text-stone-900 tabular-nums">{fmt(p.m.v)} {label}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-stone-400">No sets saved in the last {WEEKS} weeks.</p>
+      )}
+    </SettingsSheet>
   )
 }
 

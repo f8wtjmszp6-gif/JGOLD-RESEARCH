@@ -4,7 +4,7 @@ import { STRETCH_BY_ID, applyCustomStretches, applyStretchEdits } from '../data/
 import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession } from './state'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 import { cardioMinutes } from '../utils/format'
 
@@ -439,7 +439,7 @@ function makeStore(state, update) {
   function getExerciseSections(workoutId) {
     // (A past week can name an exercise of yours that's since been deleted.)
     const ex = section => listIds(state, workoutId, section).map(id => EXERCISE_BY_ID[id]).filter(Boolean)
-    return { main: ex('main'), core: ex('core'), coreOn: coreOnOf(state, workoutId) }
+    return { main: ex('main'), core: ex('core'), coreOn: coreOnOf(state, workoutId), coreInMain: coreInMain(workoutId) }
   }
 
   // Changes to what's in a plan take a scope: 'week' for just this week,
@@ -456,7 +456,7 @@ function makeStore(state, update) {
   function addExercise(workoutId, id, scope) {
     update(s => {
       const ex = EXERCISE_BY_ID[id]
-      const section = sectionOf(ex)
+      const section = sectionOf(ex, workoutId)
       if (section === 'main' && !fitsPlan(ex, workoutId)) return s
       if (listIds(s, workoutId, section).includes(id)) return s
       const next = writeList(s, workoutId, section, ids => (ids.includes(id) ? ids : [...ids, id]), listScope(workoutId, scope))
@@ -467,7 +467,7 @@ function makeStore(state, update) {
   // The main list always keeps at least one exercise; Core can be emptied.
   function removeExercise(workoutId, id, scope) {
     update(s => {
-      const section = sectionOf(EXERCISE_BY_ID[id])
+      const section = sectionOf(EXERCISE_BY_ID[id], workoutId)
       const ids = listIds(s, workoutId, section)
       if (section === 'main' && ids.length <= 1) return s
       const next = writeList(s, workoutId, section, list => (section === 'main' && list.length <= 1 ? list : list.filter(x => x !== id)), listScope(workoutId, scope))
@@ -480,7 +480,7 @@ function makeStore(state, update) {
   // dragged by its handle.
   function moveExerciseTo(workoutId, exerciseId, to) {
     update(s => {
-      const section = sectionOf(EXERCISE_BY_ID[exerciseId])
+      const section = sectionOf(EXERCISE_BY_ID[exerciseId], workoutId)
       const ids = listIds(s, workoutId, section).filter(id => id !== exerciseId)
       if (ids.length === listIds(s, workoutId, section).length) return s
       ids.splice(Math.max(0, Math.min(to, ids.length)), 0, exerciseId)
@@ -578,6 +578,10 @@ function makeStore(state, update) {
   function resetWeek(id) {
     update(s => resetWeekOf(s, id))
   }
+  // Undoes taking one out just this week.
+  function putBackWeek(id, kind, item) {
+    update(s => putBackWeekOf(s, id, kind, item))
+  }
   function defaultEdits(id) {
     return defaultEditsOf(state, id)
   }
@@ -597,11 +601,28 @@ function makeStore(state, update) {
     })
   }
 
+  // Ticks or unticks every hold at once.
   function toggleStretch(workoutId, id) {
     update(s => writeChecks(s, workoutId, cur => ({
       ...cur,
       stretches: { ...cur.stretches, [id]: !(cur.stretches?.[id] ?? false) },
+      stretchHolds: { ...cur.stretchHolds, [id]: [] },
     })))
+  }
+
+  // Each of a stretch's `n` holds (sets × sides), ticked one by one. All of
+  // them ticked is the stretch done.
+  function getStretchHolds(workoutId, id, n) {
+    const c = state.checks?.[workoutId]
+    return Array.from({ length: n }, (_, i) => !!(c?.stretches?.[id] || c?.stretchHolds?.[id]?.[i]))
+  }
+  function toggleStretchHold(workoutId, id, i, n) {
+    update(s => writeChecks(s, workoutId, cur => {
+      const t = Array.from({ length: n }, (_, k) => !!(cur.stretches?.[id] || cur.stretchHolds?.[id]?.[k]))
+      t[i] = !t[i]
+      const all = t.every(Boolean)
+      return { ...cur, stretches: { ...cur.stretches, [id]: all }, stretchHolds: { ...cur.stretchHolds, [id]: all ? [] : t } }
+    }))
   }
 
   function removeActivity(id) {
@@ -739,8 +760,8 @@ function makeStore(state, update) {
 
   // A targeted workout for these areas, with this equipment (see
   // startTargeted).
-  function startTargetedWorkout(areas, eq) {
-    update(s => startTargeted(s, areas, eq))
+  function startTargetedWorkout(areas, eq, muscles) {
+    update(s => startTargeted(s, areas, eq, muscles))
   }
 
 
@@ -969,16 +990,16 @@ function makeStore(state, update) {
     update(s => ({ ...s, perSide: { ...s.perSide, [itemId]: value } }))
   }
 
-  function getStretchSets(stretchId) {
-    return state.stretchSets?.[stretchId] ?? 1
+  function getStretchSets(stretchId, fallback = 1) {
+    return state.stretchSets?.[stretchId] ?? fallback
   }
 
   function setStretchSets(stretchId, count) {
     update(s => ({ ...s, stretchSets: { ...s.stretchSets, [stretchId]: count } }))
   }
 
-  function getStretchRest(stretchId) {
-    return state.stretchRest?.[stretchId] ?? 20
+  function getStretchRest(stretchId, fallback = 20) {
+    return state.stretchRest?.[stretchId] ?? fallback
   }
 
   function setStretchRest(stretchId, seconds) {
@@ -1039,6 +1060,7 @@ function makeStore(state, update) {
     discard,
     dropTargetedSlot,
     resetWeek,
+    putBackWeek,
     defaultEdits,
     restoreDefault,
     undoDefaultEdit,
@@ -1046,6 +1068,8 @@ function makeStore(state, update) {
     removeStretch,
     moveStretchTo,
     toggleStretch,
+    getStretchHolds,
+    toggleStretchHold,
     removeActivity,
     restDays: restDaysOf(state),
     addRest,

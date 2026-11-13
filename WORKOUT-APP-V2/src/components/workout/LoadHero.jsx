@@ -1,6 +1,7 @@
-import { useState } from 'react'
 import { EQUIPMENT } from '../../data/exercises'
-import { fmt, stepTo } from '../../utils/format'
+import { fmt } from '../../utils/format'
+import { BAR_MIN, BAR_MAX, BAR_STEP } from '../../data/workout'
+import { StepperRow } from '../ui/controls'
 
 // What an exercise is done with, as a row of icon buttons.
 const EQUIPMENT_ICON = {
@@ -32,79 +33,52 @@ export function EquipmentPicker({ value, onChange }) {
   )
 }
 
-// The weight, big, with − / + either side (tap the number to type it) and a
-// line on what it means for the equipment. A barbell also draws its plates.
-const PLATES = [45, 35, 25, 10, 5, 2.5]
-const PLATE_HEIGHT = { 45: 46, 35: 40, 25: 34, 10: 26, 5: 20, 2.5: 15 }
-function platesFor(perSide) {
-  const plates = []
-  let left = perSide
-  for (const p of PLATES) {
-    while (left >= p - 1e-9) {
-      plates.push(p)
-      left -= p
-    }
-  }
-  return { plates, left: Math.round(left * 100) / 100 }
-}
-export function LoadHero({ equipment, weight, bar, onChange }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
+// The weight, as a row like the bar's (tap the number to type it), and a
+// line on what it means for the equipment.
+export function LoadHero({ equipment, weight, bar, onChange, onBar, onEquipment }) {
   const step = equipment === 'barbell' ? 5 : 2.5
   // A barbell never weighs less than the bar on it.
   const least = equipment === 'barbell' ? bar : 0
-  const set = v => onChange(Math.max(least, v))
   const perSide = equipment === 'barbell' && bar > 0 ? Math.max(0, (weight - bar) / 2) : null
-  const { plates } = platesFor(perSide ?? 0)
-  const unit = { dumbbell: 'lbs each', assisted: 'lbs help' }[equipment] ?? 'lbs'
   const note = {
-    barbell: bar > 0 ? `${fmt(bar)} lb bar · ${perSide > 0 ? `${fmt(perSide)} lb each side` : 'empty bar'}` : 'Set the bar weight below',
-    dumbbell: 'The weight of one dumbbell',
-    cable: 'The number on the stack',
-    machine: 'The number on the stack or plates loaded',
+    barbell: null,
+    dumbbell: 'The weight of each dumbbell',
+    cable: 'The weight of the stack',
+    machine: 'The weight of the stack or plates loaded',
     bodyweight: weight > 0 ? 'Added with a belt, vest, plate or kettlebell' : 'Your bodyweight. Add weight once it gets easy.',
-    assisted: 'Help from the machine or band. Lower = harder.',
+    assisted: <>Help from the machine or band.<br />Lower = harder</>,
   }[equipment]
 
-  function save() {
-    setEditing(false)
-    const n = parseFloat(draft)
-    if (!isNaN(n) && n >= 0) set(Math.round(n * 100) / 100)
-  }
-
-  const btn = 'w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 text-2xl font-medium active:bg-stone-200 transition-colors'
   return (
-    <div className="flex flex-col items-center gap-2 py-1">
-      <div className="flex items-center gap-5">
-        <button onClick={() => set(stepTo(weight, step, -1))} disabled={weight <= least} className={`${btn} disabled:opacity-30`} aria-label="Less weight">−</button>
-        {editing ? (
-          <input
-            type="number"
-            inputMode="decimal"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => e.key === 'Enter' && save()}
-            autoFocus
-            className="w-28 text-center text-4xl font-bold bg-stone-100 rounded-xl py-1 text-stone-900 outline-none"
-          />
-        ) : (
-          <button onClick={() => { setDraft(String(weight)); setEditing(true) }} className="min-w-28 text-center active:opacity-60">
-            <span className="text-5xl font-bold tracking-tight text-stone-900">{equipment === 'bodyweight' ? '+' : ''}{fmt(weight)}</span>
-            <span className="ml-1.5 text-base font-medium text-stone-400">{unit}</span>
-          </button>
-        )}
-        <button onClick={() => set(stepTo(weight, step, 1))} className={btn} aria-label="More weight">+</button>
+    <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
+      {/* What it's done with, on top. */}
+      <div className="p-2">
+        <EquipmentPicker value={equipment} onChange={onEquipment} />
       </div>
-      {/* The bar with its plates; an empty bar is just the bar. */}
-      {perSide !== null && (
-        <div className="flex items-center h-12" aria-hidden="true">
-          {[...plates].reverse().map((p, i) => <span key={`l${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
-          <span className="w-24 h-2 rounded-full bg-stone-400" />
-          {plates.map((p, i) => <span key={`r${i}`} className="w-2.5 rounded-sm bg-accent-500 mx-px" style={{ height: PLATE_HEIGHT[p] }} />)}
+      <div className="px-4 py-2.5">
+      <StepperRow
+        label="Weight"
+        value={weight}
+        step={step}
+        min={least}
+        editable
+        suffix=" lbs"
+        onChange={onChange}
+      />
+      </div>
+      {note && <p className="px-4 py-3 text-sm text-stone-400">{note}</p>}
+      {/* A barbell: the bar's own weight, then what goes on each side. */}
+      {equipment === 'barbell' && (
+        <div className="px-4 py-2.5">
+          <StepperRow label="Bar" value={bar} step={BAR_STEP} min={BAR_MIN} max={BAR_MAX} editable suffix=" lbs" onChange={onBar} />
         </div>
       )}
-      <p className="text-sm text-stone-500 text-center">{note}</p>
+      {perSide !== null && (
+        <div className="px-4 py-3.5 flex items-center justify-between">
+          <span className="text-base text-stone-600">Weight per side (plates)</span>
+          <span className="text-base font-semibold text-stone-900">{perSide > 0 ? `${fmt(perSide)} lbs` : 'Empty bar'}</span>
+        </div>
+      )}
     </div>
   )
 }

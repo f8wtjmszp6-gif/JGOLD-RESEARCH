@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FULL_BODY, TARGETED } from '../../data/workout'
-import { TARGET_AREAS, TARGET_EQUIPMENT, MIN_MUSCLES, muscleCount, stretchTotal, equipmentName } from '../../data/targeted'
+import { TARGET_AREAS, TARGET_EQUIPMENT, MUSCLE_LABEL, equipmentName } from '../../data/targeted'
 import { SettingsSheet } from '../ui/Sheet'
 import { BodyFigure } from '../week/MuscleMap'
 import { CardHead, CARD } from './cards'
@@ -24,7 +24,8 @@ function progressOf(store, id) {
 
 // The built one (Full Body has its own card).
 const IDS = [TARGETED.id]
-const ALL = TARGET_AREAS.map(a => a.id)
+// The ready-made full-body plan for each kind of equipment.
+const FULL_BODY_FOR = { gym: 'fullGym', db: 'fullHomeDb', none: 'fullHome' }
 
 // One card for working out any day, as often as you like: a full-body day,
 // or just the areas you pick. Tapping it asks what to hit. Underneath, each
@@ -53,7 +54,6 @@ export function BuildCard({ store, onOpen }) {
 
 // What a tile shows: the body, front or back, with its area filled in.
 const FIGURE_FILL = '#ff8904'
-const ALL_REGIONS = ['shoulders', 'chest', 'arms', 'core', 'hips', 'thighs', 'calves']
 
 // A tile per choice, the picked ones outlined in the card's color.
 const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2 pb-2 border-[1.5px] text-[11.5px] font-semibold transition-colors min-w-0 ${
@@ -61,83 +61,133 @@ const tile = on => `flex flex-col items-center gap-1 rounded-xl px-1 pt-2 pb-2 b
 }`
 
 // The areas, three to a row, each with its part of the body filled in.
-function AreaTiles({ list, picked, onToggle }) {
+// `picks`: the muscles picked in each; one with some but not all says how
+// many.
+function AreaTiles({ list, picks, onTap }) {
   return (
     <div className="grid grid-cols-3 gap-1.5">
-      {list.map(a => (
-        <button key={a.id} onClick={() => onToggle(a.id)} aria-pressed={picked.includes(a.id)} className={tile(picked.includes(a.id))}>
-          <BodyFigure view={a.view} fills={Object.fromEntries(a.regions.map(r => [r, FIGURE_FILL]))} className="w-[30px] h-[38px]" />
-          <span className="w-full truncate text-center">{a.label}</span>
-        </button>
-      ))}
+      {list.map(a => {
+        const n = picks[a.id]?.length ?? 0
+        return (
+          <button key={a.id} onClick={() => onTap(a)} aria-pressed={n > 0} className={tile(n > 0)}>
+            <BodyFigure view={a.view} fills={Object.fromEntries(a.regions.map(r => [r, FIGURE_FILL]))} className="w-[30px] h-[38px]" />
+            <span className="w-full truncate text-center">{a.label}{n > 0 && n < a.tags.length ? ` · ${n}/${a.tags.length}` : ''}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-// Picking what to work: Full body across the top, then the areas (any
-// number), and what you have to work with. It opens with nothing picked,
-// on the equipment you used last.
-// Start opens the workout empty, with a slot for each exercise and stretch
-// to pick (full body is every area; see startTargeted).
+// An area's muscles to pick from (any number; none takes the area off).
+function MuscleSheet({ area, picked, onChange, onClose }) {
+  return (
+    <SettingsSheet title={area.label} onClose={onClose}>
+      <p className="text-sm text-stone-500">Which muscles?</p>
+      <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
+        {area.tags.map(m => {
+          const on = picked.includes(m)
+          return (
+            <button key={m} onClick={() => onChange(on ? picked.filter(x => x !== m) : area.tags.filter(x => x === m || picked.includes(x)))}
+              aria-pressed={on} className="w-full flex items-center justify-between px-4 py-3.5 text-left active:bg-stone-100">
+              <span className={`text-base ${on ? 'font-semibold text-stone-900' : 'text-stone-600'}`}>{MUSCLE_LABEL[m]}</span>
+              <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${on ? 'border-orange-500 bg-orange-500' : 'border-stone-300'}`}>
+                {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </SettingsSheet>
+  )
+}
+
+// Picking what to work: full body (its ready-made plan for the equipment)
+// or not, what you have to work with, then the areas and their muscles
+// (one exercise each). It opens on the equipment you used last. Built ones start
+// empty, with a slot for each exercise and stretch to pick (see
+// startTargeted).
 export function BuildSheet({ store, onPick, onClose }) {
-  // Every area picked is Full body.
-  const all = list => list.length === TARGET_AREAS.length
   const [full, setFull] = useState(false)
-  const [areas, setAreas] = useState([])
+  // The muscles picked in each area: one with a single muscle toggles, one
+  // with more opens a pop-up to pick them (all of them to start).
+  const [picks, setPicks] = useState({})
+  const [choosing, setChoosing] = useState(null) // the area whose muscles show
+  const areas = TARGET_AREAS.filter(a => picks[a.id]?.length).map(a => a.id)
   const [eq, setEq] = useState(store.targeted.eq)
-  function toggle(id) {
-    const next = areas.includes(id) ? areas.filter(x => x !== id) : [...areas, id]
-    setFull(all(next))
-    setAreas(all(next) ? [] : next)
+  const setArea = (id, muscles) => setPicks(p => ({ ...p, [id]: muscles }))
+  function tap(a) {
+    if (a.tags.length === 1) return setArea(a.id, picks[a.id]?.length ? [] : a.tags)
+    if (!picks[a.id]?.length) setArea(a.id, a.tags)
+    setChoosing(a)
   }
-  // One exercise per muscle in what's picked, and at least four of them.
-  const exercises = muscleCount(full ? ALL : areas)
-  const ready = exercises >= MIN_MUSCLES
-  const stretches = stretchTotal(full ? ALL.length : areas.length)
+  // Full body: the ready-made plan for what you have (see FULL_BODY).
+  const plan = FULL_BODY.find(p => p.id === FULL_BODY_FOR[eq])
+  const planSize = full ? store.getExerciseSections(plan.id).main.length : 0
+  // One exercise per muscle picked.
+  const ready = full || areas.length > 0
+  const exercises = full ? planSize : Object.values(picks).reduce((n, m) => n + m.length, 0)
+  // And one stretch per muscle.
+  const stretches = full ? store.getStretches(plan.id).length : exercises
 
   function start() {
-    store.startTargeted(full ? ALL : areas, eq)
+    if (full) {
+      store.begin(plan.id)
+      onPick(plan.id)
+      return
+    }
+    store.startTargeted(areas, eq, picks)
     onPick(TARGETED.id)
   }
 
   return (
     <SettingsSheet title="Build a Workout" closeLabel="Cancel" onClose={onClose}>
-      <div className="space-y-2">
-        <span className="text-base text-stone-600">What do you want to hit?</span>
-        <button onClick={() => { setFull(!full); setAreas([]) }} aria-pressed={full} className={`${tile(full)} w-full !flex-row justify-center gap-2 !text-sm py-2.5`}>
-          <BodyFigure view="front" fills={Object.fromEntries(ALL_REGIONS.map(r => [r, FIGURE_FILL]))} className="w-[22px] h-[28px]" />
-          Full body
-        </button>
-        <AreaTiles list={TARGET_AREAS} picked={areas} onToggle={toggle} />
+      {/* Full body uses its ready-made plan, so no count or areas to pick. */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-base text-stone-600">Full body workout?</span>
+        <div className="bg-stone-100 rounded-xl p-1 flex" role="radiogroup" aria-label="Full body workout">
+          {[[true, 'Yes'], [false, 'No']].map(([v, t]) => (
+            <button key={t} role="radio" aria-checked={full === v} onClick={() => setFull(v)}
+              className={`w-14 py-1.5 rounded-lg text-sm font-semibold transition-colors ${full === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}>
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
-      {/* Its own full-width row, so "Gym Equipment" fits on one line. */}
-      <div className="space-y-2">
-        <span className="text-base text-stone-600">With</span>
+      {/* What you have, one row on its own. */}
+      <div>
         <div className="bg-stone-100 rounded-xl p-1 flex">
           {TARGET_EQUIPMENT.map(x => (
             <button
               key={x.id}
               onClick={() => setEq(x.id)}
               aria-pressed={eq === x.id}
-              className={`flex-auto px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${eq === x.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}
+              className={`flex-1 basis-0 px-2 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${eq === x.id ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}
             >
               {x.label}
             </button>
           ))}
         </div>
       </div>
+      {!full && (
+        <div className="space-y-2">
+          <span className="text-base text-stone-600">What do you want to hit?</span>
+          <AreaTiles list={TARGET_AREAS} picks={picks} onTap={tap} />
+        </div>
+      )}
       {ready ? (
         <div className="space-y-1">
           <p className="text-sm font-semibold text-emerald-700">✓ Counts as a workout once every set is done</p>
           <p className="text-sm text-stone-500">
-            {exercises} exercises · {stretches} stretches · {equipmentName(eq)}
+            {full ? `${plan.short} · ` : ''}{exercises} exercises · {stretches} stretches{full ? '' : ` · ${equipmentName(eq)}`}
           </p>
         </div>
       ) : (
         <p className="text-sm text-stone-500">
-          {exercises ? `${exercises} muscle${exercises > 1 ? 's' : ''} so far. ` : ''}Pick areas that add up to at least {MIN_MUSCLES} muscles: one exercise each.
+          Pick at least one area.
         </p>
       )}
+      {choosing && <MuscleSheet area={choosing} picked={picks[choosing.id] ?? []} onChange={m => setArea(choosing.id, m)} onClose={() => setChoosing(null)} />}
       <button
         onClick={start}
         disabled={!ready}

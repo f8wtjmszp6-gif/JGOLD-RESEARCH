@@ -1,7 +1,7 @@
 // The muscles each stretch reaches, from the same 17 the exercises use,
-// the one it stretches most first (at most three). Neck, wrist, foot and
-// hip-flexor work maps to the nearest of them (upper traps, quads), or to
-// none when there isn't one.
+// the one it stretches most first (at most three). Work on muscles not in
+// the 17 maps to the nearest: neck to traps, forearm and hand to biceps,
+// shin, foot and ankle to calves, hip flexors to quads.
 const P = {
   // Neck
   'lateral-neck-tilts': 'traps',
@@ -10,8 +10,8 @@ const P = {
   'chin-tucks': 'traps',
   'upper-trap': 'traps',
   'chin-to-chest': 'traps',
-  'scalene-stretch': '',
-  'neck-extension': '',
+  'scalene-stretch': 'traps',
+  'neck-extension': 'traps',
   'shoulder-rolls': 'traps front-delts',
   // Chest & shoulders
   'doorway-pec': 'chest front-delts',
@@ -33,10 +33,10 @@ const P = {
   'bicep-wall': 'biceps chest front-delts',
   'wrist-flexor': 'biceps',
   'forearm-wall': 'biceps',
-  'wrist-extensor': '',
-  'prayer-wrist': '',
-  'finger-stretch': '',
-  'thumb-stretch': '',
+  'wrist-extensor': 'biceps',
+  'prayer-wrist': 'biceps',
+  'finger-stretch': 'biceps',
+  'thumb-stretch': 'biceps',
   // Back
   'lat-stretch': 'lats triceps',
   'doorway-lat': 'lats',
@@ -99,9 +99,9 @@ const P = {
   'towel-calf': 'calves hamstrings',
   'downward-dog': 'calves hamstrings lats',
   'walking-dog': 'calves hamstrings',
-  'kneeling-shin': '',
-  'plantar-fascia': '',
-  'ankle-circles': '',
+  'kneeling-shin': 'calves',
+  'plantar-fascia': 'calves',
+  'ankle-circles': 'calves',
   // Full body
   'worlds-greatest': 'quads hamstrings obliques',
   'spiderman-lunge': 'quads inner-thighs',

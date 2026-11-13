@@ -14,7 +14,7 @@ export const BAR_STEP = 1
 export const workouts = {
   push: {
     id: 'push',
-    name: 'Chest, shoulders & triceps',
+    name: 'Chest, shoulders, triceps & obliques',
     short: 'Chest & Shoulders',
     exercises: [
       { id: 'bench-press', name: 'Bench Press', sets: 3, reps: '6–8', weight: { bar: 25, value: 105 } },
@@ -23,29 +23,30 @@ export const workouts = {
       { id: 'lateral-raises', name: 'Lateral Raises', sets: 3, reps: '12–14', weight: { bar: 0, value: 12 } },
       { id: 'overhead-tricep-extension', name: 'Overhead Tricep Extension', sets: 3, reps: '10–12', weight: { bar: 0, value: 40 } },
     ],
-    // Chest, front and side shoulders, triceps, upper traps
-    stretches: ['doorway-pec', 'behind-back-clasp', 'cross-body-shoulder', 'overhead-tricep-stretch', 'upper-trap'],
+    // Chest, front and side shoulders, triceps, obliques
+    stretches: ['doorway-pec', 'behind-back-clasp', 'cross-body-shoulder', 'overhead-tricep-stretch', 'side-bend'],
   },
 
   legsQuad: {
     id: 'legsQuad',
-    name: 'Quads, glutes, inner & outer thighs, core',
+    name: 'Quads, glutes, thighs, calves & abs',
     short: 'Quads & Glutes',
     exercises: [
       { id: 'cable-squat', name: 'Cable-Assisted Squat', sets: 3, reps: '6–8', weight: { bar: 0, value: 170 } },
       { id: 'hip-thrust', name: 'Hip Thrust', sets: 3, reps: '6–8', weight: { bar: 25, value: 145 } },
       { id: 'hip-abduction', name: 'Hip Abduction', sets: 3, reps: '12–14', weight: { bar: 0, value: 130 } },
       { id: 'hip-adduction', name: 'Hip Adduction', sets: 3, reps: '12–14', weight: { bar: 0, value: 185 } },
+      { id: 'seated-calf-raise', name: 'Seated Calf Raise', sets: 3, reps: '12–14', weight: { bar: 0, value: 55 } },
       { id: 'plank', name: 'Plank', sets: 3, reps: '45s', isTime: true, durationSeconds: 45, weight: { bar: 0, value: 0, assist: true } },
       { id: 'dead-bugs', name: 'Dead Bugs', sets: 3, reps: '12–14', perSide: true, weight: { bar: 0, value: 0, assist: true } },
     ],
     // Hip flexors, quads, glutes, outer hip, inner thighs
-    stretches: ['hip-flexor', 'quad-stretch', 'figure-4', '90-90', 'butterfly'],
+    stretches: ['hip-flexor', 'figure-4', '90-90', 'butterfly', 'wall-calf-stretch', 'cobra-pose'],
   },
 
   pull: {
     id: 'pull',
-    name: 'Back, traps, rear delts, biceps & core',
+    name: 'Back, traps, rear delts, biceps & abs',
     short: 'Back & Biceps',
     exercises: [
       { id: 'barbell-rows', name: 'Barbell Rows', sets: 3, reps: '8–10', weight: { bar: 45, value: 95 } },
@@ -57,22 +58,21 @@ export const workouts = {
       { id: 'hanging-leg-raises', name: 'Hanging Leg Raises', sets: 3, reps: '12–14', weight: { bar: 0, value: 0, assist: true } },
     ],
     // Lats, upper back, rear shoulders, biceps, forearms, traps
-    stretches: ['lat-stretch', 'childs-pose', 'thread-the-needle', 'bicep-wall', 'wrist-flexor', 'levator-scapulae'],
+    stretches: ['lat-stretch', 'thread-the-needle', 'bicep-wall', 'levator-scapulae', 'cobra-pose'],
   },
 
   legsPost: {
     id: 'legsPost',
     name: 'Hamstrings, glutes, lower back, calves & obliques',
-    short: 'Hamstrings & Calves',
+    short: 'Hamstrings & Lower Back',
     exercises: [
       { id: 'romanian-deadlift', name: 'Romanian Deadlift', sets: 3, reps: '6–8', weight: { bar: 45, value: 125 } },
       { id: 'back-extensions', name: 'Weighted Back Extensions', sets: 3, reps: '10–12', weight: { bar: 0, value: 35 } },
       { id: 'standing-calf-raise', name: 'Standing Calf Raise', sets: 3, reps: '12–14', weight: { bar: 0, value: 180 } },
-      { id: 'seated-calf-raise', name: 'Seated Calf Raise', sets: 3, reps: '12–14', weight: { bar: 0, value: 55 } },
       { id: 'woodchoppers', name: 'Woodchoppers', sets: 2, reps: '12–14', perSide: true, weight: { bar: 0, value: 20 } },
     ],
     // Hamstrings, glutes, lower back, both calf muscles
-    stretches: ['hamstring-stretch', 'pigeon-pose', 'knees-to-chest', 'wall-calf-stretch', 'bent-knee-calf'],
+    stretches: ['hamstring-stretch', 'pigeon-pose', 'knees-to-chest', 'wall-calf-stretch', 'side-bend'],
   },
 }
 
@@ -88,21 +88,29 @@ export const STRETCH_ROUTINE = {
   short: 'Full Body Stretch',
   exercises: [],
   stretches: [
+    // One for each of the 17 muscles (see stretchAreas).
     'cat-cow', 'worlds-greatest', 'downward-dog', 'hip-flexor', 'pigeon-pose', 'hamstring-stretch', 'butterfly',
-    'doorway-pec', 'thread-the-needle', 'childs-pose', 'spinal-twist', 'chin-tucks', 'lateral-neck-tilts',
+    'doorway-pec', 'behind-back-clasp', 'cross-body-shoulder', 'thread-the-needle', 'bicep-wall', 'overhead-tricep-stretch',
+    'childs-pose', 'spinal-twist', 'side-bend', 'chin-tucks',
   ],
+  // About 30 minutes, the same time on each: two sets of 25s a side for one
+  // done on each side, or of 50s, with 5s between (17 × 105s).
+  holds: { perSide: 25, single: 50, sets: 2, rest: 5 },
 }
 
 // Short stretch lists for after cardio, one per activity; you pick which you
 // just did. Each aims at what that activity works: calves and hips for walks
 // and runs, bent-over hips and chest for a ride, shoulders for a swim, back
 // and hamstrings for rowing.
+// Each is five stretches in five minutes: a minute each, 30s a side for
+// one done on each side.
+const COOL_DOWN_HOLDS = { perSide: 30, single: 60, sets: 1 }
 export const COOL_DOWNS = [
-  { id: 'coolWalk', label: 'Walk', stretches: ['wall-calf-stretch', 'quad-stretch', 'standing-hamstring', 'hip-flexor', 'figure-4'] },
-  { id: 'coolRun', label: 'Run', stretches: ['wall-calf-stretch', 'bent-knee-calf', 'quad-stretch', 'hip-flexor', 'figure-4', 'standing-hamstring'] },
-  { id: 'coolBike', label: 'Bike', stretches: ['couch-stretch', 'kneeling-quad', 'pigeon-pose', 'doorway-pec', 'cat-cow', 'knees-to-chest'] },
-  { id: 'coolSwim', label: 'Swim', stretches: ['lat-stretch', 'doorway-pec', 'sleeper-stretch', 'overhead-tricep-stretch', 'thread-the-needle', 'lateral-neck-tilts'] },
-  { id: 'coolRow', label: 'Row / Elliptical', chip: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'] },
+  { id: 'coolWalk', label: 'Walk', stretches: ['wall-calf-stretch', 'quad-stretch', 'standing-hamstring', 'hip-flexor', 'figure-4'], holds: COOL_DOWN_HOLDS },
+  { id: 'coolRun', label: 'Run', stretches: ['wall-calf-stretch', 'quad-stretch', 'hip-flexor', 'figure-4', 'standing-hamstring'], holds: COOL_DOWN_HOLDS },
+  { id: 'coolBike', label: 'Bike', stretches: ['couch-stretch', 'pigeon-pose', 'doorway-pec', 'cat-cow', 'knees-to-chest'], holds: COOL_DOWN_HOLDS },
+  { id: 'coolSwim', label: 'Swim', stretches: ['lat-stretch', 'doorway-pec', 'sleeper-stretch', 'overhead-tricep-stretch', 'thread-the-needle'], holds: COOL_DOWN_HOLDS },
+  { id: 'coolRow', label: 'Row / Elliptical', chip: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'], holds: COOL_DOWN_HOLDS },
 ].map(c => ({ ...c, chip: c.chip ?? c.label, name: `Cool Down · ${c.label}`, short: 'Cool Down', exercises: [] }))
 export const COOL_DOWN_BY_ID = Object.fromEntries(COOL_DOWNS.map(c => [c.id, c]))
 
@@ -229,9 +237,10 @@ export const FULL_BODY = [
     label: 'With Gym Equipment',
     where: 'At the gym',
     chip: 'All equipment',
-    // Every muscle, in as few exercises as do it well (Core: see DEFAULT_CORE).
+    // Every muscle, in as few exercises as do it well (core work at the end:
+    // see DEFAULT_CORE).
     exercises: ['deadlift', 'lateral-lunge', 'dips', 'chin-ups', 'arnold-press', 'y-raises', 'hip-abduction', 'standing-calf-raise'].map(id => ({ id })),
-    stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'lat-stretch'],
+    stretches: ['worlds-greatest', 'hip-flexor', 'doorway-pec', 'lat-stretch', 'cross-body-shoulder', 'overhead-tricep-stretch'],
   },
   {
     id: 'fullHomeDb',
@@ -241,7 +250,7 @@ export const FULL_BODY = [
     where: 'At home',
     chip: 'Dumbbells',
     exercises: ['lateral-lunge', 'single-leg-rdl', 'incline-db-press', 'one-arm-db-row', 'arnold-press', 'y-raises', 'db-curl', 'overhead-tricep-extension', 'superman', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
-    stretches: ['worlds-greatest', 'hip-flexor', 'hamstring-stretch', 'doorway-pec', 'childs-pose'],
+    stretches: ['worlds-greatest', 'hip-flexor', 'doorway-pec', 'childs-pose', 'cross-body-shoulder', 'overhead-tricep-stretch'],
   },
   {
     id: 'fullHome',
@@ -251,7 +260,7 @@ export const FULL_BODY = [
     where: 'At home',
     chip: 'Bodyweight',
     exercises: ['cossack-squat', 'elevated-hamstring-bridge', 'push-ups', 'superman-pull', 'pike-push-ups', 'arm-circles', 'reverse-snow-angels', 'towel-curl', 'diamond-push-ups', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
-    stretches: ['downward-dog', 'pigeon-pose', 'childs-pose', 'cat-cow', 'hip-flexor'],
+    stretches: ['downward-dog', 'cobra-pose', 'childs-pose', 'floor-pec', 'thread-the-needle', 'overhead-tricep-stretch'],
   },
 ]
 export const FULL_BODY_BY_ID = Object.fromEntries(FULL_BODY.map(p => [p.id, p]))

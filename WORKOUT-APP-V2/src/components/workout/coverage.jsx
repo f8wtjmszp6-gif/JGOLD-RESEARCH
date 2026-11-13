@@ -5,9 +5,11 @@ import { coverage } from '../../data/exercises'
 // How many of a list's areas it covers, as a pill on its heading: a green
 // ✓ once all are covered, or orange "3 of 4 areas" while one is missing.
 // Tap it for which areas count.
-export function CoveragePill({ list, area }) {
+// `given`: areas worked out elsewhere (a list's stretches), with `noun` for
+// what fills one.
+export function CoveragePill({ list, area, given, noun = 'exercise' }) {
   const [open, setOpen] = useState(false)
-  const areas = coverage(list, area)
+  const areas = given ?? coverage(list, area)
   if (!areas.length) return null
   const covered = areas.filter(a => a.covered).length
   const all = covered === areas.length
@@ -26,14 +28,17 @@ export function CoveragePill({ list, area }) {
         <InfoSheet
           icon={all && pill}
           title={all ? 'All areas covered' : `${covered} of ${areas.length} areas covered`}
-          text={all ? 'Every area this part should hit has an exercise.' : `Missing ${listOf(missing)}. Add an exercise to fill the gap.`}
+          text={noun === 'stretch'
+            ? (all ? 'Every area has its own stretch.' : `Missing ${listOf(missing)}. Add a stretch to fill the gap.`)
+            : (all ? 'Every area this part should hit has its own exercise.' : `Missing ${listOf(missing)}. Add an exercise to fill the gap.`)}
           onClose={() => setOpen(false)}
         >
           <ul className="space-y-2 text-sm">
             {areas.map(a => (
               <li key={a.id} className="flex items-center gap-3">
                 <span className={`w-4 text-center font-bold ${a.covered ? 'text-emerald-600' : 'text-orange-500'}`}>{a.covered ? '✓' : '–'}</span>
-                <span className={a.covered ? 'text-stone-700' : 'text-stone-400'}>{a.label}</span>
+                <span className={`shrink-0 ${a.covered ? 'text-stone-700' : 'text-stone-400'}`}>{a.label}</span>
+                <span className="ml-auto min-w-0 truncate text-right text-stone-400">{a.by ? a.by.name : 'Nothing yet'}</span>
               </li>
             ))}
           </ul>
