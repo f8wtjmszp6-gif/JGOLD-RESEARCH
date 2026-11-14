@@ -110,7 +110,7 @@ function MuscleSheet({ area, picked, onChange, onClose }) {
 export function BuildSheet({ store, onPick, onClose }) {
   const [full, setFull] = useState(false)
   // The muscles picked in each area: one with a single muscle toggles, one
-  // with more opens a pop-up to pick them (all of them to start).
+  // with more opens a pop-up to pick them (none ticked to start).
   const [picks, setPicks] = useState({})
   const [choosing, setChoosing] = useState(null) // the area whose muscles show
   const areas = TARGET_AREAS.filter(a => picks[a.id]?.length).map(a => a.id)
@@ -118,7 +118,6 @@ export function BuildSheet({ store, onPick, onClose }) {
   const setArea = (id, muscles) => setPicks(p => ({ ...p, [id]: muscles }))
   function tap(a) {
     if (a.tags.length === 1) return setArea(a.id, picks[a.id]?.length ? [] : a.tags)
-    if (!picks[a.id]?.length) setArea(a.id, a.tags)
     setChoosing(a)
   }
   // Full body: the ready-made plan for what you have (see FULL_BODY).

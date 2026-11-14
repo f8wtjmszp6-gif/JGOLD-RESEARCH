@@ -115,10 +115,14 @@ export const STRETCH_ROUTINE = {
 const COOL_DOWN_HOLDS = { perSide: 30, single: 60, sets: 1 }
 export const COOL_DOWNS = [
   { id: 'coolWalk', label: 'Walk', stretches: ['wall-calf-stretch', 'quad-stretch', 'standing-hamstring', 'hip-flexor', 'figure-4'], holds: COOL_DOWN_HOLDS },
-  { id: 'coolRun', label: 'Run', stretches: ['wall-calf-stretch', 'quad-stretch', 'hip-flexor', 'figure-4', 'standing-hamstring'], holds: COOL_DOWN_HOLDS },
+  // Running is harder on the calves (the lower calf too): both calf
+  // stretches, and the couch stretch for quads and hip flexors at once.
+  { id: 'coolRun', label: 'Run', stretches: ['wall-calf-stretch', 'bent-knee-calf', 'couch-stretch', 'standing-hamstring', 'figure-4'], holds: COOL_DOWN_HOLDS },
   { id: 'coolBike', label: 'Bike', stretches: ['couch-stretch', 'pigeon-pose', 'doorway-pec', 'cat-cow', 'knees-to-chest'], holds: COOL_DOWN_HOLDS },
   { id: 'coolSwim', label: 'Swim', stretches: ['lat-stretch', 'doorway-pec', 'sleeper-stretch', 'overhead-tricep-stretch', 'thread-the-needle'], holds: COOL_DOWN_HOLDS },
-  { id: 'coolRow', label: 'Row / Elliptical', chip: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'], holds: COOL_DOWN_HOLDS },
+  { id: 'coolRow', label: 'Row', stretches: ['childs-pose', 'lat-stretch', 'seated-forward-fold', 'figure-4', 'cat-cow'], holds: COOL_DOWN_HOLDS },
+  // The elliptical works the legs and hips as walking does: the same five.
+  { id: 'coolElliptical', label: 'Elliptical', stretches: ['wall-calf-stretch', 'quad-stretch', 'standing-hamstring', 'hip-flexor', 'figure-4'], holds: COOL_DOWN_HOLDS },
 ].map(c => ({ ...c, chip: c.chip ?? c.label, name: `Cool Down · ${c.label}`, short: 'Cool Down', exercises: [] }))
 export const COOL_DOWN_BY_ID = Object.fromEntries(COOL_DOWNS.map(c => [c.id, c]))
 

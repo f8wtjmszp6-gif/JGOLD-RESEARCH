@@ -8,6 +8,7 @@ import { notificationsOf } from './utils/notifications'
 import TrendsScreen from './components/trends/Trends'
 import CalendarSheet from './components/week/CalendarSheet'
 import WorkoutDetail from './components/workout/WorkoutDetail'
+import { useWorkoutTimer } from './hooks/useWorkoutTimer'
 import { useStore } from './store/useStore'
 import { calendarWeekOf } from './store/weeks'
 import { weekDay } from './utils/goal'
@@ -16,6 +17,14 @@ import { setSoundMode, setVolume } from './utils/sound'
 
 export default function App() {
   const [workoutId, setWorkoutId] = useState(null)
+  // The card to open in it (from a timer's line on Home): { tab, id }.
+  const [focus, setFocus] = useState(null)
+  // Opened from Activities: back says so, and goes back there.
+  const [fromActivities, setFromActivities] = useState(false)
+  const [reopenActivities, setReopenActivities] = useState(false)
+  // The week Home showed before a workout from another week opened (from
+  // Activities); back returns to it.
+  const [returnWeek, setReturnWeek] = useState(undefined)
   const [view, setView] = useState(null) // 'trends' | null
   const [settings, setSettings] = useState(false)
   const [calendar, setCalendar] = useState(false)
@@ -33,6 +42,11 @@ export default function App() {
   const entry = past ? store.history.find(e => calendarWeekOf(e) === weekStart) : null
   const week = past ? store.weekStore(weekStart) : store
 
+  // The running timer, kept here so it keeps going when you leave its
+  // workout; it shows there, and on that workout's card on Home.
+  const timer = useWorkoutTimer(ws => (ws ? store.weekStore(ws) : store))
+  const shownWeek = past ? weekStart : null
+
   // The bell's sheet, with the ones that were new when it opened.
   const [bell, setBell] = useState(null)
   const notes = notificationsOf(store).filter(n => !store.dismissedNotes.includes(n.id))
@@ -48,7 +62,7 @@ export default function App() {
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings(true)
     if (n.run === 'trends') setView('trends')
-    if (n.run === 'plan') { setWeekStart(null); setWorkoutId(n.plan) }
+    if (n.run === 'plan') { setWeekStart(null); setFocus(null); setWorkoutId(n.plan) }
   }
 
   // Timer beeps follow the Sound setting.
@@ -65,7 +79,7 @@ export default function App() {
       if (document.visibilityState === 'hidden') hiddenAt = Date.now()
       else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) {
         setWeekStart(null)
-        setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
+        setReopenActivities(false); setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
       }
     }
     document.addEventListener('visibilitychange', back)
@@ -84,14 +98,14 @@ export default function App() {
       ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
-          <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} store={week} onBack={() => setWorkoutId(null)} onSwitch={setWorkoutId} />
+          <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} backLabel={fromActivities ? 'Activities' : null} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
         </div>
       ) : (
         <>
           {past ? (
             <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onToday={() => {
               setWeekStart(null)
-              setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
+              setReopenActivities(false); setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
             }} onCalendar={() => setCalendar(true)} />
           ) : (
             <Header
@@ -114,8 +128,15 @@ export default function App() {
               weeks={weeks}
               at={at}
               onAt={i => setWeekStart(weeks[i].live ? null : weeks[i].weekStart)}
-              onOpenWorkout={setWorkoutId}
+              onOpenWorkout={(id, f, from, ws) => {
+                setFocus(f ?? null); setFromActivities(from === 'activities'); setReopenActivities(false)
+                if (ws !== undefined) { setReturnWeek(weekStart); setWeekStart(ws) } else setReturnWeek(undefined)
+                setWorkoutId(id)
+              }}
+              storeOf={ws => (ws ? store.weekStore(ws) : store)}
+              reopenActivities={reopenActivities}
               dayFocus={dayFocus}
+              timer={timer.active?.weekStart === shownWeek ? timer : null}
             />
           </div>
         </>
@@ -127,7 +148,7 @@ export default function App() {
           at={at}
           onPick={(w, day) => {
             setWeekStart(w.live ? null : w.weekStart)
-            setDayFocus(f => ({ day, n: (f?.n ?? 0) + 1 }))
+            setReopenActivities(false); setDayFocus(f => ({ day, n: (f?.n ?? 0) + 1 }))
             setCalendar(false)
           }}
           onClose={() => setCalendar(false)}

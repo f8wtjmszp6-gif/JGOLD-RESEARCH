@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE } from '../../data/workout'
+import { workouts, GYM_ORDER, activities, STRETCH_ROUTINE, FULL_BODY_BY_ID, COOL_DOWN_BY_ID, TARGETED } from '../../data/workout'
 import WeekStrip from '../week/WeekStrip'
 import DaySheet from '../week/DaySheet'
-import { ClassCard, RoutineCard, WorkoutCard, LogCard } from './cards'
+import { ClassCard, RoutineCard, RoutineSheet, WorkoutCard, LogCard } from './cards'
 import { LogClassSheet, AddCardioSheet, AddStretchSheet } from './logSheets'
 import { WhatCountsSheet } from './WhatCountsSheet'
 import { CoolDownCard, CoolDownSheet } from './coolDown'
 import { BuildCard, BuildSheet } from './buildWorkout'
 import { FullBodyCard, FullBodySheet } from './fullBody'
 import { LineMenu } from './lineMenu'
+import { Timed } from './timerLine'
 import { upNextOf } from '../../utils/upNext'
 
 // The homepage shows one group at a time, picked by these tabs. The tab you
@@ -41,7 +42,15 @@ function savedGymView() {
   }
 }
 
-export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, dayFocus }) {
+export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, dayFocus, timer, reopenActivities = false, storeOf }) {
+  // A timer running for one of these workouts shows on its card (see Timed).
+  const timing = timer?.active?.workoutId
+  // Its card in the workout, opened when you tap the line.
+  const focusOf = a => (a.stretchId ? { tab: 'stretches', id: a.stretchId } : { tab: 'exercises', id: a.exercise?.id ?? null })
+  const cardOf = id => (FULL_BODY_BY_ID[id] ? 'fullBody' : id === TARGETED.id ? 'build' : COOL_DOWN_BY_ID[id] ? 'cool' : id)
+  const timed = (card, children) => (
+    <Timed key={card} bar={timing && cardOf(timing) === card ? timer.bar : null} onOpen={() => onOpenWorkout(timing, focusOf(timer.active))}>{children}</Timed>
+  )
   const [tab, setTabState] = useState(savedTab)
   const [showCounts, setShowCounts] = useState(false)
   const [gymView, setGymViewState] = useState(savedGymView)
@@ -96,31 +105,43 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   // The open sheet: { type: 'class' | 'walk' | 'other' | 'stretch', edit? },
   // where `edit` is { index, entry } when changing something already logged.
   // It belongs to the week it was opened in, so changing weeks closes it.
+  // One opened from another week's line in Activities carries that week
+  // (`other`: true, `ws`: its Sunday, null for this week) and works on it
+  // there, so Home stays on the week it shows.
   const [opened, setSheet] = useState(null)
-  const sheet = opened?.at === at ? opened : null
+  const sheetStore = opened?.other ? storeOf(opened.ws) : store
+  // Something logged, by its kind and place in that kind's list.
+  const entryOf = (st, kind, index) => ({ class: st?.classes, walk: st?.walks, other: st?.otherCardio, sport: st?.sports, stretch: st?.ownStretches, rest: st?.restDays.map(at => ({ at })) }[kind]?.[index])
+  const sheet = opened && (opened.other || opened.at === at) && sheetStore ? opened : null
   const open = (type, edit) => setSheet({ type, edit, at })
+  // Another sheet in the same week as the one open (Edit from its menu).
+  const openSame = (type, edit) => setSheet(o => ({ type, edit, at, other: o?.other, ws: o?.ws }))
   const close = () => setSheet(null)
-  // Tapping a logged line asks what to do first (see LineMenu).
-  const menu = (kind, e) => open('menu', { kind, index: e.index, entry: e.entry })
   const byId = id => activities.find(a => a.id === id)
   // The day pop-up, opened from Activities on the strip (on today). Tapping a
   // line there opens its workout, or asks what to do with it (over the
   // pop-up), as on the cards.
-  const [dayOpen, setDayOpen] = useState(false)
-  function editLine({ open: id, menu: kind, index }) {
-    if (id) {
-      setDayOpen(false)
-      onOpenWorkout(id)
-    } else if (kind === 'session') open('menu', { kind, index })
-    else {
-      const list = { class: store.classes, walk: store.walks, other: store.otherCardio, sport: store.sports, stretch: store.ownStretches, rest: store.restDays.map(at => ({ at })) }[kind]
-      if (list?.[index]) menu(kind, { index, entry: list[index] })
-    }
+  // (Back from a workout opened there, it's open again.)
+  const [dayOpen, setDayOpen] = useState(reopenActivities)
+  // Only that reopening picks up where you left off; opened from the strip
+  // it starts on Today.
+  const [restoring, setRestoring] = useState(reopenActivities)
+  // A line from Activities, in this week or another: what to do with it.
+  function editLine(edit, week) {
+    const other = !!week && week !== weeks[at]
+    const ws = other && !week.live ? week.weekStart : null
+    const st = other ? storeOf(ws) : store
+    if (!st) return
+    const { open: id, menu: kind, index } = edit
+    // A workout asks too: open it, change its day, or delete it.
+    const item = id ? { kind: 'open', id } : kind === 'session' ? { kind, index } : { kind, index, entry: entryOf(st, kind, index) }
+    if (!id && kind !== 'session' && !item.entry) return
+    setSheet({ type: 'menu', edit: item, at, other, ws })
   }
   const strip = (
     <div className="shrink-0 px-5 pb-2.5">
       <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} onActivities={() => setDayOpen(true)} />
-      {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} goals={store?.goals} onEdit={store ? editLine : null} onRest={store ? () => store.addRest(new Date().toISOString()) : null} onClose={() => setDayOpen(false)} />}
+      {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} goals={store?.goals} onEdit={store ? editLine : null} restore={restoring} onRest={store ? () => store.addRest(new Date().toISOString()) : null} onClose={() => { setDayOpen(false); setRestoring(false) }} />}
     </div>
   )
   if (!store) return (
@@ -164,7 +185,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
         {tab === 'gym' && <>
           {gymView === 'plans' ? <Section title="Workout plans" note="Each plan can be completed once a week" aside={gymSwitch}>
             {/* Under way first, then up next; complete ones last. */}
-            {[...GYM_ORDER].sort((a, b) => rank(a) - rank(b)).map(id => (
+            {[...GYM_ORDER].sort((a, b) => rank(a) - rank(b)).map(id => timed(id,
               <WorkoutCard
                 key={id}
                 workout={workouts[id]}
@@ -180,8 +201,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
             // Any day, as often as you like: a workout built from full body
             // or just the areas you pick, at the gym or at home, and classes.
             <Section title="Custom workouts" note="Any day, as often as you like" aside={gymSwitch}>
-              <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('fullBody'))} />
-              <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />
+              {timed('fullBody', <FullBodyCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('fullBody'))} />)}
+              {timed('build', <BuildCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('full'))} />)}
               <ClassCard activity={byId('class')} onAdd={() => open('class')} />
             </Section>
           )}
@@ -197,8 +218,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
 
         {tab === 'stretch' && (
           <Section title="Stretching">
-            <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} />
-            <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} />
+            {timed(STRETCH_ROUTINE.id, <RoutineCard store={store} onOpen={() => onOpenWorkout(STRETCH_ROUTINE.id)} onAsk={() => open('routine')} />)}
+            {timed('cool', <CoolDownCard store={store} onOpen={id => (id ? onOpenWorkout(id) : open('cool'))} />)}
             <LogCard activity={OWN_STRETCH} icon="stretch" sub={OWN_STRETCH.note} onAdd={() => open('stretch')} />
           </Section>
         )}
@@ -207,15 +228,16 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       </div>
 
       {showCounts && <WhatCountsSheet tab={tab} onClose={() => setShowCounts(false)} />}
-      {sheet?.type === 'other' && <AddCardioSheet store={store} edit={sheet.edit} onClose={close} />}
-      {sheet?.type === 'stretch' && <AddStretchSheet store={store} edit={sheet.edit} onClose={close} />}
-      {sheet?.type === 'class' && <LogClassSheet store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'other' && <AddCardioSheet store={sheetStore} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'stretch' && <AddStretchSheet store={sheetStore} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'class' && <LogClassSheet store={sheetStore} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'routine' && <RoutineSheet store={store} onStart={() => { close(); onOpenWorkout(STRETCH_ROUTINE.id) }} onClose={close} />}
       {sheet?.type === 'fullBody' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'full' && <BuildSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
-      {sheet?.type === 'menu' && <LineMenu store={store} item={sheet.edit} onEdit={item => open(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={onOpenWorkout} onClose={close} />}
-      {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={store} edit={sheet.edit} onClose={close} />}
-      {sheet?.type === 'sport' && <AddCardioSheet kind="sport" store={store} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'menu' && <LineMenu store={sheetStore} item={sheet.edit} onEdit={item => openSame(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={id => { const from = dayOpen ? 'activities' : null; setDayOpen(false); onOpenWorkout(id, null, from, sheet.other ? sheet.ws : undefined) }} onClose={close} />}
+      {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={sheetStore} edit={sheet.edit} onClose={close} />}
+      {sheet?.type === 'sport' && <AddCardioSheet kind="sport" store={sheetStore} edit={sheet.edit} onClose={close} />}
     </div>
   )
 }

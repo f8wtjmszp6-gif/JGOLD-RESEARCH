@@ -471,7 +471,7 @@ export function openSlotsOf(s, workoutId) {
 // days keep core in their main list and have no Core section (older saves
 // are moved over: see mergeCore in persist.js).
 const LIST_KEY = { main: 'order', core: 'coreLists' }
-export const coreInMain = workoutId => GYM_ORDER.includes(workoutId) || !!FULL_BODY_BY_ID[workoutId]
+export const coreInMain = workoutId => GYM_ORDER.includes(workoutId) || !!FULL_BODY_BY_ID[workoutId] || workoutId === TARGETED.id
 
 function defaultIds(workoutId) {
   const own = (workouts[workoutId]?.exercises ?? []).map(e => e.id)
@@ -1002,6 +1002,7 @@ export function targetedOf(s) {
     eq: s.targeted?.eq ?? 'gym',
     slots: s.targeted?.slots ?? [],
     stretchSlots: s.targeted?.stretchSlots ?? [],
+    muscles: s.targeted?.muscles ?? null, // { areaId: [muscle, …] } picked
     main: listIds(s, id, 'main'),
     core: coreOnOf(s, id) ? listIds(s, id, 'core') : [],
     stretches: stretchesOf(s, id).map(x => x.id),
@@ -1010,14 +1011,15 @@ export function targetedOf(s) {
 
 // Sets the targeted workout's picks and lists (as everyday lists, not just
 // this week's: each one is made fresh anyway).
-function withTargeted(s, { areas, eq, main, core, stretches, slots = [], stretchSlots = [] }) {
+function withTargeted(s, { areas, eq, main, core, stretches, slots = [], stretchSlots = [], muscles = null }) {
   const id = TARGETED.id
   return {
     ...withoutWeekOnly(s, id),
-    targeted: { areas, eq, slots, stretchSlots },
-    order: { ...s.order, [id]: main },
-    coreLists: { ...s.coreLists, [id]: core },
-    coreOn: { ...s.coreOn, [id]: core.length > 0 || slots.some(x => x.area === 'core') },
+    targeted: { areas, eq, slots, stretchSlots, muscles },
+    // Core goes in its main list, with everything else (see coreInMain).
+    order: { ...s.order, [id]: [...main, ...core] },
+    coreLists: { ...s.coreLists, [id]: [] },
+    coreOn: { ...s.coreOn, [id]: false },
     stretchLists: { ...s.stretchLists, [id]: stretches },
   }
 }
@@ -1054,7 +1056,7 @@ export function startTargeted(s, areas, eq, muscles) {
   const { slots, stretchSlots } = buildTargeted(areas, eq, { known, recent, muscles })
   const checks = { ...filed.checks }
   delete checks[id]
-  return opened(noWarmup({ ...withTargeted(filed, { areas, eq, main: [], core: [], stretches: [], slots, stretchSlots }), checks }, id), id)
+  return opened(noWarmup({ ...withTargeted(filed, { areas, eq, main: [], core: [], stretches: [], slots, stretchSlots, muscles }), checks }, id), id)
 }
 
 // Fills an empty slot (`kind` 'exercise' or 'stretch', by its place among
@@ -1065,7 +1067,6 @@ export function fillSlot(s, kind, index, id) {
   if (!now[key][index]) return s
   const next = { ...now, [key]: now[key].filter((_, i) => i !== index) }
   if (kind === 'stretch') next.stretches = [...now.stretches, id]
-  else if (isCore(EXERCISE_BY_ID[id])) next.core = [...now.core, id]
   else next.main = [...now.main, id]
   return withTargeted(s, next)
 }

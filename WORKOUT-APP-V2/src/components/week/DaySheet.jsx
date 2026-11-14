@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { InfoMark } from '../ui/InfoMark'
 import { SettingsSheet } from '../ui/Sheet'
 import { MonthGrid } from './CalendarSheet'
@@ -21,21 +21,33 @@ const weekOf = days => `Week of ${days[0].toLocaleDateString('en-US', { month: '
 // yet, can be marked as a rest day (onRest); earlier days with nothing on
 // them are rest days already. With no week under way, Today shows `at` and
 // `picked` instead.
-export default function DaySheet({ weeks, at: startAt, picked: startPicked, goals, onEdit, onRest, onClose }) {
+// Where it was left (tab, week, month), so coming back from a workout opened
+// here (`restore`) shows the same place.
+let left = null
+
+export default function DaySheet({ weeks, at: startAt, picked: startPicked, goals, onEdit, onRest, onClose, restore = false }) {
   const live = weeks.findIndex(w => w.live)
   const home = live >= 0 ? live : startAt
   const picked = live >= 0 ? new Date().getDay() : startPicked
   // Which tab: today, a week, or the month showing.
-  const [view, setView] = useState('today')
+  const back = restore && left ? left : null
+  const [view, setView] = useState(back?.view ?? 'today')
   const whole = view === 'week'
   // The week Week shows.
-  const [at, setAt] = useState(home)
+  const [at, setAt] = useState(() => {
+    if (!back) return home
+    const i = back.weekStart ? weeks.findIndex(w => w.weekStart === back.weekStart) : -1
+    return i >= 0 ? i : back.weekStart === null ? null : home
+  })
   const homeDays = weekDays(firstDay(weeks[home].weekStart))
-  const [month, setMonth] = useState(() => monthOf(homeDays[picked]))
+  const [month, setMonth] = useState(() => (back ? new Date(back.month) : monthOf(homeDays[picked])))
+  useEffect(() => { left = { view, weekStart: at == null ? null : weeks[at]?.weekStart, month: +month } })
   const week = weeks[whole ? at : home]
   const days = weekDays(firstDay(week.weekStart))
   const day = days[picked]
-  const tap = week.live ? onEdit : null
+  // Any week's lines can be tapped (this week's or a saved one with its
+  // details), naming the week so it can be opened.
+  const tap = onEdit && week.dayLines ? edit => onEdit(edit, week) : null
   // The Week tab names the week it shows: This week, or its days.
   // (None picked yet, after turning to another month: Select a week.)
   const shown = at == null ? null : weekDays(firstDay(weeks[at].weekStart))

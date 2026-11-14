@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { STRETCH_ROUTINE, STRETCH_WORKOUT_MINUTES } from '../../data/workout'
 import { TileIcon } from '../ui/Icons'
+import { SettingsSheet } from '../ui/Sheet'
 import { Part } from './lines'
 import { UnderWay, InProgressLine } from './sessions'
 
@@ -38,14 +40,15 @@ export function CardHead({ icon, tile, value, fill, title, sub, label = title, o
 // The Full Body Stretch, which can be done more than once a week. Tapping
 // opens the one under way, or, once it's finished, files it and opens a
 // fresh one. The one under way gets an IN PROGRESS line and fills the ring.
-export function RoutineCard({ store, onOpen }) {
+// `onAsk`: starting a fresh one asks how long first (see RoutineSheet).
+export function RoutineCard({ store, onOpen, onAsk }) {
   const id = STRETCH_ROUTINE.id
   const list = store.getStretches(id)
   const done = list.filter(x => store.getStretchDone(id, x.id)).length
   const under = done > 0 && done < list.length
   return (
     <div className={CARD}>
-      <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" title={STRETCH_ROUTINE.name} sub={`${STRETCH_WORKOUT_MINUTES}+ min counts as a workout`} onClick={() => { store.startAgain(id); onOpen() }} />
+      <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" title={STRETCH_ROUTINE.name} sub={`${STRETCH_WORKOUT_MINUTES}+ min counts as a workout`} onClick={() => (under ? onOpen() : onAsk())} />
       <UnderWay>
         {under && (
           <InProgressLine label={STRETCH_ROUTINE.name} onOpen={onOpen}>
@@ -150,3 +153,27 @@ export const Of = ({ n, of }) => <span className="font-semibold text-stone-500">
 // Every card's shell: 46px icon, then the rest, ~66px tall.
 export const CARD = 'w-full text-left rounded-2xl px-3.5 py-2.5 bg-white shadow-sm'
 
+
+// Before a fresh Full Body Stretch: how long, then Start.
+export function RoutineSheet({ store, onStart, onClose }) {
+  // Nothing is picked for you; tap a length to start.
+  const [len, setLen] = useState(null)
+  return (
+    <SettingsSheet title={STRETCH_ROUTINE.name} closeLabel="Cancel" onClose={onClose}>
+      <p className="text-base text-stone-600">How long?</p>
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="How long">
+        {Object.keys(STRETCH_ROUTINE.lengths).map(Number).map(m => (
+          <button key={m} role="radio" aria-checked={len === m} onClick={() => setLen(m)}
+            className={`py-3 rounded-xl text-base font-semibold border-[1.5px] transition-colors ${len === m ? 'bg-teal-50 text-teal-800 border-teal-500' : 'bg-stone-100 text-stone-500 border-transparent'}`}>
+            {m} min
+          </button>
+        ))}
+      </div>
+      <p className="text-sm text-stone-500">{len >= STRETCH_WORKOUT_MINUTES ? `✓ ${STRETCH_WORKOUT_MINUTES}+ min counts as a workout` : `Counts as a stretch day; ${STRETCH_WORKOUT_MINUTES}+ min also counts as a workout`}</p>
+      <button disabled={!len} onClick={() => { store.setRoutineLength(len); store.startAgain(STRETCH_ROUTINE.id); onStart() }}
+        className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400">
+        {len ? 'Start' : 'Pick a length'}
+      </button>
+    </SettingsSheet>
+  )
+}

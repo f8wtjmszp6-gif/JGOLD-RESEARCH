@@ -150,6 +150,7 @@ export const SUGGESTED_AREAS = {
   coolBike: ['hips', 'legs', 'shoulders', 'back'],
   coolSwim: ['shoulders', 'back', 'arms', 'neck'],
   coolRow: ['back', 'legs', 'hips'],
+  coolElliptical: ['calves', 'legs', 'hips'],
 }
 
 // How well a stretch suits a list with no muscles of its own to go by (the

@@ -121,7 +121,7 @@ export function LogClassSheet({ store, edit, onClose }) {
 }
 
 // Logs a walk (kind "walk"), other cardio ("other") or a sport or hike
-// ("sport"). Starts from the last one you added. Other cardio and sports say
+// ("sport"). Length and effort start from the last one you added. Other cardio and sports say
 // what they were, and can count as a workout, so they show how close they are.
 export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   const isWalk = kind === 'walk'
@@ -134,14 +134,8 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
   // kept to this once: `keep` false).
   const choices = isSport ? store.sportNames : CARDIO_TYPES
   const oneOff = isSport && !!edit && !!start.type && !choices.includes(start.type)
-  // A new sport starts on your last one only if it's a tile; one of your
-  // own isn't picked for you, so Other sports starts closed and unpicked.
-  const [type, setType] = useState(() => {
-    if (isWalk) return null
-    if (edit) return start.type ?? null
-    if (isSport) return SPORTS.includes(start.type) ? start.type : null
-    return choices.includes(start.type) ? start.type : choices[0]
-  })
+  // Nothing is picked for you on a new one; you tap what you did.
+  const [type, setType] = useState(() => (edit && !isWalk ? start.type ?? (isSport ? null : 'Other') : null))
   const [keep, setKeep] = useState(!oneOff)
   // Sports: a tile for each common one, and Other sports for the ones you've
   // added (or a new one).
@@ -228,8 +222,8 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
         </p>
       )}
       {!edit && <DayPicker now={store.today} dayLog={store.dayLog} at={at} onChange={setAt} />}
-      <LogButton disabled={isSport && !picked} onSave={add}>
-        {isSport && !picked ? 'Pick what you did' : picked && picked !== 'Other'
+      <LogButton disabled={!isWalk && !picked} onSave={add}>
+        {!isWalk && !picked ? 'Pick what you did' : picked && picked !== 'Other'
           // Whether it counts shows just above, so a named one keeps the button short.
           ? `${edit ? 'Save' : 'Add'} ${picked} · ${minutes} min`
           : `${edit ? 'Save' : 'Add'} ${minutes} min · ${workout ? 'counts as a workout' : `${minutes * (hard ? 2 : 1)} cardio min`}`}
@@ -248,7 +242,8 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [keep, setKeep] = useState(true)
-  const fresh = name.trim()
+  // Saved with each word capitalized: "rock climbing" → "Rock Climbing".
+  const fresh = name.trim().replace(/\s+/g, ' ').replace(/(^|\s)\S/g, c => c.toUpperCase())
   // A name already on a list is just picked.
   const known = store.sportNames.find(c => c.toLowerCase() === fresh.toLowerCase())
   function addNew() {
@@ -288,8 +283,11 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
   }
   return (
     <SettingsSheet title="Other sports" closeLabel="Cancel" tall onClose={onClose}>
-      {own.length === 0 && <p className="text-sm text-stone-400">Sports you add show here, for next time.</p>}
-      {own.length > 0 && <div className="flex items-center gap-2">
+      {/* Search (once there's a list), edit, and + to add one (what you've
+          typed in search to start). */}
+      <div className="flex items-center gap-2">
+      {own.length === 0 && <p className="flex-1 text-sm text-stone-400">Sports you add show here, for next time.</p>}
+      {own.length > 0 && <>
         <input
           value={q}
           onChange={e => setQ(e.target.value)}
@@ -297,11 +295,22 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
           className="flex-1 min-w-0 rounded-xl bg-stone-100 px-3 py-2.5 text-base text-stone-900 outline-none placeholder:text-stone-400"
         />
         {own.length > 0 && (
-          <button onClick={() => setEditing(!editing)} className="px-2 text-sm font-semibold text-accent-500 active:opacity-70">
-            {editing ? 'Done' : 'Edit'}
+          // A pencil to edit the list; Done while editing.
+          editing ? (
+            <button onClick={() => setEditing(false)} className="px-2 text-sm font-semibold text-accent-500 active:opacity-70">Done</button>
+          ) : (
+            <button onClick={() => setEditing(true)} aria-label="Edit your sports" className="w-11 h-11 shrink-0 rounded-xl bg-stone-100 text-stone-600 flex items-center justify-center active:bg-stone-200">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>
+            </button>
+          )
+        )}
+      </>}
+        {!editing && !adding && (
+          <button onClick={() => { setName(q.trim()); setAdding(true) }} aria-label="Add a sport" className="w-11 h-11 shrink-0 rounded-xl bg-accent-500 text-white flex items-center justify-center active:bg-accent-600">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         )}
-      </div>}
+      </div>
       {editing && <p className="text-xs text-stone-400">Tap ✕ to take a sport off your list. Sessions you logged with it stay.</p>}
       {recent.length > 0 && (
         <div>
@@ -315,15 +324,16 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
           {rest.map(row)}
         </div>
       )}
+      {/* + opens its own pop-up to name it. */}
       {adding ? (
-        <div className="space-y-3 rounded-2xl bg-stone-50 p-3">
+        <SettingsSheet title="Add a sport" closeLabel="Cancel" onClose={() => setAdding(false)}>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="What was it? (Climbing, Kayaking…)"
             autoFocus
             maxLength={24}
-            className="w-full rounded-xl bg-white px-3 py-2.5 text-base text-stone-900 outline-none placeholder:text-stone-400"
+            className="w-full rounded-xl bg-stone-100 px-3 py-2.5 text-base text-stone-900 outline-none placeholder:text-stone-400"
           />
           <ToggleRow
             label="Save to my list"
@@ -338,16 +348,8 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
           >
             {fresh ? (known ? `Pick ${known}` : `Add ${fresh}`) : 'Name it to add it'}
           </button>
-        </div>
-      ) : !editing && (
-        <button
-          onClick={() => { setName(q.trim()); setAdding(true) }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-base font-semibold text-accent-500 border-[1.5px] border-dashed border-stone-200 active:bg-stone-50"
-        >
-          <span className="text-lg leading-none">+</span>
-          {q.trim() ? `Add “${q.trim()}”` : 'Add a new one'}
-        </button>
-      )}
+        </SettingsSheet>
+      ) : null}
     </SettingsSheet>
   )
 }

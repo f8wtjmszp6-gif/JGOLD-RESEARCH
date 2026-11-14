@@ -298,7 +298,7 @@ const inPlans = exercise => isCore(exercise) || FITS.fullGym.includes(exercise.i
 // keeps core work in its own Core section.
 export function fitsPlan(exercise, planId) {
   if (GYM_ORDER.includes(planId)) return isCore(exercise) || !!FITS[planId]?.includes(exercise.id) || mainlyWorks(exercise, planId)
-  if (planId === 'targeted') return !isCore(exercise)
+  if (planId === 'targeted') return true // core included, in its main list
   if (planId === 'fullGym') return inPlans(exercise)
   if (planId === 'fullHome') return inPlans(exercise) && defaultEquipment(exercise) === 'bodyweight' && !exercise.gear
   if (planId === 'fullHomeDb') return inPlans(exercise) && ['bodyweight', 'dumbbell'].includes(defaultEquipment(exercise)) && !exercise.gear

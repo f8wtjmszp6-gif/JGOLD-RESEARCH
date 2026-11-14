@@ -18,7 +18,7 @@ export function migrate(s) {
     }
   }
   const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
-  return freshFullBodyPlans(freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next))))))
+  return freshCoolDowns(freshFullBodyPlans(freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next)))))))
 }
 
 // The four gym plans used to keep core in a Core section of its own (on or
@@ -90,6 +90,19 @@ function freshStretches(s) {
   return {
     ...s,
     stretchDefaults8: true,
+    ...(s.stretchLists && { stretchLists: drop(s.stretchLists) }),
+    ...(s.weekOnly?.stretchLists && { weekOnly: { ...s.weekOnly, stretchLists: drop(s.weekOnly.stretchLists) } }),
+  }
+}
+
+// The Run cool-down's stretches changed. Once, a saved list for it goes,
+// so it starts from the new one.
+function freshCoolDowns(s) {
+  if (s.coolDownDefaults2) return s
+  const drop = map => (map ? Object.fromEntries(Object.entries(map).filter(([id]) => id !== 'coolRun')) : map)
+  return {
+    ...s,
+    coolDownDefaults2: true,
     ...(s.stretchLists && { stretchLists: drop(s.stretchLists) }),
     ...(s.weekOnly?.stretchLists && { weekOnly: { ...s.weekOnly, stretchLists: drop(s.weekOnly.stretchLists) } }),
   }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { openDemo } from '../../data/howto'
 import { StretchPicker } from './pickers'
 import { AddRow, CoveragePill } from './coverage'
@@ -15,7 +15,6 @@ import { useScope } from '../../hooks/useScope'
 import { WeekTag, OffRow } from './weekDiff'
 import { SlotRows } from './slots'
 import { STRETCH_BY_ID } from '../../data/stretches'
-import { STRETCH_ROUTINE } from '../../data/workout'
 import { StretchPage } from '../StretchBank'
 
 // Seconds → "6m 30s" / "6m" / "45s"
@@ -31,22 +30,12 @@ function fmtDuration(totalSeconds) {
 // remove it (never the last), + Add stretch at the end. `diff`: how this
 // week's differs from every week's (see weekDiffOf), for one you can do any
 // number of times (`repeat`) this time's.
-export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
-  const list = store.getStretches(workout.id)
-  const [adding, setAdding] = useState(false)
-  // Adding or removing one asks: just this week, or every week after?
-  const [ask, scopeSheet] = useScope(store, workout.id)
-  const listRef = useRef(null)
-  const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
-  // One open at a time; open, just it and the ones either side, greyed.
-  const [openId, setOpenId] = useState(null)
-  const openStretch = list.some(x => x.id === openId) ? openId : null
-  const at = list.findIndex(x => x.id === openStretch)
-  const shown = openStretch ? list.slice(Math.max(0, at - 1), at + 2) : list
-  const areas = stretchAreas(store, workout.id, list)
-  const doneCount = list.filter(x => store.getStretchDone(workout.id, x.id)).length
-  const holdsOf = x => store.getStretchSets(x.id, x.sets) * (store.getPerSide(x.id, x.perSide) ? 2 : 1)
-  const totalStretchSeconds = list.reduce(
+// `timing`: what its timer is timing, { stretchId, hold, total, phase }:
+// that card freezes, and the hold being counted shows TIMER RUNNING.
+// How long a list's stretches take with your settings: every hold, every
+// set, and the rests between sets. Sits above the timer (see WorkoutDetail).
+export function StretchTotal({ store, listId }) {
+  const totalStretchSeconds = store.getStretches(listId).reduce(
     (sum, s) => {
       const sets = store.getStretchSets(s.id, s.sets)
       const hold = store.getCustomDuration(s.id, s.duration) * (store.getPerSide(s.id, s.perSide) ? 2 : 1)
@@ -54,28 +43,35 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
     },
     0,
   )
+  return (
+    <div className="rounded-2xl bg-accent-50 border border-accent-100 px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <ClockIcon size={18} />
+        <span className="text-sm font-medium text-stone-600">Total stretching time</span>
+      </div>
+      <span className="text-accent-600 font-bold">{fmtDuration(totalStretchSeconds)}</span>
+    </div>
+  )
+}
+
+export function StretchesTab({ workout, store, diff, repeat, onTimer, open = null, timing = null }) {
+  const list = store.getStretches(workout.id)
+  const [adding, setAdding] = useState(false)
+  // Adding or removing one asks: just this week, or every week after?
+  const [ask, scopeSheet] = useScope(store, workout.id)
+  const listRef = useRef(null)
+  const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
+  // One open at a time; open, just it and the ones either side, greyed.
+  const [openId, setOpenId] = useState(open)
+  const openStretch = list.some(x => x.id === openId) ? openId : null
+  const at = list.findIndex(x => x.id === openStretch)
+  const shown = openStretch ? list.slice(Math.max(0, at - 1), at + 2) : list
+  const areas = stretchAreas(store, workout.id, list)
+  const doneCount = list.filter(x => store.getStretchDone(workout.id, x.id)).length
+  const holdsOf = x => store.getStretchSets(x.id, x.sets) * (store.getPerSide(x.id, x.perSide) ? 2 : 1)
 
   return (
     <>
-      {/* The Full Body Stretch: how long, in minutes. */}
-      {workout.id === STRETCH_ROUTINE.id && (
-        <div className="flex rounded-xl bg-stone-100 p-1" role="radiogroup" aria-label="How long">
-          {Object.keys(STRETCH_ROUTINE.lengths).map(Number).map(m => (
-            <button key={m} role="radio" aria-checked={store.getRoutineLength() === m} onClick={() => store.setRoutineLength(m)}
-              className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-colors ${store.getRoutineLength() === m ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}>
-              {m}m
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="rounded-2xl bg-accent-50 border border-accent-100 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <ClockIcon size={18} />
-          <span className="text-sm font-medium text-stone-600">Total stretching time</span>
-        </div>
-        <span className="text-accent-600 font-bold">{fmtDuration(totalStretchSeconds)}</span>
-      </div>
-
       <div className="flex items-baseline justify-between gap-3 px-1 pt-3">
         <span className="flex items-baseline gap-2">
           <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Stretches</p>
@@ -91,6 +87,7 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
           <StretchCard
             store={store}
             stretch={stretch}
+            timing={timing?.stretchId === stretch.id ? timing : null}
             tag={diff?.stretches.added.includes(stretch.id) && <WeekTag repeat={repeat} />}
             grip={openStretch ? null : drag.handlers(stretch.id)}
             open={stretch.id === openStretch}
@@ -116,10 +113,15 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
               rest: 0,
               hold: i,
               holds: holdsOf(stretch),
+              // For naming each hold: "1 Left".
+              holdSides: store.getPerSide(stretch.id, stretch.perSide) ? 2 : 1,
+              holdSets: store.getStretchSets(stretch.id, stretch.sets),
+              holdRest: store.getStretchRest(stretch.id, stretch.rest),
+              baseDuration: stretch.duration,
             })}
           />
         )
-        return faded ? <div key={stretch.id} className="opacity-50">{card}</div> : (
+        return faded ? <div key={stretch.id} className={`opacity-50 ${timing ? 'pointer-events-none' : ''}`}>{card}</div> : (
           <div key={stretch.id} data-row={stretch.id} style={drag.style(stretch.id)} className={drag.dragging === stretch.id ? 'rounded-2xl shadow-lg' : ''}>
             {openStretch ? card : (
               <SwipeRow label={stretch.name} onRemove={list.length > 1 ? () => (diff?.stretches.added.includes(stretch.id) ? store.removeStretch(workout.id, stretch.id, 'week') : ask(`Remove ${stretch.name}?`, scope => store.removeStretch(workout.id, stretch.id, scope))) : null}>{card}</SwipeRow>
@@ -153,9 +155,19 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
 // Like an exercise card. Folded: its name and a dot per hold; tap to open.
 // Open: name and hold, how-to, settings and close, then one row per hold
 // (Left / Right when per side) with its own seconds, timer and tick.
-function StretchCard({ store, stretch, tag, grip, open, onOpen, onClose, done, holdsDone, onToggleAll, onToggleHold, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
+// While a card's timer goes: its buttons fade and don't respond, but for
+// the ones marked data-keep.
+const FROZEN = '[&_button:not([data-keep])]:pointer-events-none [&_button:not([data-keep]):not([data-title])]:opacity-40 [&_input]:pointer-events-none'
+
+function StretchCard({ store, stretch, timing, tag, grip, open, onOpen, onClose, done, holdsDone, onToggleAll, onToggleHold, onTimer, customDuration, onDurationChange, perSide, onPerSideChange, sets, onSetsChange, rest, onRestChange }) {
   const [showSettings, setShowSettings] = useState(false)
   const [showPage, setShowPage] = useState(false) // its page in the Stretches bank
+  // Finished while open (the timer ticking the last hold, say): it folds.
+  const wasDone = useRef(done)
+  useEffect(() => {
+    if (done && !wasDone.current && open) onClose()
+    wasDone.current = done
+  }, [done, open, onClose])
   const sides = perSide ? 2 : 1
   const holds = holdsDone.map((d, i) => ({
     i,
@@ -164,7 +176,7 @@ function StretchCard({ store, stretch, tag, grip, open, onOpen, onClose, done, h
     side: i % sides,
   }))
   const next = holds.find(h => !h.done)
-  const label = h => (!perSide ? null : `${sets > 1 ? `${h.set + 1} ` : ''}${h.side ? 'Right' : 'Left'}`)
+  const label = h => (!perSide ? null : h.side ? 'Right' : 'Left')
   const total = customDuration * holds.length + rest * (sets - 1)
 
   if (!open) {
@@ -184,13 +196,16 @@ function StretchCard({ store, stretch, tag, grip, open, onOpen, onClose, done, h
 
   const btn = 'w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200'
   return (
-    <div className={`rounded-2xl p-4 ${done ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'}`}>
+    // While its timer goes, nothing on it can be changed or closed (how-to still works).
+    <div className={`rounded-2xl p-4 ${done ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'} ${timing ? FROZEN : ''}`}>
       <div className="flex items-start gap-1.5">
-        <button onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
+        <button data-title onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
           <p className={`text-lg font-bold leading-tight text-balance ${done ? 'text-accent-500' : 'text-stone-900'}`}>{stretch.name}{tag}</p>
           <p className="mt-0.5 text-sm text-stone-500">{[`${fmtSecs(customDuration)} hold`, perSide && 'per side'].filter(Boolean).join(' · ')}</p>
         </button>
-        <button onClick={() => openDemo(stretch.name, 'stretch')} aria-label={`How to do ${stretch.name}`} className={btn}><InfoIcon size={16} /></button>
+        {/* Times the next hold not done (from the first once all are). */}
+        <button onClick={() => onTimer((next ?? holds[0]).i)} disabled={!!timing} aria-label={`Time ${stretch.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-accent-100 text-accent-500 flex items-center justify-center active:bg-accent-200 disabled:opacity-40"><ClockIcon size={16} /></button>
+        <button data-keep onClick={() => openDemo(stretch.name, 'stretch')} aria-label={`How to do ${stretch.name}`} className={btn}><InfoIcon size={16} /></button>
         <button onClick={() => setShowSettings(true)} aria-label={`${stretch.name} settings`} className={btn}><GearIcon size={16} /></button>
         <button onClick={onClose} aria-label={`Close ${stretch.name}`} className={btn}><Chevron up size={16} /></button>
       </div>
@@ -219,13 +234,13 @@ function StretchCard({ store, stretch, tag, grip, open, onOpen, onClose, done, h
             <SetRow
               index={perSide ? h.i : h.set}
               label={label(h)}
-              value={customDuration}
+              value={timing?.hold === h.i ? timing.total / 1000 : customDuration}
               done={h.done}
               next={h === next}
               hold
+              locked={timing?.hold === h.i && ['ready', 'running'].includes(timing.phase)}
               onChange={onDurationChange}
               onToggle={() => { onToggleHold(h.i); if (!h.done && holds.every(x => x.done || x === h)) onClose() }}
-              onTimer={() => onTimer(h.i)}
             />
           </div>
         ))}

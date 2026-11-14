@@ -18,7 +18,7 @@ export function CoolDownCard({ store, onOpen }) {
   const going = COOL_DOWNS.map(c => ({ ...c, ...coolProgress(store, c.id) })).filter(c => c.done > 0 && !c.complete)
   return (
     <div className={CARD}>
-      <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={going[0] ? going[0].done / going[0].list.length : 0} fill="stroke-teal-400" title="Cool Down" sub="After a walk, run, bike, swim or row" onClick={() => onOpen(null)} />
+      <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={going[0] ? going[0].done / going[0].list.length : 0} fill="stroke-teal-400" title="Cool Down" sub="After a walk, run, bike, swim, row or elliptical" onClick={() => onOpen(null)} />
       <UnderWay>
         {going.map(c => (
           <InProgressLine key={c.id} label={`Cool Down · ${c.label}`} onOpen={() => onOpen(c.id)}>

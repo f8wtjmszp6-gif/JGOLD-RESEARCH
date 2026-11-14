@@ -299,6 +299,19 @@ function ExerciseTrend({ exercise, weeks, best }) {
   )
 }
 
+// "10/18/26"
+const mmddyy = d => d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })
+
+const ROW = 'grid grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1fr)] items-center gap-3 px-4'
+
+// A week's totals, split parts included: "3 / 30" (sets / reps), or for
+// holds "3 / 2:15" (sets / time held).
+function setsOf(lift, unit) {
+  const all = [...(lift?.sets ?? []), ...(lift?.splits ?? []).flatMap(x => x.sets)]
+  const sum = all.reduce((n, x) => n + x, 0)
+  return `${all.length} / ${unit === 's' ? `${Math.floor(sum / 60)}:${String(sum % 60).padStart(2, '0')}` : sum}`
+}
+
 // One exercise's trend as a pop-up (from its card in a workout): its row
 // as Trends shows it, then each week it was done, newest first.
 export function ExerciseTrendSheet({ store, exercise, onClose }) {
@@ -311,14 +324,31 @@ export function ExerciseTrendSheet({ store, exercise, onClose }) {
   const label = { lb: assist ? 'lb help' : 'lb', s: 's', reps: 'reps' }[unit]
   return (
     <SettingsSheet title={`${exercise.name} trend`} closeLabel="Done" onClose={onClose}>
+      {/* What each week's number is, for this kind of exercise. */}
+      {unit && <p className="-mt-1 text-sm text-stone-500">{{
+        lb: 'Weight is the average across your sets.',
+        s: 'Longest is your best hold that week.',
+        reps: 'Most is your best set that week.',
+      }[unit]}</p>}
       {unit === 'lb' && !assist && <ExerciseTrend exercise={exercise} weeks={weeks} best={best} />}
       {points.length ? (
-        <div className="mt-3 rounded-2xl bg-stone-50 divide-y divide-stone-200/70">
+        // Three columns: the week, its number (weight, longest hold or most
+        // reps), and the sets done that week.
+        <div className="mt-3 rounded-2xl bg-stone-50 divide-y divide-stone-200/70 text-[15px] tabular-nums">
+          <div className={`${ROW} py-2 text-[11px] font-semibold uppercase tracking-wider text-stone-400`}>
+            <span>Week</span>
+            <span className="text-center">{{ lb: 'Weight', s: 'Longest', reps: 'Most' }[unit]}</span>
+            <span className="text-right">{unit === 's' ? 'Sets / time' : 'Sets / reps'}</span>
+          </div>
           {[...points].reverse().map(p => (
-            <div key={p.start.getTime()} className="flex items-center gap-2 px-4 py-2.5 text-[15px]">
-              <span className="flex-1 text-stone-600">{p.live ? 'This week' : `Week of ${short(p.start)}`}</span>
-              {p.pr && <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px">PR</span>}
-              <span className="font-semibold text-stone-900 tabular-nums">{fmt(p.m.v)} {label}</span>
+            <div key={p.start.getTime()} className={`${ROW} py-2.5`}>
+              <span className="text-stone-600 truncate">{p.live ? 'This week' : mmddyy(p.start)}</span>
+              {/* PR at the left of the column, the number centered in it. */}
+              <span className="relative text-center font-semibold text-stone-900 whitespace-nowrap">
+                {p.pr && <span className="absolute left-0 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px">PR</span>}
+                {fmt(p.m.v)} {label}
+              </span>
+              <span className="text-right text-stone-600 truncate">{setsOf(p.lift, unit === 's' ? 's' : '')}</span>
             </div>
           ))}
         </div>

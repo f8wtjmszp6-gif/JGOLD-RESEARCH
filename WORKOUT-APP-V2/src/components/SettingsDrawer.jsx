@@ -1,19 +1,14 @@
 import { useRef, useState } from 'react'
 import { useDragToClose } from '../hooks/useDragToClose'
 import { GOAL_SETTINGS } from '../data/workout'
-import { Segmented, StepperRow } from './ui/controls'
 import { shareBackup, readBackup, backupAge, usesShareSheet } from '../utils/backup'
-import { playBeep, setVolume } from '../utils/sound'
 import { DefaultsSettings } from './DefaultsSettings'
-import { defaultsSummary } from '../utils/defaults'
 import { ExerciseBank } from './ExerciseBank'
 import { StretchBank } from './StretchBank'
 import { SettingsSheet } from './ui/Sheet'
-import { EXERCISE_BANK } from '../data/exercises'
-import { STRETCH_BANK } from '../data/stretches'
 
 // App settings, full screen, sliding in from the right (and swiping back out
-// to close): your weekly goals (with what the guidelines recommend), timers,
+// to close): your weekly goals (with what the guidelines recommend),
 // backups and reset, each a row that opens in place with what it's set to
 // underneath (your plans' defaults among them). Light or dark follows the
 // phone.
@@ -23,7 +18,7 @@ export default function SettingsDrawer({ store, onClose }) {
   // One section open at a time; tap it again to close it.
   const [open, setOpen] = useState(null)
   const toggle = id => setOpen(o => (o === id ? null : id))
-  // Defaults, Exercises and Stretches open full screen over Settings.
+  // Weekly goals, Defaults, Exercises and Stretches open full screen over Settings.
   const [page, setPage] = useState(null)
   return (
     // Dragging on the shade does nothing, and the panel's scroll stops at its
@@ -42,7 +37,7 @@ export default function SettingsDrawer({ store, onClose }) {
           transition: dragging ? 'none' : 'transform 180ms ease-out',
         }}
       >
-        <div className="px-5 pb-8 space-y-6">
+        <div className="px-5 pb-8 min-h-full flex flex-col gap-6">
           {/* The title stays at the top while the settings scroll under it. */}
           <div
             className="sticky top-0 z-10 bg-white -mx-5 px-5 pb-3 flex items-center justify-between"
@@ -53,29 +48,36 @@ export default function SettingsDrawer({ store, onClose }) {
           </div>
 
           <div className="space-y-3">
-            <Section id="goals" title="Weekly goals" summary={goalsSummary(store.goals)} tile="bg-green-600" icon={ICONS.goals} open={open} onToggle={toggle}>
+            <PageRow title="Weekly goals" tile="bg-green-600" icon={ICONS.goals} onOpen={() => setPage('goals')} />
+            <PageRow title="Defaults" tile="bg-orange-500" icon={ICONS.defaults} onOpen={() => setPage('defaults')} />
+            <PageRow title="Exercises" tile="bg-teal-600" icon={ICONS.exercises} onOpen={() => setPage('exercises')} />
+            <PageRow title="Stretches" tile="bg-violet-500" icon={ICONS.stretches} onOpen={() => setPage('stretches')} />
+            <Section id="backup" title="Backup" summary={backupSummary(store.lastBackupAt)} tile="bg-blue-600" icon={ICONS.backup} open={open} onToggle={toggle}>
+              <Backup store={store} />
+            </Section>
+          </div>
+          {/* Reset sits at the bottom of the page. */}
+          <div className="mt-auto">
+            <FactoryReset store={store} />
+          </div>
+        </div>
+        {page === 'exercises' && <ExerciseBank store={store} onClose={() => setPage(null)} />}
+        {page === 'stretches' && <StretchBank store={store} onClose={() => setPage(null)} />}
+        {page === 'goals' && (
+          <SettingsSheet title="Weekly goals" bare split full onClose={() => setPage(null)}>
+            <div className="flex items-center gap-2">
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Weekly goals</h2>
+              <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
+            </div>
+            <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
               <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
                 {GOAL_SETTINGS.map(g => (
                   <GoalSetting key={g.id} setting={g} goal={store.goals[g.id]} onChange={patch => store.setGoal(g.id, patch)} />
                 ))}
               </div>
-            </Section>
-            <PageRow title="Defaults" summary={defaultsSummary(store).text} tile="bg-orange-500" icon={ICONS.defaults} onOpen={() => setPage('defaults')} />
-            <PageRow title="Exercises" summary={`${EXERCISE_BANK.length} in the bank`} tile="bg-teal-600" icon={ICONS.exercises} onOpen={() => setPage('exercises')} />
-            <PageRow title="Stretches" summary={`${STRETCH_BANK.length} in the bank`} tile="bg-violet-500" icon={ICONS.stretches} onOpen={() => setPage('stretches')} />
-            <Section id="timers" title="Timers" summary={timerSummary(store.timer)} tile="bg-amber-500" icon={ICONS.timers} open={open} onToggle={toggle}>
-              <TimerSettings timer={store.timer} onChange={store.setTimer} />
-            </Section>
-            <Section id="backup" title="Backup" summary={backupSummary(store.lastBackupAt)} tile="bg-blue-600" icon={ICONS.backup} open={open} onToggle={toggle}>
-              <Backup store={store} />
-            </Section>
-            <Section id="reset" title="Reset the app" red tile="bg-stone-500" icon={ICONS.reset} open={open} onToggle={toggle}>
-              <FactoryReset store={store} />
-            </Section>
-          </div>
-        </div>
-        {page === 'exercises' && <ExerciseBank store={store} onClose={() => setPage(null)} />}
-        {page === 'stretches' && <StretchBank store={store} onClose={() => setPage(null)} />}
+            </div>
+          </SettingsSheet>
+        )}
         {page === 'defaults' && (
           <SettingsSheet title="Defaults" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
@@ -92,75 +94,20 @@ export default function SettingsDrawer({ store, onClose }) {
   )
 }
 
-// How timer beeps play, and the count-in before a hold or stretch.
-const SOUND_NOTES = {
-  music: 'Beeps play over your music or podcast. With the ringer switch on silent they only play through headphones.',
-  silent: 'Beeps play even with the ringer switch on silent, but not while music is playing.',
-}
-function TimerSettings({ timer, onChange }) {
-  return (
-    <div className="rounded-2xl bg-stone-50 px-4 py-3 space-y-3">
-      <Segmented
-        label="Sound"
-        value={timer.sound}
-        options={[['music', 'Over music'], ['silent', 'On silent']]}
-        onChange={sound => onChange({ sound })}
-      />
-      <p className="text-xs text-stone-500 leading-relaxed">{SOUND_NOTES[timer.sound]}</p>
-      {/* How loud the beeps are; Test plays the finish beep at that level. */}
-      <div className="pt-3 border-t border-stone-200/70 space-y-2">
-        <div className="flex items-center justify-between">
-          <label htmlFor="timer-volume" className="text-base text-stone-600">Volume</label>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-stone-900 tabular-nums w-11 text-right">{timer.volume === 0 ? 'Off' : `${timer.volume}%`}</span>
-            <button
-              onClick={() => { setVolume(timer.volume / 100); playBeep() }}
-              className="px-3 py-1.5 rounded-lg bg-white text-sm font-medium text-accent-500 shadow-sm active:bg-stone-100"
-            >
-              Test
-            </button>
-          </div>
-        </div>
-        <input
-          id="timer-volume"
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          value={timer.volume}
-          onChange={e => onChange({ volume: Number(e.target.value) })}
-          className="w-full accent-accent-500"
-        />
-        <p className="text-xs text-stone-500 leading-relaxed">On top of your phone’s volume, so turn the phone up too if it’s quiet.</p>
-      </div>
-      <div className="pt-3 border-t border-stone-200/70 space-y-2">
-        <StepperRow
-          label="Get-ready time"
-          value={timer.prep}
-          step={1}
-          min={0}
-          max={15}
-          editable
-          format={v => (v === 0 ? 'Off' : `${v}s`)}
-          onChange={v => onChange({ prep: Math.round(v) })}
-        />
-        <p className="text-xs text-stone-500 leading-relaxed">A countdown before a hold or stretch starts, and before each side and set, so you can get into position.</p>
-      </div>
-    </div>
-  )
-}
-
 // Starts the app fresh: plans back to how they came, everything logged
 // cleared. Asks first, since only a backup file can bring it back.
 function FactoryReset({ store }) {
   const [asking, setAsking] = useState(false)
   const btn = 'w-full py-3 rounded-xl text-sm font-semibold transition-colors'
+  // A plain row (nothing to open); tapping it asks first.
   if (!asking) {
     return (
-      <div className="rounded-2xl bg-stone-50 px-4 py-3 space-y-3">
-        <p className="text-xs text-stone-400">Puts every plan back to how the app came and clears everything you’ve logged.</p>
-        <button onClick={() => setAsking(true)} className={`${btn} bg-red-50 text-red-600 active:bg-red-100`}>Reset app…</button>
-      </div>
+      <button onClick={() => setAsking(true)} className="w-full rounded-2xl border border-stone-100 bg-white shadow-sm flex items-center gap-3 px-3.5 py-2 min-h-[66px] text-left active:bg-stone-50">
+        <span className="w-8 h-8 rounded-[9px] flex items-center justify-center text-white shrink-0 bg-stone-500">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS.reset}</svg>
+        </span>
+        <span className="flex-1 min-w-0 text-base font-medium text-red-600">Reset the app</span>
+      </button>
     )
   }
   return (
@@ -182,13 +129,13 @@ function FactoryReset({ store }) {
 // A setting with a page of its own: tap to open it full screen.
 function PageRow({ title, summary, tile, icon, onOpen }) {
   return (
-    <button onClick={onOpen} className="w-full rounded-2xl border border-stone-100 bg-white shadow-sm flex items-center gap-3 px-3.5 py-3 text-left active:bg-stone-50">
+    <button onClick={onOpen} className="w-full rounded-2xl border border-stone-100 bg-white shadow-sm flex items-center gap-3 px-3.5 py-2 min-h-[66px] text-left active:bg-stone-50">
       <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center text-white shrink-0 ${tile}`}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
       </span>
       <span className="flex-1 min-w-0">
         <span className="block text-base font-medium text-stone-900">{title}</span>
-        <span className="block text-[13px] leading-snug text-stone-400">{summary}</span>
+        {summary && <span className="block text-[13px] leading-snug text-stone-400">{summary}</span>}
       </span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-stone-300 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
     </button>
@@ -199,7 +146,7 @@ function Section({ id, title, summary, tile, icon, red, open, onToggle, children
   const shown = open === id
   return (
     <section className="rounded-2xl border border-stone-100 bg-white shadow-sm overflow-hidden">
-      <button onClick={() => onToggle(id)} aria-expanded={shown} className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-stone-50">
+      <button onClick={() => onToggle(id)} aria-expanded={shown} className="w-full flex items-center gap-3 px-3.5 py-2 min-h-[66px] text-left active:bg-stone-50">
         <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center text-white shrink-0 ${tile}`}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
         </span>
@@ -219,15 +166,12 @@ const ICONS = {
   defaults: <><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></>,
   exercises: <path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12" />,
   stretches: <><circle cx="12" cy="4.5" r="2" /><path d="M5 9l7 1.5L19 9M12 10.5V15l-3.5 6M12 15l3.5 6" /></>,
-  timers: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M10 2h4" /></>,
   backup: <><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z" /><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5" /></>,
   reset: <><path d="M4 12a8 8 0 1 0 2.3-5.7" /><path d="M4 4v4h4" /></>,
 }
 
-// What each section is set to, for its closed row.
-const range = (g, unit) => `${g.min === g.max ? g.min : `${g.min}–${g.max}`} ${unit}`
-const goalsSummary = goals => ({ text: [range(goals.workouts, 'workouts'), range(goals.stretch, 'stretch days'), range(goals.cardio, 'min')].join(' · ') })
-const timerSummary = t => ({ text: [t.sound === 'music' ? 'Over music' : 'On silent', t.volume === 0 ? 'Muted' : `${t.volume}%`, t.prep === 0 ? 'No get-ready' : `${t.prep} s get-ready`].join(' · ') })
+// Every row is the same height (66px fits a title plus a line under it).
+// What Backup is set to, for its closed row.
 // Amber once it's been a week or more, or never.
 function backupSummary(at) {
   if (!at) return { text: 'Never backed up', warn: true }

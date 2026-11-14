@@ -25,7 +25,9 @@ function TrendsNote({ hold, assist, weight }) {
 // ── One set: remembered reps (or seconds) plus this round's tick ────────────
 // A hold's seconds go up and down 5 at a time, never under 5, and it has
 // its own timer (onTimer) before the tick.
-export function SetRow({ index, label, value, done, next, hold, onChange, onToggle, onTimer }) {
+// `locked`: it's the one being timed, so it can't be changed or ticked
+// (the timer ticks it).
+export function SetRow({ index, label, value, done, next, hold, locked, onChange, onToggle, onTimer }) {
   const step = hold ? 5 : 1, least = hold ? 5 : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -40,10 +42,16 @@ export function SetRow({ index, label, value, done, next, hold, onChange, onTogg
     <div className={`flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors ${
       done ? 'bg-accent-100/70' : next ? 'bg-accent-50' : 'bg-stone-50'
     }`}>
-      <span className={`text-xs font-semibold shrink-0 ${label ? 'w-9' : 'w-4'} ${done || next ? 'text-accent-500' : 'text-stone-400'}`}>
-        {label ?? index + 1}
-      </span>
+      {!locked && (
+        <span className={`text-xs font-semibold shrink-0 ${label ? 'w-9' : 'w-4'} ${done || next ? 'text-accent-500' : 'text-stone-400'}`}>
+          {label ?? index + 1}
+        </span>
+      )}
 
+      {/* Being timed: no buttons at all, just a word that the timer has it. */}
+      {locked ? (
+        <span className="flex-1 text-center py-1.5 text-xs font-bold uppercase tracking-wider text-accent-500">Timer running</span>
+      ) : <>
       <button
         onClick={() => onChange(Math.max(least, value - step))}
         className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center text-stone-600 font-medium active:bg-stone-100 transition-colors shrink-0"
@@ -65,7 +73,7 @@ export function SetRow({ index, label, value, done, next, hold, onChange, onTogg
       ) : (
         <button
           onClick={() => { setDraft(String(value)); setEditing(true) }}
-          className="flex-1 text-center active:opacity-60"
+            className="flex-1 text-center active:opacity-60"
         >
           <span className="text-base font-bold text-stone-900">{hold ? secsParts(value)[0] : value}</span>
           <span className="text-xs font-medium text-stone-400">{hold ? secsParts(value)[1] : ' reps'}</span>
@@ -79,9 +87,12 @@ export function SetRow({ index, label, value, done, next, hold, onChange, onTogg
         +
       </button>
 
-      {onTimer && (
+      </>}
+
+      {onTimer && !locked && (
         <button
           onClick={onTimer}
+          disabled={locked}
           aria-label={`Time set ${index + 1}, ${value} seconds`}
           className="w-7 h-7 rounded-lg bg-accent-100 flex items-center justify-center active:bg-accent-200 transition-colors shrink-0"
         >
@@ -89,7 +100,7 @@ export function SetRow({ index, label, value, done, next, hold, onChange, onTogg
         </button>
       )}
 
-      <button onClick={onToggle} aria-label={`${done ? 'Untick' : 'Tick'} set ${index + 1}`} className="shrink-0 active:scale-95 transition-transform ml-0.5">
+      {!locked && <button onClick={onToggle} disabled={locked} aria-label={`${done ? 'Untick' : 'Tick'} set ${index + 1}`} className="shrink-0 active:scale-95 transition-transform ml-0.5 disabled:active:scale-100">
         <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
           done ? 'border-accent-500 bg-accent-500' : next ? 'border-accent-500 bg-white' : 'border-stone-200 bg-white'
         }`}>
@@ -99,17 +110,21 @@ export function SetRow({ index, label, value, done, next, hold, onChange, onTogg
             </svg>
           )}
         </div>
-      </button>
+      </button>}
     </div>
   )
 }
+
+// While a card's timer goes: its buttons fade and don't respond, but for
+// the ones marked data-keep.
+const FROZEN = '[&_button:not([data-keep])]:pointer-events-none [&_button:not([data-keep]):not([data-title])]:opacity-40 [&_input]:pointer-events-none'
 
 // ── Exercise card ────────────────────────────────────────────────────────────
 // Open, it's the full card with its sets; ⌃ or its name closes it. Folded,
 // it's one line ending in ⌄: finished exercises tinted with a tick, the rest
 // with a dot per set. Tap to open. `tag`: by its name, when it's in just
 // for this week.
-export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone, tag }) {
+export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone, tag, timing }) {
   const [showSettings, setShowSettings] = useState(false)
   const [showTrend, setShowTrend] = useState(false)
   const [showPage, setShowPage] = useState(false) // its page in the Exercises bank
@@ -180,14 +195,17 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
     )
   }
 
+  // From Go until its timer ends: nothing on it changes; the set being
+  // counted shows TIMER RUNNING.
+  const counting = !!timing && ['ready', 'running'].includes(timing.phase)
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${timing ? FROZEN : ''}`}>
     <div className={`rounded-2xl p-4 transition-all ${
       allDone ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
       {/* Name and its weight, with how-to, settings and collapse. */}
       <div className="flex items-start gap-1.5">
-        <button onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
+        <button data-title onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
           <p className={`text-lg font-bold leading-tight text-balance ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
             {tag}
@@ -195,11 +213,11 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
           <p className="mt-0.5 text-sm text-stone-500">{[summary, setup.perSide && 'per side'].filter(Boolean).join(' · ')}</p>
         </button>
         {store.current && (
-          <button onClick={() => setShowTrend(true)} aria-label={`${exercise.name} trend`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200">
+          <button data-keep onClick={() => setShowTrend(true)} aria-label={`${exercise.name} trend`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>
           </button>
         )}
-        <button onClick={() => openDemo(exercise.name, 'exercise')} aria-label={`How to do ${exercise.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><InfoIcon size={16} /></button>
+        <button data-keep onClick={() => openDemo(exercise.name, 'exercise')} aria-label={`How to do ${exercise.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><InfoIcon size={16} /></button>
         <button onClick={() => setShowSettings(true)} aria-label={`${exercise.name} settings`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><GearIcon size={16} /></button>
         <button onClick={onClose} aria-label={`Close ${exercise.name}`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><Chevron up size={16} /></button>
       </div>
@@ -231,6 +249,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
             done={set.done}
             next={set === nextSet}
             hold={hold}
+            locked={counting && timing.part === -1 && timing.index === set.index}
             onChange={reps => store.setSetReps(exercise, set.index, reps)}
             onToggle={() => tickSet(set, () => store.toggleSet(workoutId, exercise, set.index))}
             onTimer={onTimer && (() => onTimer(set))}
@@ -321,6 +340,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
       {log.parts.map((p, j) => (
         <SplitCard
           key={j}
+          timingIndex={counting && timing.part === j ? timing.index : null}
           name={exercise.name}
           first={log.sets.length + log.parts.slice(0, j).reduce((n, q) => n + q.sets.length, 0)}
           part={p}
@@ -358,7 +378,7 @@ function SplitButton({ label = 'Split', onClick }) {
 // A split card: this week's sets split off of an exercise, under its main card.
 // Its weight is its own; everything else follows the exercise's settings.
 // `first` is how many sets come before it, so its sets carry on the count.
-function SplitCard({ name, first, part, equipment, bar, hold, next, last, completeAll, onTimer, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
+function SplitCard({ name, first, part, equipment, bar, hold, timingIndex, next, last, completeAll, onTimer, onWeight, onReps, onToggle, onAdd, onRemove, onSplit, onClose }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const step = equipment === 'barbell' ? 5 : 2.5
@@ -425,6 +445,7 @@ function SplitCard({ name, first, part, equipment, bar, hold, next, last, comple
               done={set.done}
               next={set === next}
               hold={hold}
+              locked={timingIndex === set.index}
               onChange={reps => onReps(set.index, reps)}
               onToggle={() => onToggle(set)}
               onTimer={onTimer && (() => onTimer(set))}

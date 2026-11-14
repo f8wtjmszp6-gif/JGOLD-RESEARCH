@@ -246,7 +246,7 @@ export function ExercisePage({ store, exercise: x, fresh, popup = false, onSaved
         </a>
       </Section>}
       {!editing && coversOf(x).length > 0 && (
-        <Section title="Ratings">
+        <Section title="Targets">
           <div className="pb-1.5"><TargetsTable exercise={x} ratings={ratings} /></div>
         </Section>
       )}
