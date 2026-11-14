@@ -231,7 +231,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
                 <CoverageHead start="stretches" parts={[
                   { key: 'stretches', label: 'Stretches', areas: stretchAreas(store, workoutId, store.getStretches(workoutId)), list: store.getStretches(workoutId), noun: 'stretch', listLabel: 'In the routine' },
                 ]} />
-              ) : infoBtn}
+              ) : cool ? null : infoBtn}
               {/* The bell: always here, with a dot while this week differs
                   from your default (Reset is inside). */}
               {(
@@ -253,6 +253,9 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
           <p className="text-stone-400 text-sm mt-1">{FULL_BODY_BY_ID[workoutId].label}</p>
         ) : targeted ? (
           <p className="text-stone-400 text-sm mt-1">{equipmentName(store.targeted.eq)}</p>
+        ) : cool ? (
+          // Which cool-down it is, under Cool Down.
+          <p className="text-stone-400 text-sm mt-1">{cool.label}</p>
         ) : null}
       </div>
 
@@ -370,7 +373,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
                 Finish {kindWord}
               </button>
             )}
-            <button onClick={() => { setLeaving(false); if (anyTicked) setCancelling(true); else cancel() }} className="w-full py-3.5 rounded-2xl bg-red-50 text-red-600 font-semibold active:bg-red-100 transition-colors">
+            <button onClick={() => { setLeaving(false); setCancelling(true) }} className="w-full py-3.5 rounded-2xl bg-red-50 text-red-600 font-semibold active:bg-red-100 transition-colors">
               Cancel {kindWord}
             </button>
           </div>
@@ -384,7 +387,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
         </SettingsSheet>
       )}
       {showInfo && (
-        <SettingsSheet title={targeted ? 'Build a Workout' : cool ? cool.name : workout.short} closeLabel="Done" onClose={() => setShowInfo(false)}>
+        <SettingsSheet title={targeted ? 'What you picked' : cool ? cool.name : workout.short} closeLabel="Done" onClose={() => setShowInfo(false)}>
           {targeted ? (
             // Each area picked, with its muscles.
             <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70">
@@ -403,8 +406,8 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
       )}
       {cancelling && (
         <ConfirmSheet
-          title={`Cancel ${title}?`}
-          body={isRoutine ? "This clears the stretches you've ticked." : "This clears this week's ticked sets, stretches and warm-up for it."}
+          title={targeted ? 'Cancel workout?' : `Cancel ${title}?`}
+          body="Everything you've done or picked will be cleared."
           confirmLabel={`Cancel ${kindWord}`}
           onConfirm={() => { setCancelling(false); cancel() }}
           onClose={() => setCancelling(false)}

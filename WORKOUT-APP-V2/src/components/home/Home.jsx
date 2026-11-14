@@ -234,7 +234,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
       {sheet?.type === 'class' && <LogClassSheet store={sheetStore} edit={sheet.edit} onClose={close} />}
       {sheet?.type === 'routine' && <RoutineSheet store={store} onStart={() => { close(); onOpenWorkout(STRETCH_ROUTINE.id) }} onClose={close} />}
       {sheet?.type === 'fullBody' && <FullBodySheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
-      {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
+      {sheet?.type === 'cool' && <CoolDownSheet store={store} onPick={id => { close(); store.begin(id); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'full' && <BuildSheet store={store} onPick={id => { close(); onOpenWorkout(id) }} onClose={close} />}
       {sheet?.type === 'menu' && <LineMenu store={sheetStore} item={sheet.edit} onEdit={item => openSame(item.kind, { index: item.index, entry: item.entry })} onOpenWorkout={id => { const from = dayOpen ? 'activities' : null; setDayOpen(false); onOpenWorkout(id, null, from, sheet.other ? sheet.ws : undefined) }} onClose={close} />}
       {sheet?.type === 'walk' && <AddCardioSheet kind="walk" store={sheetStore} edit={sheet.edit} onClose={close} />}

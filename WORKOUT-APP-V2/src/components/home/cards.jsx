@@ -45,7 +45,8 @@ export function RoutineCard({ store, onOpen, onAsk }) {
   const id = STRETCH_ROUTINE.id
   const list = store.getStretches(id)
   const done = list.filter(x => store.getStretchDone(id, x.id)).length
-  const under = done > 0 && done < list.length
+  // Under way from when it's started (see begin), not just once one's ticked.
+  const under = (done > 0 || !!store.currentSession(id).checks?.openedAt) && done < list.length
   return (
     <div className={CARD}>
       <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={under ? done / list.length : 0} fill="stroke-teal-400" title={STRETCH_ROUTINE.name} sub={`${STRETCH_WORKOUT_MINUTES}+ min counts as a workout`} onClick={() => (under ? onOpen() : onAsk())} />
@@ -170,7 +171,7 @@ export function RoutineSheet({ store, onStart, onClose }) {
         ))}
       </div>
       <p className="text-sm text-stone-500">{len >= STRETCH_WORKOUT_MINUTES ? `✓ ${STRETCH_WORKOUT_MINUTES}+ min counts as a workout` : `Counts as a stretch day; ${STRETCH_WORKOUT_MINUTES}+ min also counts as a workout`}</p>
-      <button disabled={!len} onClick={() => { store.setRoutineLength(len); store.startAgain(STRETCH_ROUTINE.id); onStart() }}
+      <button disabled={!len} onClick={() => { store.setRoutineLength(len); store.startAgain(STRETCH_ROUTINE.id); store.begin(STRETCH_ROUTINE.id); onStart() }}
         className="w-full py-3.5 rounded-2xl bg-accent-500 text-white font-semibold active:bg-accent-600 transition-colors disabled:bg-stone-200 disabled:text-stone-400">
         {len ? 'Start' : 'Pick a length'}
       </button>

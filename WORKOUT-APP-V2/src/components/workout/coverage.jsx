@@ -57,7 +57,8 @@ const missingText = (missing, noun) => `Missing ${listOf(missing)}. Add ${noun =
 // while something's missing. Its pop-up has a part each (`parts`: { key,
 // label, areas, list, noun, listLabel }), picked with a switch when there's
 // more than one (starting on `start`): the areas covered, then what's in it.
-export function CoverageHead({ parts, start }) {
+// `title`: the pop-up's name (Overview).
+export function CoverageHead({ parts, start, title = 'Overview' }) {
   const [open, setOpen] = useState(false)
   const shown = parts.filter(p => p.areas.length)
   const [key, setKey] = useState(start)
@@ -74,9 +75,9 @@ export function CoverageHead({ parts, start }) {
       </button>
       {open && (
         <InfoSheet
-          title={partAll ? 'All areas covered' : `${covered} of ${part.areas.length} areas covered`}
-          // With a switch, what's missing goes under it.
-          text={shown.length > 1 || partAll ? null : missingText(part.areas.filter(a => !a.covered).map(a => a.label), part.noun)}
+          title={title}
+          // What's missing goes under Coverage.
+          text={null}
           // A fixed height, so switching parts doesn't resize it.
           tall={shown.length > 1}
           onClose={() => setOpen(false)}
@@ -99,7 +100,7 @@ export function CoverageHead({ parts, start }) {
           <div className="space-y-1.5">
             {/* Headed like In this plan below. */}
             <p className="text-sm font-semibold text-stone-900">Coverage</p>
-            {shown.length > 1 && !partAll && (
+            {!partAll && (
               <p className="text-sm text-stone-600 leading-relaxed">{missingText(part.areas.filter(a => !a.covered).map(a => a.label), part.noun)}</p>
             )}
             <ul className="pt-1 space-y-2 text-sm">

@@ -114,7 +114,8 @@ export function BuildSheet({ store, onPick, onClose }) {
   const [picks, setPicks] = useState({})
   const [choosing, setChoosing] = useState(null) // the area whose muscles show
   const areas = TARGET_AREAS.filter(a => picks[a.id]?.length).map(a => a.id)
-  const [eq, setEq] = useState(store.targeted.eq)
+  // Always starts on gym equipment (and not full body, above).
+  const [eq, setEq] = useState('gym')
   const setArea = (id, muscles) => setPicks(p => ({ ...p, [id]: muscles }))
   function tap(a) {
     if (a.tags.length === 1) return setArea(a.id, picks[a.id]?.length ? [] : a.tags)

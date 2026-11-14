@@ -15,7 +15,8 @@ function coolProgress(store, id) {
 // Tapping asks what you just did. Each one under way gets an IN PROGRESS
 // line (tap it to carry on).
 export function CoolDownCard({ store, onOpen }) {
-  const going = COOL_DOWNS.map(c => ({ ...c, ...coolProgress(store, c.id) })).filter(c => c.done > 0 && !c.complete)
+  // Under way from when it's opened (see begin), not just once one's ticked.
+  const going = COOL_DOWNS.map(c => ({ ...c, ...coolProgress(store, c.id) })).filter(c => (c.done > 0 || !!store.currentSession(c.id).checks?.openedAt) && !c.complete)
   return (
     <div className={CARD}>
       <CardHead icon="stretch" tile="from-teal-50 to-teal-100" value={going[0] ? going[0].done / going[0].list.length : 0} fill="stroke-teal-400" title="Cool Down" sub="After a walk, run, bike, swim, row or elliptical" onClick={() => onOpen(null)} />
