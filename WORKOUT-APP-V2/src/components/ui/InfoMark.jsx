@@ -12,10 +12,11 @@ const MARK_INFO = {
 
 // The one way the app explains a symbol: a short sheet with the symbol and
 // its name on top, a sentence, and anything more (a list) under it.
-export function InfoSheet({ icon, title, text, onClose, children }) {
+// `tall`: a fixed height, so a sheet opened from it can match.
+export function InfoSheet({ icon, title, text, tall = false, onClose, children }) {
   return (
-    <SettingsSheet title={<span className="flex items-center gap-2">{icon}{title}</span>} onClose={onClose}>
-      <p className="text-sm text-stone-600 leading-relaxed">{text}</p>
+    <SettingsSheet title={<span className="flex items-center gap-2">{icon}{title}</span>} tall={tall} onClose={onClose}>
+      {text && <p className="text-sm text-stone-600 leading-relaxed">{text}</p>}
       {children}
     </SettingsSheet>
   )

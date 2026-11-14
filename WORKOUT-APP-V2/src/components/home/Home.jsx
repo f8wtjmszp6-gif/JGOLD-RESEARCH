@@ -141,7 +141,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   }
   const strip = (
     <div className="shrink-0 px-5 pb-2.5">
-      <WeekStrip weeks={weeks} at={at} onAt={toWeek} picked={picked} onPick={setPicked} onActivities={() => setDayOpen(true)} />
+      <WeekStrip weeks={weeks} at={at} onAt={toWeek} onActivities={() => setDayOpen(true)} />
       {dayOpen && <DaySheet weeks={weeks} at={at} picked={picked} goals={store?.goals} onEdit={store ? editLine : null} restore={restoring} onRest={store ? () => store.addRest(new Date().toISOString()) : null} onClose={() => { setDayOpen(false); setRestoring(false) }} />}
     </div>
   )

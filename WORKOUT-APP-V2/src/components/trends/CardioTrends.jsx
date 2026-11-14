@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { InfoIcon } from '../ui/glyphs'
+import { SettingsSheet } from '../ui/Sheet'
 
 // Where cardio minutes come from, in the order a week's breakdown lists them.
 const GROUPS = [['walk', 'Walks'], ['class', 'Classes'], ['sport', 'Sports & hikes'], ['other', 'Cardio sessions'], ['warmup', 'Warm-ups']]
@@ -67,6 +69,7 @@ function Stat({ value, unit, label, good }) {
 // blowing the chart up.
 function WeeklyMinutes({ rows, goal }) {
   const [picked, setPicked] = useState(null)
+  const [showInfo, setShowInfo] = useState(false)
   const box = useRef(null)
   const [W, setW] = useState(320)
   useLayoutEffect(() => {
@@ -86,8 +89,17 @@ function WeeklyMinutes({ rows, goal }) {
 
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5 mt-2">
-      {/* Which weeks is said once, under Trends' title. */}
-      <p className="text-sm font-semibold text-stone-900">Cardio minutes</p>
+      {/* Which weeks is said once, under Trends' title; ⓘ says what the
+          shading is. */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-stone-900">Cardio minutes</p>
+        <button onClick={() => setShowInfo(true)} aria-label="What the shading means" className="w-8 h-8 -my-1 -mr-1 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200"><InfoIcon size={15} /></button>
+      </div>
+      {showInfo && (
+        <SettingsSheet title="Cardio minutes" onClose={() => setShowInfo(false)}>
+          <p className="text-sm text-stone-600 leading-relaxed">The shaded band is your {goal.min}–{goal.max} min weekly goal.</p>
+        </SettingsSheet>
+      )}
       <div ref={box} className="relative mt-2">
         <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block" role="img" aria-label={`Cardio minutes for the last ${rows.length} weeks against your ${goal.min}–${goal.max} goal`}>
           <rect x={L} y={y(goal.max)} width={W - L} height={y(goal.min) - y(goal.max)} className="fill-emerald-500/10" />
@@ -141,7 +153,7 @@ function WeeklyMinutes({ rows, goal }) {
           </div>
         )}
       </div>
-      <p className="text-xs text-stone-400 mt-1">Shaded: your {goal.min}–{goal.max} min goal. Tap a week to see what you did.</p>
+      <p className="text-xs text-stone-400 mt-1">Tap a week to see what you did.</p>
     </div>
   )
 }

@@ -57,6 +57,8 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   )
   // Anything ticked in it this week (sets, stretches or the warm-up).
   const anyTicked = store.workoutProgress(workoutId).done > 0 || store.getStretches(workoutId).some(x => store.getStretchDone(workoutId, x.id)) || store.getWarmupDone(workoutId)
+  // A weekly gym plan (not a full-body day or one built from Build a Workout).
+  const gymPlan = !!workouts[workoutId] && !targeted && !FULL_BODY_BY_ID[workoutId]
   const title = FULL_BODY_BY_ID[workoutId] ? 'Full Body' : targeted ? 'Build a Workout' : workout.short
   // What ✕'s buttons call it: the Full Body Stretch and cool-downs are stretches.
   const kindWord = isRoutine ? 'stretch' : 'workout'
@@ -216,7 +218,8 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
           )}
           {!store.past && (
             <div className="flex items-center gap-2 shrink-0">
-              {!FULL_BODY_BY_ID[workoutId] && workoutId !== STRETCH_ROUTINE.id && infoBtn}
+              {/* A gym plan's ⓘ is its areas covered: green when all are. */}
+              {gymPlan ? <CoveragePill list={sections.main} area={workoutId} head /> : !FULL_BODY_BY_ID[workoutId] && workoutId !== STRETCH_ROUTINE.id && infoBtn}
               {calendarBtn}
               <HeadBtn label={`Leave ${title}`} onClick={() => (anyTicked || stamps.day || repeatable ? setLeaving(true) : onBack())}><CrossIcon /></HeadBtn>
             </div>
@@ -266,7 +269,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
 
             <PartHead
               title="Main workout"
-              pill={<CoveragePill list={sections.main} area={workoutId} />}
+              pill={gymPlan ? null : <CoveragePill list={sections.main} area={workoutId} />}
               right={partProgress(sections.main, false)}
               done={partDone(sections.main, false)}
             />

@@ -31,6 +31,8 @@ export function ExerciseBank({ store, onClose }) {
   const [target, setTarget] = useState('')
   const [gear, setGear] = useState('')
   const [open, setOpen] = useState(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [mine, setMine] = useState(false) // only ones you added
   const [planned, setPlanned] = useState(null) // null: all
   // One just added with +: on its page until it's saved (or cancelled,
   // which takes it away again).
@@ -49,6 +51,7 @@ export function ExerciseBank({ store, onClose }) {
   const list = (q ? EXERCISE_BANK.filter(x => x.name.toLowerCase().includes(q)) : inGroup)
     .filter(x => q || !target || coversOf(x).includes(target))
     .filter(x => q || !gear || store.getEquipment(x) === gear)
+    .filter(x => !mine || x.custom)
   const used = new Set(PLANS.flatMap(p => {
     const { main, core } = store.getExerciseSections(p)
     return [...main, ...core].map(x => x?.id)
@@ -56,6 +59,7 @@ export function ExerciseBank({ store, onClose }) {
   const inPlan = list.filter(x => used.has(x.id))
   const shown = planned === null ? list : planned ? inPlan : list.filter(x => !used.has(x.id))
   const groupLabel = MUSCLE_GROUPS.find(g => g.id === group)?.label ?? 'All'
+  const filtered = !!(group || target || gear || mine || planned !== null)
 
   function pickGroup(id) {
     setGroup(id)
@@ -70,8 +74,28 @@ export function ExerciseBank({ store, onClose }) {
         <button onClick={addNew} aria-label="Add an exercise" className={`${HEAD_BTN} w-9 px-0 flex items-center justify-center`}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         </button>
+        {/* Filters: a side bar from the right. */}
+        <FilterButton on={filtered} onClick={() => setFiltersOpen(true)} />
         <button onClick={onClose} className={HEAD_BTN}>Done</button>
       </div>
+      {filtersOpen && (
+        <FilterDrawer onReset={filtered ? () => { setGroup(''); setTarget(''); setGear(''); setMine(false); setPlanned(null) } : null} onClose={() => setFiltersOpen(false)}>
+          <Picker label="Muscle group" sheet value={group} onChange={pickGroup}
+            options={[['', `All (${EXERCISE_BANK.length})`], ...MUSCLE_GROUPS.map(g => [g.id, `${g.label} (${EXERCISE_BANK.filter(x => x.group === g.id).length})`])]} shown={groupLabel} />
+          <Picker label="Targets" sheet value={target} onChange={setTarget}
+            options={[['', 'Any'], ...targets.map(m => [m, muscleName(m)])]} shown={target ? muscleName(target) : 'Any'} />
+          <Picker label="Equipment" sheet value={gear} onChange={setGear}
+            options={[['', 'Any'], ...gears.map(e => [e.id, e.label])]} shown={gear ? gearName(gear) : 'Any'} />
+          <div className="rounded-xl border border-stone-200 px-3 flex items-center">
+            <ToggleRow label="Added by me" on={mine} onChange={setMine} />
+          </div>
+          {/* In your plans or not: a picker like the others. */}
+          <Picker label="Plans" sheet value={planned === null ? '' : planned ? 'in' : 'out'}
+            onChange={v => setPlanned(v === '' ? null : v === 'in')}
+            options={[['', `All (${list.length})`], ['in', `In a plan (${inPlan.length})`], ['out', `Not in a plan (${list.length - inPlan.length})`]]}
+            shown={planned === null ? 'All' : planned ? 'In a plan' : 'Not in a plan'} />
+        </FilterDrawer>
+      )}
       <label className="flex items-center gap-2 rounded-xl bg-stone-100 px-3.5 py-2.5 text-stone-400">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         <input
@@ -82,26 +106,8 @@ export function ExerciseBank({ store, onClose }) {
           className="flex-1 min-w-0 bg-transparent text-base text-stone-900 placeholder:text-stone-400 outline-none select-text"
         />
       </label>
-      {!q && (
-        <div className="grid grid-cols-3 gap-1.5">
-          <Picker label="Muscle group" sheet value={group} onChange={pickGroup}
-            options={[['', `All (${EXERCISE_BANK.length})`], ...MUSCLE_GROUPS.map(g => [g.id, `${g.label} (${EXERCISE_BANK.filter(x => x.group === g.id).length})`])]} shown={groupLabel} />
-          <Picker label="Targets" sheet value={target} onChange={setTarget}
-            options={[['', 'Any'], ...targets.map(m => [m, muscleName(m)])]} shown={target ? muscleName(target) : 'Any'} />
-          <Picker label="Equipment" sheet value={gear} onChange={setGear}
-            options={[['', 'Any'], ...gears.map(e => [e.id, e.label])]} shown={gear ? gearName(gear) : 'Any'} />
-        </div>
-      )}
-      <div className="flex rounded-xl bg-stone-100 p-1" role="radiogroup" aria-label="In a plan or not">
-        {[[null, 'All', list.length], [true, 'In a plan', inPlan.length], [false, 'Not in a plan', list.length - inPlan.length]].map(([v, text, n]) => (
-          <button key={text} role="radio" aria-checked={planned === v} onClick={() => setPlanned(v)}
-            className={`flex-1 py-1.5 rounded-lg text-sm font-semibold ${planned === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}>
-            {text} <span className="font-medium text-stone-400">{n}</span>
-          </button>
-        ))}
-      </div>
       <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5">
-        {/* In your plans, or not: the switch above. */}
+        {/* In your plans, or not: the switch in Filters. */}
         <div className="divide-y divide-stone-100">
           {shown.map(x => (
             <button key={x.id} onClick={() => setOpen(x.id)} className="w-full flex items-center gap-2.5 py-3 text-left active:bg-stone-50">
@@ -513,5 +519,39 @@ export function InfoLink({ href, what }) {
 export function ArrowOut() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
+  )
+}
+
+// The filter button in a bank's header, with a dot while any filter is on.
+export function FilterButton({ on, onClick }) {
+  return (
+    <button onClick={onClick} aria-label="Filters" className={`${HEAD_BTN} relative w-9 px-0 flex items-center justify-center`}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+      {on && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent-500" />}
+    </button>
+  )
+}
+
+// A bank's filters, in a side bar from the right; every filter the same height.
+// Reset (once any is on) puts them all back.
+export function FilterDrawer({ onReset, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 animate-[fade-in_200ms_ease-out]" />
+      <aside
+        role="dialog"
+        aria-label="Filters"
+        onClick={e => e.stopPropagation()}
+        className="absolute inset-y-0 right-0 w-[85%] max-w-sm bg-white shadow-xl px-5 flex flex-col animate-[drawer-in_240ms_ease-out]"
+        style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex items-center gap-2">
+          <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Filters</h2>
+          {onReset && <button onClick={onReset} className={HEAD_BTN}>Reset</button>}
+          <button onClick={onClose} className={HEAD_BTN}>Done</button>
+        </div>
+        <div className="mt-4 space-y-2 [&>div]:h-14">{children}</div>
+      </aside>
+    </div>
   )
 }

@@ -100,7 +100,7 @@ export default function MuscleMap({ store }) {
 
   return (
     <div
-      className="flex items-center gap-0.5"
+      className="flex flex-col items-center gap-0.5"
       role="img"
       aria-label={`Muscles this week: ${done.length ? done.join(', ') + ' done' : 'no plans finished yet'}${classes.length ? `, ${classes.length} ${classes.length === 1 ? 'class' : 'classes'}` : ''}`}
     >

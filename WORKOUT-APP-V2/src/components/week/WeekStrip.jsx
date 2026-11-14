@@ -22,10 +22,9 @@ function monthsOf(weekStart) {
 // Every week, Sunday to Saturday, one page each: swipe right for earlier weeks.
 // It sits under the This week card as the bottom of the same card: the
 // month on top, then each date with a dot for everything done that day, then
-// the key and Activities, which opens the picked day (see DaySheet). Tap a day
-// to pick it. `weeks` is oldest first, ending with this week; `at` is the
-// one showing; `picked` is the day picked (0 = Sunday).
-export default function WeekStrip({ weeks, at, onAt, picked, onPick, onActivities }) {
+// the key and Activities (see DaySheet). The days aren't tappable. `weeks` is oldest first, ending with this week; `at` is the
+// one showing; 
+export default function WeekStrip({ weeks, at, onAt, onActivities }) {
   const pager = useRef(null)
   const settle = useRef(null)
   const week = weeks[at]
@@ -81,8 +80,6 @@ export default function WeekStrip({ weeks, at, onAt, picked, onPick, onActivitie
               key={w.weekStart}
               week={w}
               current={wi === at}
-              picked={wi === at ? picked : null}
-              onPick={onPick}
             />
           ))}
         </div>
@@ -120,38 +117,36 @@ function Arrow({ label, right, disabled, onClick }) {
 }
 
 // One week's seven days. Only this week has a today and days still to come.
-function WeekPage({ week, current, picked, onPick }) {
+function WeekPage({ week, current }) {
   const now = new Date()
   const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
   return (
-    <div className="w-full shrink-0 snap-center snap-always py-1.5" role="tablist" aria-hidden={!current}>
+    <div className="w-full shrink-0 snap-center snap-always py-1.5" aria-hidden={!current}>
       <div className="grid grid-cols-7">
         {days.map((d, i) => {
           const items = week.dayLog?.[i] ?? []
           const isToday = i === today
           return (
-            <button
+            // Just shows the day; Activities is where you look at one.
+            <div
               key={i}
-              role="tab"
-              tabIndex={current ? 0 : -1}
-              aria-selected={picked === i}
+              role="img"
               aria-label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${items.length ? items.map(x => x.label).join(', ') : 'nothing logged'}`}
-              onClick={() => onPick(i)}
-              className={`flex flex-col items-center gap-1 py-0.5 rounded-xl active:bg-stone-100 ${i > today ? 'opacity-40' : ''}`}
+              className={`flex flex-col items-center gap-1 py-0.5 ${i > today ? 'opacity-40' : ''}`}
             >
               <span className={`text-[11px] font-semibold ${isToday ? 'text-accent-500' : 'text-stone-400'}`}>
                 {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
               </span>
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold tabular-nums ${
-                isToday ? 'bg-accent-500 text-white' : picked === i ? 'ring-2 ring-accent-500 text-accent-500' : 'text-stone-900'
+                isToday ? 'bg-accent-500 text-white' : 'text-stone-900'
               }`}>
                 {d.getDate()}
               </span>
               <span className="flex gap-0.5 h-1.5">
                 {tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)}
               </span>
-            </button>
+            </div>
           )
         })}
       </div>

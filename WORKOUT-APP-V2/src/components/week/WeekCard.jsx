@@ -44,22 +44,24 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
   }
 
   return (
-    <div className={`bg-white shadow-sm px-4 pt-2.5 ${joined ? 'rounded-t-2xl pb-3' : 'rounded-2xl pb-2.5'}`}>
-      {/* The live week's title is what's still to go; a saved week's is its
-          dates. */}
-      <div className={`flex items-center justify-between gap-3 ${figure ? 'mb-1.5 -mt-1' : 'mb-2.5'}`}>
-        {live ? (
-          <p className="text-sm text-stone-500">
-            <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} ended={ended} />
-          </p>
-        ) : <p className="text-sm font-medium text-stone-500">{title}</p>}
-        {figure}
-      </div>
-      <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
+    <div className={`bg-white shadow-sm px-4 pt-3 ${joined ? 'rounded-t-2xl pb-2' : 'rounded-2xl pb-2.5'}`}>
+      {/* A saved week's title is its dates; the live week's has what's
+          still to go under the goals instead. */}
+      {!live && <p className="mb-2.5 text-sm font-medium text-stone-500">{title}</p>}
+      {/* The body figures, front over back, to the right of the goals. */}
+      <div className="flex items-center gap-2">
+      <div className={`flex-1 min-w-0 grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
         <GoalTile label="Stretch days" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
+      {figure && <div className="shrink-0">{figure}</div>}
+      </div>
+      {live && (
+        <p className="mt-1.5 text-sm leading-tight text-stone-500">
+          <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} ended={ended} />
+        </p>
+      )}
 
       {/* A count per activity on saved weeks; the live week has the day strip
           under it instead. */}

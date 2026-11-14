@@ -5,7 +5,7 @@ import { demoUrl, openDemo } from '../data/howto'
 import { fmtSecs } from '../utils/format'
 import { ConfirmSheet, SettingsSheet } from './ui/Sheet'
 import { StepperRow, ToggleRow } from './ui/controls'
-import { ArrowOut, HEAD_BTN, InfoLink, Picker, Row, Section } from './ExerciseBank'
+import { ArrowOut, FilterButton, FilterDrawer, HEAD_BTN, InfoLink, Picker, Row, Section } from './ExerciseBank'
 import { ALL_MUSCLES, MUSCLES, google, muscleName } from '../utils/muscles'
 import { InfoSheet } from './ui/InfoMark'
 import { InfoIcon } from './ui/glyphs'
@@ -30,6 +30,8 @@ export function StretchBank({ store, onClose }) {
   const [muscle, setMuscle] = useState('')
   const [open, setOpen] = useState(null)
   const [planned, setPlanned] = useState(null) // null: all
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [mine, setMine] = useState(false) // only ones you added
   const [fresh, setFresh] = useState(null)
   function addNew() {
     const id = store.addCustomStretch()
@@ -41,9 +43,11 @@ export function StretchBank({ store, onClose }) {
   const muscles = ALL_MUSCLES.filter(m => inArea.some(x => x.muscles.includes(m)))
   const shownList = (q ? STRETCH_BANK.filter(x => x.name.toLowerCase().includes(q)) : inArea)
     .filter(x => q || !muscle || x.muscles.includes(muscle))
+    .filter(x => !mine || x.custom)
   const used = new Set(LISTS.flatMap(l => store.getStretches(l).map(x => x.id)))
   const inPlan = shownList.filter(x => used.has(x.id))
   const shown = planned === null ? shownList : planned ? inPlan : shownList.filter(x => !used.has(x.id))
+  const filtered = !!(area || muscle || mine || planned !== null)
 
   return (
     <SettingsSheet title="Stretches" bare split full onClose={onClose}>
@@ -52,8 +56,26 @@ export function StretchBank({ store, onClose }) {
         <button onClick={addNew} aria-label="Add a stretch" className={`${HEAD_BTN} w-9 px-0 flex items-center justify-center`}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         </button>
+        {/* Filters: a side bar from the right. */}
+        <FilterButton on={filtered} onClick={() => setFiltersOpen(true)} />
         <button onClick={onClose} className={HEAD_BTN}>Done</button>
       </div>
+      {filtersOpen && (
+        <FilterDrawer onReset={filtered ? () => { setArea(''); setMuscle(''); setMine(false); setPlanned(null) } : null} onClose={() => setFiltersOpen(false)}>
+          <Picker label="Stretch group" sheet value={area} onChange={v => { setArea(v); setMuscle('') }}
+            options={[['', `All (${STRETCH_BANK.length})`], ...STRETCH_AREAS.map(a => [a.id, `${a.label} (${STRETCH_BANK.filter(x => x.area === a.id).length})`])]}
+            shown={area ? areaName(area) : 'All'} />
+          <Picker label="Targets" sheet value={muscle} onChange={setMuscle}
+            options={[['', 'Any'], ...muscles.map(m => [m, muscleName(m)])]} shown={muscle ? muscleName(muscle) : 'Any'} />
+          <div className="rounded-xl border border-stone-200 px-3 flex items-center">
+            <ToggleRow label="Added by me" on={mine} onChange={setMine} />
+          </div>
+          <Picker label="Plans" sheet value={planned === null ? '' : planned ? 'in' : 'out'}
+            onChange={v => setPlanned(v === '' ? null : v === 'in')}
+            options={[['', `All (${shownList.length})`], ['in', `In a plan (${inPlan.length})`], ['out', `Not in a plan (${shownList.length - inPlan.length})`]]}
+            shown={planned === null ? 'All' : planned ? 'In a plan' : 'Not in a plan'} />
+        </FilterDrawer>
+      )}
       <label className="flex items-center gap-2 rounded-xl bg-stone-100 px-3.5 py-2.5 text-stone-400">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         <input
@@ -64,23 +86,6 @@ export function StretchBank({ store, onClose }) {
           className="flex-1 min-w-0 bg-transparent text-base text-stone-900 placeholder:text-stone-400 outline-none select-text"
         />
       </label>
-      {!q && (
-        <div className="grid grid-cols-2 gap-1.5">
-          <Picker label="Area" sheet value={area} onChange={v => { setArea(v); setMuscle('') }}
-            options={[['', `All (${STRETCH_BANK.length})`], ...STRETCH_AREAS.map(a => [a.id, `${a.label} (${STRETCH_BANK.filter(x => x.area === a.id).length})`])]}
-            shown={area ? areaName(area) : 'All'} />
-          <Picker label="Stretches" sheet value={muscle} onChange={setMuscle}
-            options={[['', 'Any'], ...muscles.map(m => [m, muscleName(m)])]} shown={muscle ? muscleName(muscle) : 'Any'} />
-        </div>
-      )}
-      <div className="flex rounded-xl bg-stone-100 p-1" role="radiogroup" aria-label="In a plan or not">
-        {[[null, 'All', shownList.length], [true, 'In a plan', inPlan.length], [false, 'Not in a plan', shownList.length - inPlan.length]].map(([v, text, n]) => (
-          <button key={text} role="radio" aria-checked={planned === v} onClick={() => setPlanned(v)}
-            className={`flex-1 py-1.5 rounded-lg text-sm font-semibold ${planned === v ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}>
-            {text} <span className="font-medium text-stone-400">{n}</span>
-          </button>
-        ))}
-      </div>
       <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5">
         <div className="divide-y divide-stone-100">
           {shown.map(x => (
