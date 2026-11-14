@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { workouts, STRETCH_ROUTINE, COOL_DOWN_BY_ID, FULL_BODY_BY_ID, TARGETED } from '../../data/workout'
 import { equipmentName, MUSCLE_LABEL, TARGET_AREA_BY_ID } from '../../data/targeted'
 import { gapsAfter, EXERCISE_BY_ID, isCore } from '../../data/exercises'
-import { weekRange, sameDay, weekdayOf } from '../../utils/days'
+import { sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab, StretchTotal } from './StretchesTab'
 import { ExercisePicker } from './pickers'
@@ -18,7 +18,7 @@ import { SlotRows } from './slots'
 import { WarmupCard } from './WarmupCard'
 import { ExerciseCard } from './ExerciseCard'
 
-export default function WorkoutDetail({ workoutId, weekStart = null, focus: asked, backLabel, store, timer, onBack }) {
+export default function WorkoutDetail({ workoutId, weekStart = null, focus: asked, store, timer, onBack }) {
   // Opened while its timer is going, it opens on the card being timed, however
   // you got here.
   const live = timer.active?.workoutId === workoutId && timer.active?.weekStart === weekStart ? timer.active : null
@@ -38,10 +38,9 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   // Ones you can do more than once a week, and how far the one under way got.
   const repeatable = !!FULL_BODY_BY_ID[workoutId] || targeted || workoutId === STRETCH_ROUTINE.id || !!COOL_DOWN_BY_ID[workoutId]
   const current = repeatable ? store.currentSession(workoutId) : null
-  const started = !!current && ((current.done ?? 0) > 0 || current.stretched > 0)
-  const [ending, setEnding] = useState(false)
+  const [leaving, setLeaving] = useState(false) // ✕'s pop-up
   const [pickingDay, setPickingDay] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
+  const [cancelling, setCancelling] = useState(false) // making sure
   const [showInfo, setShowInfo] = useState(false)
   // What it's for, in a pop-up: a plan's muscles, or what you picked for a
   // built one.
@@ -58,6 +57,24 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   )
   // Anything ticked in it this week (sets, stretches or the warm-up).
   const anyTicked = store.workoutProgress(workoutId).done > 0 || store.getStretches(workoutId).some(x => store.getStretchDone(workoutId, x.id)) || store.getWarmupDone(workoutId)
+  const title = FULL_BODY_BY_ID[workoutId] ? 'Full Body' : targeted ? 'Build a Workout' : workout.short
+  // What ✕'s buttons call it: the Full Body Stretch and cool-downs are stretches.
+  const kindWord = isRoutine ? 'stretch' : 'workout'
+  // ✕ → Cancel: everything for this week goes, as if it never happened (a
+  // built one's picks too), and its timer stops.
+  function cancel() {
+    if (mine) timer.stop()
+    store.discard(workoutId)
+    onBack()
+  }
+  // ✕ → Finish workout: logged as far as it got.
+  function endHere() {
+    if (mine) timer.stop()
+    store.endEarly(workoutId)
+    onBack()
+  }
+  // Done to the end already, or ended: nothing to end.
+  const endable = anyTicked && !(repeatable ? current.finished : store.workoutProgress(workoutId).done >= store.workoutProgress(workoutId).total || store.planEnded(workoutId))
   const warmup = store.getWarmup(workoutId)
   // Every exercise starts folded; tapping one opens it (and folds any other).
   // Finishing it folds it again.
@@ -187,46 +204,23 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 bg-stone-50 shrink-0">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <button onClick={onBack} className="flex items-center gap-1.5 text-accent-500 active:opacity-70">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            {/* Back to where you came from: Activities, a saved week, or Workouts. */}
-            <span className="text-sm font-medium">{backLabel ?? (store.past ? weekRange(store.weekStart) : 'Workouts')}</span>
-          </button>
-          {/* Full-body days, the Full Body Stretch and cool-downs go on the day
-              they're done (each moves from its line on the card); one you
-              can't finish is ended here and still logged. */}
-          {/* One built with nothing done yet can be called off, as if it
-              never happened. */}
-          {(targeted || FULL_BODY_BY_ID[workoutId] || workoutId === STRETCH_ROUTINE.id || cool) && !store.past && !started && !store.getWarmupDone(workoutId) ? (
-            <div className="flex items-center gap-2">
-              {(targeted || cool) && infoBtn}
+        {/* Buttons stay at the top when the title wraps. */}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 text-3xl font-bold text-stone-900 tracking-tight">{title}</h1>
+          {/* The same for every kind: what it works (when there's something to
+              say), its day, and ✕ to leave it (see the Leave pop-up). */}
+          {/* A past week's has no ✕, so Done takes you back (to Activities or
+              that week) instead. */}
+          {store.past && (
+            <button onClick={onBack} className="shrink-0 h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
+          )}
+          {!store.past && (
+            <div className="flex items-center gap-2 shrink-0">
+              {!FULL_BODY_BY_ID[workoutId] && workoutId !== STRETCH_ROUTINE.id && infoBtn}
               {calendarBtn}
-              <HeadBtn label="Cancel" onClick={() => { store.discard(workoutId); onBack() }}><CrossIcon /></HeadBtn>
-            </div>
-          ) : repeatable ? (
-            started && !current.finished && (
-              <div className="flex items-center gap-2">
-              {(targeted || cool) && infoBtn}
-              <button onClick={() => setEnding(true)} className="px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 text-sm font-medium active:bg-stone-200">
-                End
-              </button>
-              </div>
-            )
-          ) : !store.past && (
-            // A plan: pick its day, or cancel it (clearing what's ticked,
-            // after asking). A past week's day changes from Activities.
-            <div className="flex items-center gap-2">
-              {infoBtn}
-              {calendarBtn}
-              <HeadBtn label="Cancel this workout" onClick={() => (anyTicked ? setCancelling(true) : onBack())}><CrossIcon /></HeadBtn>
+              <HeadBtn label={`Leave ${title}`} onClick={() => (anyTicked || stamps.day || repeatable ? setLeaving(true) : onBack())}><CrossIcon /></HeadBtn>
             </div>
           )}
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold text-stone-900 tracking-tight">{FULL_BODY_BY_ID[workoutId] ? 'Full Body' : targeted ? 'Build a Workout' : workout.short}</h1>
         </div>
         {FULL_BODY_BY_ID[workoutId] ? (
           // Its equipment was picked before starting (Build a Workout), so it
@@ -341,16 +335,22 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
         />
       )}
       {scopeSheet}
-      {ending && (
-        <ConfirmSheet
-          title="End now?"
-          body={FULL_BODY_BY_ID[workoutId] || targeted
-            ? `It’s logged as it is: ${current.done}/${current.total} sets and ${current.stretched}/${current.stretches} stretches. It counts as a workout only when every set is done.`
-            : `It’s logged as it is: ${current.stretched}/${current.stretches} stretches. It counts as a stretch day only when every stretch is done.`}
-          confirmLabel="End"
-          onConfirm={() => { store.endEarly(workoutId); setEnding(false); onBack() }}
-          onClose={() => setEnding(false)}
-        />
+      {leaving && (
+        <SettingsSheet title={`Leave ${title}?`} closeLabel="Cancel" onClose={() => setLeaving(false)}>
+          <div className="space-y-2">
+            <button onClick={() => { setLeaving(false); onBack() }} className="w-full py-3.5 rounded-2xl bg-stone-100 text-stone-800 font-semibold active:bg-stone-200 transition-colors">
+              Main menu
+            </button>
+            {endable && (
+              <button onClick={endHere} className="w-full py-3.5 rounded-2xl bg-stone-100 text-stone-800 font-semibold active:bg-stone-200 transition-colors">
+                Finish {kindWord}
+              </button>
+            )}
+            <button onClick={() => { setLeaving(false); if (anyTicked) setCancelling(true); else cancel() }} className="w-full py-3.5 rounded-2xl bg-red-50 text-red-600 font-semibold active:bg-red-100 transition-colors">
+              Cancel {kindWord}
+            </button>
+          </div>
+        </SettingsSheet>
       )}
       {showInfo && (
         <SettingsSheet title={targeted ? 'Build a Workout' : cool ? cool.name : workout.short} closeLabel="Done" onClose={() => setShowInfo(false)}>
@@ -372,10 +372,10 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
       )}
       {cancelling && (
         <ConfirmSheet
-          title={`Cancel ${workout.short}?`}
-          body="This clears this week's ticked sets, stretches and warm-up for it."
-          confirmLabel="Cancel workout"
-          onConfirm={() => { if (mine) timer.stop(); store.clearSession(workoutId); setCancelling(false); onBack() }}
+          title={`Cancel ${title}?`}
+          body={isRoutine ? "This clears the stretches you've ticked." : "This clears this week's ticked sets, stretches and warm-up for it."}
+          confirmLabel={`Cancel ${kindWord}`}
+          onConfirm={() => { setCancelling(false); cancel() }}
           onClose={() => setCancelling(false)}
         />
       )}

@@ -59,14 +59,16 @@ function lastWeeks(history, current, count = WEEKS, all = false) {
 
 // The Trends screen: its own page off the header, like Past weeks.
 export default function TrendsScreen({ store, onBack }) {
+  const past = lastWeeks(store.history, store.current).length - 1
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 pt-6 pb-4 bg-stone-50 shrink-0">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Trends</h1>
-          <button onClick={onBack} className="text-accent-500 text-sm font-semibold active:opacity-70">Done</button>
+          <button onClick={onBack} className="shrink-0 h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
         </div>
-        <p className="text-stone-400 text-sm mt-1">Updates as you go, this week included</p>
+        {/* What the week grid shows, said once here. */}
+        <p className="text-stone-400 text-sm mt-1">Last {past} {past === 1 ? 'week' : 'weeks'} and this week so far · ✓ goal met</p>
       </div>
       <Trends store={store} />
     </div>
@@ -187,10 +189,6 @@ function WeekGrid({ weeks, goals }) {
   const spacer = <span aria-hidden="true" />
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5">
-      <div className="flex items-center justify-between mb-2.5">
-        <p className="text-sm font-medium text-stone-500">Last {weeks.length - 1} weeks + this week</p>
-        <p className="text-xs text-stone-400">✓ = goal met</p>
-      </div>
       {/* Laid out by week: the labels, then a column of three boxes per week.
           This week is still going, so its column has one dashed outline, like
           the cardio chart. */}
@@ -412,7 +410,8 @@ function Balance({ weeks }) {
         {counts.map(({ id, done }) => {
           const late = behind.some(b => b.id === id)
           return (
-            <div key={id} className="bg-white shadow-sm rounded-xl px-3 py-1.5 min-w-0 flex items-center gap-2">
+            // Tall enough for a name on two lines, so they all match.
+            <div key={id} className="bg-white shadow-sm rounded-xl px-3 py-1.5 min-h-[46px] min-w-0 flex items-center gap-2">
               <p className="flex-1 min-w-0 text-xs leading-tight text-stone-500">{workouts[id].short}</p>
               <p className={`shrink-0 text-base font-bold tracking-tight tabular-nums ${late ? 'text-red-600' : 'text-stone-900'}`}>
                 {done}<span className="ml-0.5 text-[11px] font-medium text-stone-400">/ {saved.length}</span>

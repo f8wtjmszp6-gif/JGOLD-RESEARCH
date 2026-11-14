@@ -50,11 +50,15 @@ export function ScopeSheet({ title, note, repeat, onPick, onClose }) {
 // logs that never change while open) fit what's in them. `split` ones are
 // tall with a fixed top: only the part marked data-scroll scrolls, and
 // the top takes no scrolling at all (touch-none), so a pull there only
-// moves the sheet. `full` ones (with split) take the whole screen. `bare`:
+// moves the sheet. `full` ones (with split) take the whole screen and close
+// only with their button. `bare`:
 // no title row (what's in it brings its own, and its own way to close).
+const NO_DRAG = { current: null }
+
 export function SettingsSheet({ title, bare = false, subtitle, closeLabel = 'Done', tall = false, split = false, full = false, onClose, children }) {
   const panel = useRef(null)
-  const { offset, dragging, fade } = useDragToClose(panel, onClose)
+  // A full-screen one is a page, not a pop-up: swiping down doesn't close it.
+  const { offset, dragging, fade } = useDragToClose(full ? NO_DRAG : panel, onClose)
   // React still passes events up to the component that opened the sheet (a
   // swipeable row, say); stop them here so touching the sheet can't move it.
   const stop = e => e.stopPropagation()
@@ -90,7 +94,8 @@ export function SettingsSheet({ title, bare = false, subtitle, closeLabel = 'Don
                 <h3 className="text-stone-900 font-bold text-lg">{title}</h3>
                 {subtitle && <p className="text-sm text-stone-500">{subtitle}</p>}
               </div>
-              <button onClick={onClose} className="text-accent-500 text-sm font-semibold active:opacity-70">
+              {/* Done (or Cancel) matches the one on Activities. */}
+              <button onClick={onClose} className="shrink-0 h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">
                 {closeLabel}
               </button>
             </div>

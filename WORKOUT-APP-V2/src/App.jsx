@@ -102,7 +102,7 @@ export default function App() {
       ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
-          <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} backLabel={fromActivities ? 'Activities' : null} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
+          <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
         </div>
       ) : mode === 'food' ? (
         <Food />

@@ -933,9 +933,11 @@ function beforeToday(s, at) {
 }
 
 // A plan begun on a day that's over without every set done ended there (the
-// stop sign on its day); finishing its sets later still completes it.
+// stop sign on its day), as does one ended by hand (`ended`, from ✕ → End
+// here); finishing its sets later still completes it.
 export function planEndedOf(s, id) {
-  return !REPEATABLE.has(id) && beforeToday(s, s.checks?.[id]?.at) && !workoutComplete(s, id)
+  const c = s.checks?.[id]
+  return !REPEATABLE.has(id) && (!!c?.ended || beforeToday(s, c?.at)) && !workoutComplete(s, id)
 }
 
 // Ones you can do again left unfinished on a day that's over are ended

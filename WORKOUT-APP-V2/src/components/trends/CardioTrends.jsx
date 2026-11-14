@@ -86,10 +86,8 @@ function WeeklyMinutes({ rows, goal }) {
 
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3.5 mt-2">
-      <div className="flex items-baseline justify-between">
-        <p className="text-sm font-semibold text-stone-900">Cardio minutes</p>
-        <p className="text-xs text-stone-400">{rows.length > 1 ? `Last ${rows.length - 1} ${rows.length === 2 ? 'week' : 'weeks'} + this week` : 'This week'}</p>
-      </div>
+      {/* Which weeks is said once, under Trends' title. */}
+      <p className="text-sm font-semibold text-stone-900">Cardio minutes</p>
       <div ref={box} className="relative mt-2">
         <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block" role="img" aria-label={`Cardio minutes for the last ${rows.length} weeks against your ${goal.min}–${goal.max} goal`}>
           <rect x={L} y={y(goal.max)} width={W - L} height={y(goal.min) - y(goal.max)} className="fill-emerald-500/10" />

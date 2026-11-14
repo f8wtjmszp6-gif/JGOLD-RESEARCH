@@ -297,7 +297,7 @@ function SportList({ store, picked, onPick, onForget, onClose }) {
         {own.length > 0 && (
           // A pencil to edit the list; Done while editing.
           editing ? (
-            <button onClick={() => setEditing(false)} className="px-2 text-sm font-semibold text-accent-500 active:opacity-70">Done</button>
+            <button onClick={() => setEditing(false)} className="shrink-0 h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
           ) : (
             <button onClick={() => setEditing(true)} aria-label="Edit your sports" className="w-11 h-11 shrink-0 rounded-xl bg-stone-100 text-stone-600 flex items-center justify-center active:bg-stone-200">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>
