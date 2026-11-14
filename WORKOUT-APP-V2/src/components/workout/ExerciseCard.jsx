@@ -224,12 +224,12 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
       </div>
       {/* Your best, last time and today, in one strip. */}
       <div className="mt-3 flex rounded-xl border border-stone-200 divide-x divide-stone-200">
-        {/* Last time and Today open each set in a pop-up; PR only when it's cut off. */}
-        {[['PR', past.pr], ['Last time', past.last && totalOf(past.lastRaw, past.lastHold)], ['Today', today && totalOf(reps, hold)]].map(([k, v]) => (
+        {/* Last time and Today open each set in a pop-up (PR is in Trends). */}
+        {[['Last time', past.last && totalOf(past.lastRaw, past.lastHold)], ['Today', today && totalOf(reps, hold)]].map(([k, v]) => (
           <button
             key={k}
             data-keep
-            onClick={e => { const t = e.currentTarget.lastChild; if (v && (k !== 'PR' || t.scrollWidth > t.clientWidth)) setFullStat(k) }}
+            onClick={() => { if (v) setFullStat(k) }}
             className="flex-1 min-w-0 px-3 py-2 text-left"
           >
             <p className="text-[11px] uppercase tracking-wider font-semibold text-stone-500">{k}</p>
@@ -239,9 +239,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
       </div>
       {fullStat && (
         <SettingsSheet title={`${exercise.name} · ${fullStat}`} onClose={() => setFullStat(null)}>
-          {fullStat === 'PR' ? (
-            <p className="text-lg font-bold text-stone-900">{past.pr}</p>
-          ) : (
+          {
             <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
               {(fullStat === 'Today' ? reps.map(one) : past.lastSets).map((r, i) => (
                 <div key={i} className="flex items-center justify-between py-2.5">
@@ -250,7 +248,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
                 </div>
               ))}
             </div>
-          )}
+          }
         </SettingsSheet>
       )}
 
@@ -507,13 +505,5 @@ function pastOf(history, id) {
   const last = logged[0]
   const reps = setsOf(last)
   const lastText = reps.length && (reps.every(r => r === reps[0]) ? `${reps.length} × ${one(last, reps[0])}` : reps.map(r => one(last, r)).join(', '))
-  let pr = null
-  if (last.mode === 'hold') {
-    const best = Math.max(...logged.filter(l => l.mode === 'hold').flatMap(setsOf))
-    if (best > 0) pr = fmtSecs(best)
-  } else {
-    const ws = logged.filter(l => l.mode === 'reps').map(l => l.weight).filter(w => w > 0)
-    if (ws.length) pr = `${fmt(last.assist ? Math.min(...ws) : Math.max(...ws))} lbs${last.assist ? ' assist' : ''}`
-  }
-  return { pr, last: lastText || null, lastSets: reps.map(r => one(last, r)), lastRaw: reps, lastHold: last.mode === 'hold' }
+  return { last: lastText || null, lastSets: reps.map(r => one(last, r)), lastRaw: reps, lastHold: last.mode === 'hold' }
 }
