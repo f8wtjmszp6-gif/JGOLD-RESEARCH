@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Home from './components/home/Home'
+import { resetHomeView } from './utils/homeView'
 import MuscleMap from './components/week/MuscleMap'
 import WeekCard from './components/week/WeekCard'
 import SettingsDrawer from './components/SettingsDrawer'
@@ -148,7 +149,7 @@ export default function App() {
       )}
 
       {/* On the home screens only, not inside a workout or Trends. */}
-      {!workoutId && view !== 'trends' && <ModePill mode={mode} onMode={setMode} />}
+      {!workoutId && view !== 'trends' && <ModePill mode={mode} onMode={m => { if (m === 'workout' && mode !== 'workout') resetHomeView(); setMode(m) }} />}
       {calendar && (
         <CalendarSheet
           weeks={weeks}

@@ -11,12 +11,12 @@ import { FullBodyCard, FullBodySheet } from './fullBody'
 import { LineMenu } from './lineMenu'
 import { Timed } from './timerLine'
 import { upNextOf } from '../../utils/upNext'
+import { TAB_KEY, GYM_KEY } from '../../utils/homeView'
 
 // The homepage shows one group at a time, picked by these tabs. The tab you
 // pick holds while the app is open (in the background too); starting the app
 // fresh opens on Gym.
 const TABS = [['gym', 'Gym'], ['cardio', 'Cardio'], ['stretch', 'Stretch']]
-const TAB_KEY = 'workout-v2-home-tab'
 function savedTab() {
   try {
     localStorage.removeItem(TAB_KEY) // where older builds kept it for good
@@ -33,7 +33,6 @@ function savedTab() {
 // remounts Home for each pick).
 // On Gym, a switch in the header picks the weekly plans or your own
 // workouts (Build a Workout, classes); remembered like the tab.
-const GYM_KEY = 'workout-v2-gym-view'
 function savedGymView() {
   try {
     return sessionStorage.getItem(GYM_KEY) === 'custom' ? 'custom' : 'plans'
@@ -96,6 +95,8 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   }
   function setTab(t) {
     setTabState(t)
+    // Tapping Gym always starts on Plans.
+    if (t === 'gym') setGymView('plans')
     try {
       sessionStorage.setItem(TAB_KEY, t)
     } catch {
