@@ -285,12 +285,10 @@ function ExerciseTrend({ exercise, weeks, best }) {
               <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px align-[1px]">PR</span>
               {` ${fmt(best)} lb`}
             </span>
-            <span className="text-stone-300"> · </span>
-            <span>
-              <span className={`font-semibold ${change > 0 ? 'text-emerald-700' : 'text-stone-400'}`}>
-                {`${change >= 0 ? '+' : ''}${fmt(change)}`}
-              </span>
-              <span className="text-[11px] text-stone-400">{` in ${WEEKS} wks`}</span>
+            <span className="font-bold text-stone-500"> · </span>
+            {/* ↑ or ↓ and how much over the weeks shown (said under Trends' title). */}
+            <span className={`font-semibold ${change > 0 ? 'text-emerald-700' : change < 0 ? 'text-red-600' : 'text-stone-400'}`}>
+              {change === 0 ? 'No change' : `${change > 0 ? '↑' : '↓'}${fmt(Math.abs(change))} lb`}
             </span>
           </div>
         ) : (
