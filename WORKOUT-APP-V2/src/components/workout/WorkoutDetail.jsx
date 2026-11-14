@@ -77,8 +77,9 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
     store.endEarly(workoutId)
     onBack()
   }
-  // Done to the end already, or ended: nothing to end.
-  const endable = anyTicked && !(repeatable ? current.finished : store.workoutProgress(workoutId).done >= store.workoutProgress(workoutId).total || store.planEnded(workoutId))
+  // Done to the end already: nothing to finish. A plan finished early and
+  // picked up again can be finished again.
+  const endable = anyTicked && !(repeatable ? current.finished : store.workoutProgress(workoutId).done >= store.workoutProgress(workoutId).total)
   const warmup = store.getWarmup(workoutId)
   // Every exercise starts folded; tapping one opens it (and folds any other).
   // Finishing it folds it again.

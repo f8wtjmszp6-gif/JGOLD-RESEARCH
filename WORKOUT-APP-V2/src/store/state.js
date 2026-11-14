@@ -172,7 +172,10 @@ export function writeChecks(s, workoutId, fn) {
   const list = stretchesOf(s, workoutId)
   const stretched = list.length > 0 && list.every(x => next.stretches?.[x.id])
   const begun = list.some(x => next.stretches?.[x.id])
-  const { at, stretchedAt, stretchStartAt, warmedAt, ...rest } = next
+  // Ticking again after Finish workout picks it back up: it's under way again
+  // until it's finished (or ended) once more.
+  // eslint-disable-next-line no-unused-vars
+  const { at, stretchedAt, stretchStartAt, warmedAt, ended, ...rest } = next
   // A plan's stretches and warm-up go on its workout's day, even if done
   // another day.
   const day = lifted ? at ?? now : null
