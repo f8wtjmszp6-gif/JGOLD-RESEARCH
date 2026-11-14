@@ -161,7 +161,8 @@ export function writeSettings(s, exercise, fn) {
 
 // Also stamps the day, for the week strip: `at` once a set is ticked (gone
 // again if every set is unticked), `stretchStartAt` once a stretch is,
-// `stretchedAt` once every stretch is.
+// `stretchedAt` once every stretch is, `warmedAt` once the warm-up is (all on
+// the workout's day once it has one).
 export function writeChecks(s, workoutId, fn) {
   const next = fn(s.checks?.[workoutId] ?? {})
   // Ticks go on the plan's picked day, if one was picked.
@@ -172,12 +173,15 @@ export function writeChecks(s, workoutId, fn) {
   const stretched = list.length > 0 && list.every(x => next.stretches?.[x.id])
   const begun = list.some(x => next.stretches?.[x.id])
   const { at, stretchedAt, stretchStartAt, warmedAt, ...rest } = next
+  // A plan's stretches and warm-up go on its workout's day, even if done
+  // another day.
+  const day = lifted ? at ?? now : null
   const stamped = {
     ...rest,
-    ...(lifted && { at: at ?? now }),
-    ...(begun && { stretchStartAt: stretchStartAt ?? now }),
-    ...(stretched && { stretchedAt: stretchedAt ?? now }),
-    ...(next.warmup && { warmedAt: warmedAt ?? now }),
+    ...(lifted && { at: day }),
+    ...(begun && { stretchStartAt: day ?? stretchStartAt ?? now }),
+    ...(stretched && { stretchedAt: day ?? stretchedAt ?? now }),
+    ...(next.warmup && { warmedAt: day ?? warmedAt ?? now }),
   }
   return { ...s, checks: { ...s.checks, [workoutId]: stamped } }
 }
