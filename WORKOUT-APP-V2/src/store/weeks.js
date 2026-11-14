@@ -10,7 +10,7 @@ import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, dayLogOf, classe
 // were set up that week (lists, weights, timers), so it can be opened and
 // changed later without touching this week's numbers.
 const WEEK_KEYS = ['checks', 'activities', 'stretchExtra', 'stretchLog', 'cardio', 'classLog', 'restLog', 'sessionLog', 'weekOnly']
-const SETUP_KEYS = ['exerciseSettings', 'setup', 'warmups', 'order', 'coreLists', 'coreOn', 'stretchLists', 'targeted', 'equipment', 'assist', 'customDurations', 'perSide', 'stretchSets', 'stretchRest']
+const SETUP_KEYS = ['exerciseSettings', 'setup', 'warmups', 'order', 'coreLists', 'coreOn', 'stretchLists', 'targeted', 'equipment', 'assist', 'customDurations', 'perSide', 'stretchSets', 'stretchRest', 'routineLength']
 const EMPTY_WEEK = { checks: {}, activities: {}, stretchExtra: 0, stretchLog: [], cardio: [], classLog: [], restLog: [], sessionLog: [], weekOnly: {} }
 
 export function detailsOf(s) {

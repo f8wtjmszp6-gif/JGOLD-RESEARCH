@@ -1,4 +1,4 @@
-import { pairUp, primaryOf } from '../data/exercises'
+import { pairUp, planAreaIds, primaryOf } from '../data/exercises'
 import { FULL_BODY_BY_ID, MUSCLE_GROUPS, STRETCH_ROUTINE, workouts } from '../data/workout'
 import { MUSCLE_LABEL } from '../data/targeted'
 import { MUSCLES } from './muscles'
@@ -17,7 +17,8 @@ export function stretchAreas(store, listId, list) {
   const byGroup = !!FULL_BODY_BY_ID[listId]
   const ids = byGroup
     ? MUSCLE_GROUPS.map(g => g.id).filter(g => [...trained].some(m => groupOf(m) === g))
-    : Object.keys(MUSCLE_LABEL).filter(m => trained.has(m))
+    // In the same order as the exercises' coverage, then anything else.
+    : [...new Set([...planAreaIds(listId), ...Object.keys(MUSCLE_LABEL)])].filter(m => trained.has(m))
   const reaches = byGroup ? x => (x.muscles ?? []).map(groupOf) : x => x.muscles ?? []
   const holder = pairUp(list, ids, reaches)
   return ids.map(id => ({
@@ -25,6 +26,8 @@ export function stretchAreas(store, listId, list) {
     label: byGroup ? MUSCLE_GROUPS.find(g => g.id === id).label : MUSCLE_LABEL[id],
     covered: holder[id] !== undefined,
     by: list[holder[id]] ?? null,
+    group: byGroup,
+    count: list.filter(x => reaches(x).includes(id)).length, // how many reach it
     // Its rating for this area: rank 1 is 3, rank 2 is 2, rank 3 is 1.
     rate: x => { const i = reaches(x).indexOf(id); return i < 0 ? 0 : 3 - i },
   }))

@@ -382,16 +382,24 @@ export function ratingFor(exercise, planId) {
 // ── Coverage ───────────────────────────────────────────────────────────────
 // The areas each plan (and the Core section) is meant to work. A plan covers
 // an area when one of its exercises has that area as a main target.
-const PLAN_AREAS = {
-  push: [['chest', 'Chest'], ['front-delts', 'Front delts'], ['side-delts', 'Side delts'], ['triceps', 'Triceps'], ['obliques', 'Obliques']],
-  legsQuad: [['quads', 'Quads'], ['glutes', 'Glutes'], ['inner-thighs', 'Inner thighs'], ['outer-thighs', 'Outer thighs'], ['calves', 'Calves'], ['abs', 'Abs']],
-  pull: [['lats', 'Lats / upper back'], ['traps', 'Traps'], ['rear-delts', 'Rear delts'], ['biceps', 'Biceps'], ['abs', 'Abs']],
-  legsPost: [['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['lower-back', 'Lower back'], ['calves', 'Calves'], ['obliques', 'Obliques']],
-  fullGym: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
-  fullHomeDb: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['chest', 'Chest'], ['lats', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
-  fullHome: [['quads', 'Quads'], ['glutes', 'Glutes'], ['chest', 'Chest'], ['lower-back', 'Back'], ['front-delts', 'Shoulders'], ['abs', 'Abs']],
-  core: [['abs', 'Abs'], ['obliques', 'Obliques']],
+// Each muscle's name, the same everywhere (targets, coverage, slots).
+export const MUSCLE_LABEL = {
+  chest: 'Chest', lats: 'Lats', traps: 'Traps', 'lower-back': 'Lower back', 'front-delts': 'Front delts',
+  'side-delts': 'Side delts', 'rear-delts': 'Rear delts', biceps: 'Biceps', triceps: 'Triceps', quads: 'Quads',
+  'inner-thighs': 'Inner thighs', glutes: 'Glutes', 'outer-thighs': 'Outer thighs', hamstrings: 'Hamstrings', calves: 'Calves', abs: 'Abs', obliques: 'Obliques',
 }
+
+// The muscles each gym plan should hit, named as their targets are.
+const AREAS = (...ids) => ids.map(id => [id, MUSCLE_LABEL[id]])
+const PLAN_AREAS = {
+  push: AREAS('chest', 'front-delts', 'side-delts', 'triceps', 'obliques'),
+  legsQuad: AREAS('quads', 'glutes', 'inner-thighs', 'outer-thighs', 'calves', 'abs'),
+  pull: AREAS('lats', 'traps', 'rear-delts', 'biceps', 'abs'),
+  legsPost: AREAS('hamstrings', 'glutes', 'lower-back', 'calves', 'obliques'),
+  core: AREAS('abs', 'obliques'),
+}
+// A plan's muscles in the order its coverage shows them.
+export const planAreaIds = planId => (PLAN_AREAS[planId] ?? []).map(([id]) => id)
 
 // Each exercise's main targets only — a bench press is chest work, not your
 // triceps work. Anything not listed targets a single area by its group.
@@ -463,10 +471,22 @@ export function primaryOf(exercise) {
 // works chest and triceps, is left free when Bench Press and an extension
 // cover those). `section` is the plan id, or 'core' for the Core section.
 export function coverage(list, section) {
-  const areas = PLAN_AREAS[section] ?? []
-  const holder = pairUp(list, areas.map(([id]) => id), x => primaryOf(x))
-  return areas.map(([id, label]) => ({ id, label, covered: holder[id] !== undefined, by: list[holder[id]] ?? null }))
+  // The full-body days go by muscle group: one exercise that mainly works
+  // any muscle in it.
+  const byGroup = FULL_BODY_IDS.includes(section)
+  const areas = byGroup ? MUSCLE_GROUPS.map(g => [g.id, g.label]) : PLAN_AREAS[section] ?? []
+  const reaches = byGroup ? x => primaryOf(x).map(groupOfMuscle) : x => primaryOf(x)
+  const holder = pairUp(list, areas.map(([id]) => id), reaches)
+  return areas.map(([id, label]) => ({
+    id, label, covered: holder[id] !== undefined, by: list[holder[id]] ?? null, group: byGroup,
+    count: list.filter(x => reaches(x).includes(id)).length, // how many work it
+    // How well an exercise fills it: its best rating on what it mainly works there (0: none).
+    rate: x => Math.max(0, ...primaryOf(x).filter(m => (byGroup ? groupOfMuscle(m) : m) === id).map(m => ratingOn(x, m))),
+  }))
 }
+const FULL_BODY_IDS = ['fullGym', 'fullHomeDb', 'fullHome']
+const GROUP_MUSCLES = { chest: ['chest'], back: ['lats', 'traps', 'lower-back'], shoulders: ['front-delts', 'side-delts', 'rear-delts'], arms: ['biceps', 'triceps'], legs: ['quads', 'inner-thighs', 'glutes', 'outer-thighs', 'hamstrings', 'calves'], core: ['abs', 'obliques'] }
+const groupOfMuscle = m => Object.keys(GROUP_MUSCLES).find(g => GROUP_MUSCLES[g].includes(m))
 
 // Pairs each area in `ids` with its own item from `list` (one area each),
 // trying items that reach fewer areas first and moving an area along to

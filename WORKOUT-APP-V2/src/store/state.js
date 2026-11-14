@@ -479,8 +479,7 @@ function defaultIds(workoutId) {
   const core = id => isCore(EXERCISE_BY_ID[id])
   const at = own.findIndex(core)
   const end = at < 0 ? own.length : at
-  // A full-body day's core work goes at the end (see DEFAULT_CORE).
-  return [...own.slice(0, end), ...extras.filter(id => !core(id)), ...own.slice(end), ...extras.filter(core), ...(DEFAULT_CORE[workoutId] ?? [])]
+  return [...own.slice(0, end), ...extras.filter(id => !core(id)), ...own.slice(end), ...extras.filter(core)]
 }
 
 export function listIds(s, workoutId, section) {
@@ -759,8 +758,11 @@ export function ownStretchesOf(s) {
 // it falls back to the starting stretches.
 // A list with its own holds (the Full Body Stretch, a cool-down) times them its way,
 // sets and rest too, unless you've set one yourself.
+// The Full Body Stretch's length in minutes (see STRETCH_ROUTINE.lengths).
+export const routineLengthOf = s => (STRETCH_ROUTINE.lengths[s.routineLength] ? s.routineLength : STRETCH_ROUTINE.length)
+
 export function stretchesOf(s, listId) {
-  const holds = listId === STRETCH_ROUTINE.id ? STRETCH_ROUTINE.holds : COOL_DOWN_BY_ID[listId]?.holds ?? null
+  const holds = listId === STRETCH_ROUTINE.id ? STRETCH_ROUTINE.lengths[routineLengthOf(s)] : COOL_DOWN_BY_ID[listId]?.holds ?? null
   const own = x => (holds ? { ...x, duration: x.perSide ? holds.perSide : holds.single, sets: holds.sets, rest: holds.rest } : x)
   const pick = ids => ids.map(id => STRETCH_BY_ID[id]).filter(Boolean).map(own)
   const saved = pick(planOf(s, 'stretchLists')[listId] ?? [])
@@ -773,11 +775,13 @@ export function writeStretchList(s, listId, change, scope) {
   return pruneStretchTicks(writePlan(s, 'stretchLists', listId, x => stretchesOf(x, listId).map(st => st.id), change, scope), listId)
 }
 
-// Drops ticks on stretches no longer in the list.
+// Drops ticks on stretches no longer in the list, and checks again whether
+// they're all done: taking off the last one still to do finishes them, and
+// adding one takes that back.
 function pruneStretchTicks(s, listId) {
+  if (!s.checks?.[listId]) return s
   const ids = stretchesOf(s, listId).map(st => st.id)
-  const ticks = s.checks?.[listId]?.stretches ?? {}
-  if (Object.keys(ticks).every(id => ids.includes(id))) return s
+  const ticks = s.checks[listId].stretches ?? {}
   const kept = Object.fromEntries(Object.entries(ticks).filter(([id]) => ids.includes(id)))
   return writeChecks(s, listId, cur => ({ ...cur, stretches: kept }))
 }

@@ -93,9 +93,17 @@ export const STRETCH_ROUTINE = {
     'doorway-pec', 'behind-back-clasp', 'cross-body-shoulder', 'thread-the-needle', 'bicep-wall', 'overhead-tricep-stretch',
     'childs-pose', 'spinal-twist', 'side-bend', 'chin-tucks',
   ],
-  // About 30 minutes, the same time on each: two sets of 25s a side for one
-  // done on each side, or of 50s, with 5s between (17 × 105s).
-  holds: { perSide: 25, single: 50, sets: 2, rest: 5 },
+  // How long it runs, picked from these (minutes): the same time on each
+  // stretch, as longer holds and then more sets (17 stretches each time).
+  lengths: {
+    10: { perSide: 20, single: 40, sets: 1, rest: 5 },
+    20: { perSide: 35, single: 70, sets: 1, rest: 5 },
+    30: { perSide: 25, single: 50, sets: 2, rest: 5 },
+    40: { perSide: 35, single: 70, sets: 2, rest: 5 },
+    50: { perSide: 30, single: 60, sets: 3, rest: 5 },
+    60: { perSide: 35, single: 70, sets: 3, rest: 5 },
+  },
+  length: 30, // to start
 }
 
 // Short stretch lists for after cardio, one per activity; you pick which you
@@ -229,6 +237,11 @@ export const GYM_ORDER = ['push', 'legsQuad', 'pull', 'legsPost']
 // like a cool-down. Each is a plan like the four (its own lists, stretches
 // and Trends) and counts as a gym workout once finished. Exercises come from
 // the bank, so only their ids are listed.
+// Each full-body day: 12 exercises that work all 17 muscles, and the fewest
+// stretches that reach them all (8), the same for each (checked by the six
+// muscle groups).
+const FULL_BODY_STRETCHES = ['cross-body-shoulder', 'overhead-tricep-stretch', 'bicep-wall', 'shoulder-rolls',
+  'figure-4', 'lizard-pose', 'spinal-twist', 'sun-salutation']
 export const FULL_BODY = [
   {
     id: 'fullGym',
@@ -237,10 +250,8 @@ export const FULL_BODY = [
     label: 'With Gym Equipment',
     where: 'At the gym',
     chip: 'All equipment',
-    // Every muscle, in as few exercises as do it well (core work at the end:
-    // see DEFAULT_CORE).
-    exercises: ['deadlift', 'lateral-lunge', 'dips', 'chin-ups', 'arnold-press', 'y-raises', 'hip-abduction', 'standing-calf-raise'].map(id => ({ id })),
-    stretches: ['worlds-greatest', 'hip-flexor', 'doorway-pec', 'lat-stretch', 'cross-body-shoulder', 'overhead-tricep-stretch'],
+    exercises: ['db-sumo-squat', 'deadlift', 'hip-abduction', 'seated-calf-raise', 'bench-press', 'dips', 'barbell-rows', 'chin-ups', 'arnold-press', 'y-raises', 'barbell-curl', 'bicycle-crunch'].map(id => ({ id })),
+    stretches: FULL_BODY_STRETCHES,
   },
   {
     id: 'fullHomeDb',
@@ -249,8 +260,8 @@ export const FULL_BODY = [
     label: 'With Dumbbells',
     where: 'At home',
     chip: 'Dumbbells',
-    exercises: ['lateral-lunge', 'single-leg-rdl', 'incline-db-press', 'one-arm-db-row', 'arnold-press', 'y-raises', 'db-curl', 'overhead-tricep-extension', 'superman', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
-    stretches: ['worlds-greatest', 'hip-flexor', 'doorway-pec', 'childs-pose', 'cross-body-shoulder', 'overhead-tricep-stretch'],
+    exercises: ['db-sumo-squat', 'single-leg-rdl', 'fire-hydrants', 'single-leg-calf-raise', 'incline-db-press', 'one-arm-db-row', 'superman-pull', 'arnold-press', 'y-raises', 'db-curl', 'overhead-tricep-extension', 'bicycle-crunch'].map(id => ({ id })),
+    stretches: FULL_BODY_STRETCHES,
   },
   {
     id: 'fullHome',
@@ -259,8 +270,8 @@ export const FULL_BODY = [
     label: 'No Equipment',
     where: 'At home',
     chip: 'Bodyweight',
-    exercises: ['cossack-squat', 'elevated-hamstring-bridge', 'push-ups', 'superman-pull', 'pike-push-ups', 'arm-circles', 'reverse-snow-angels', 'towel-curl', 'diamond-push-ups', 'fire-hydrants', 'single-leg-calf-raise'].map(id => ({ id })),
-    stretches: ['downward-dog', 'cobra-pose', 'childs-pose', 'floor-pec', 'thread-the-needle', 'overhead-tricep-stretch'],
+    exercises: ['cossack-squat', 'elevated-hamstring-bridge', 'fire-hydrants', 'single-leg-calf-raise', 'push-ups', 'diamond-push-ups', 'superman-pull', 'pike-push-ups', 'arm-circles', 'reverse-snow-angels', 'towel-curl', 'bicycle-crunch'].map(id => ({ id })),
+    stretches: FULL_BODY_STRETCHES,
   },
 ]
 export const FULL_BODY_BY_ID = Object.fromEntries(FULL_BODY.map(p => [p.id, p]))

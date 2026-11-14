@@ -18,7 +18,7 @@ export function migrate(s) {
     }
   }
   const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
-  return freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next)))))
+  return freshFullBodyPlans(freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next))))))
 }
 
 // The four gym plans used to keep core in a Core section of its own (on or
@@ -84,15 +84,29 @@ function mergeCoreOf(s, plans, OLD_CORE, OLD_CORE_ON, flag) {
 // cool-down's to five. Once, their saved stretch lists (every week's and this week's own)
 // go, so they start from the new ones.
 function freshStretches(s) {
-  if (s.stretchDefaults6) return s
+  if (s.stretchDefaults8) return s
   const plans = [...GYM_ORDER, ...FULL_BODY.map(p => p.id), STRETCH_ROUTINE.id, ...COOL_DOWNS.map(c => c.id)]
   const drop = map => (map ? Object.fromEntries(Object.entries(map).filter(([id]) => !plans.includes(id))) : map)
   return {
     ...s,
-    stretchDefaults6: true,
+    stretchDefaults8: true,
     ...(s.stretchLists && { stretchLists: drop(s.stretchLists) }),
     ...(s.weekOnly?.stretchLists && { weekOnly: { ...s.weekOnly, stretchLists: drop(s.weekOnly.stretchLists) } }),
   }
+}
+
+// The full-body days' starting exercises changed (12 that work all 17
+// muscles). Once, their saved exercise lists go, so they start from those.
+function freshFullBodyPlans(s) {
+  if (s.fullBodyDefaults2) return s
+  const ids = FULL_BODY.map(p => p.id)
+  const drop = map => (map ? Object.fromEntries(Object.entries(map).filter(([id]) => !ids.includes(id))) : map)
+  const next = { ...s, fullBodyDefaults2: true }
+  for (const key of ['order', 'coreLists', 'coreOn']) {
+    if (s[key]) next[key] = drop(s[key])
+    if (s.weekOnly?.[key]) next.weekOnly = { ...next.weekOnly, [key]: drop(s.weekOnly[key]) }
+  }
+  return next
 }
 
 // Full-body days used to keep no lists of their own; any left over from

@@ -38,7 +38,10 @@ export function CoveragePill({ list, area, given, noun = 'exercise' }) {
               <li key={a.id} className="flex items-center gap-3">
                 <span className={`w-4 text-center font-bold ${a.covered ? 'text-emerald-600' : 'text-orange-500'}`}>{a.covered ? '✓' : '–'}</span>
                 <span className={`shrink-0 ${a.covered ? 'text-stone-700' : 'text-stone-400'}`}>{a.label}</span>
-                <span className="ml-auto min-w-0 truncate text-right text-stone-400">{a.by ? a.by.name : 'Nothing yet'}</span>
+                {/* A muscle group says how many work it; a muscle names what covers it. */}
+                <span className="ml-auto min-w-0 truncate text-right text-stone-400">
+                  {a.group ? (a.count ? `${a.count} ${a.count > 1 ? (noun === 'stretch' ? 'stretches' : 'exercises') : noun}` : 'Nothing yet') : a.by ? a.by.name : 'Nothing yet'}
+                </span>
               </li>
             ))}
           </ul>

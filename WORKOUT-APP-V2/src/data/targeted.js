@@ -1,4 +1,4 @@
-import { EXERCISE_BANK, coversOf, defaultEquipment, isCore, primaryOf, ratingFor, ratingOn } from './exercises'
+import { EXERCISE_BANK, MUSCLE_LABEL, coversOf, defaultEquipment, isCore, primaryOf, ratingFor, ratingOn } from './exercises'
 import { STRETCH_BANK, STRETCH_BY_ID } from './stretches'
 
 // Building a targeted workout: the areas you can pick, what each one covers,
@@ -146,11 +146,7 @@ export function buildTargeted(areas, eq, { known = new Set(), recent = new Set()
 }
 
 // What each exercise slot is for, as it's shown: "Lats exercise".
-export const MUSCLE_LABEL = {
-  chest: 'Chest', lats: 'Lats', traps: 'Traps', 'lower-back': 'Lower back', 'front-delts': 'Front delts',
-  'side-delts': 'Side delts', 'rear-delts': 'Rear delts', biceps: 'Biceps', triceps: 'Triceps', quads: 'Quads',
-  'inner-thighs': 'Inner thighs', glutes: 'Glutes', 'outer-thighs': 'Outer thighs', hamstrings: 'Hamstrings', calves: 'Calves', abs: 'Abs', obliques: 'Obliques',
-}
+export { MUSCLE_LABEL }
 
 // What can go in an exercise slot with `eq`, not counting `skip` (what the
 // workout has): ones that mainly work its muscle, then ones that work it

@@ -108,12 +108,13 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
   const bank = EXERCISE_BANK.filter(x => (core ? isCore(x) : GYM_ORDER.includes(workoutId) || fitsPlan(x, workoutId)) && (workoutId !== 'targeted' || fitsEquipment(x, store.targeted.eq)))
   // How well it fills what's missing: its best rating for a missing area it
   // mainly works (0: it doesn't).
-  const fills = x => Math.max(0, ...missing.filter(a => primaryOf(x).includes(a.id)).map(a => ratingOn(x, a.id)))
+  const fills = x => Math.max(0, ...missing.map(a => a.rate(x)))
   // Each missing area with what mainly works it, best for it first.
-  const forArea = (a, list) => list.filter(x => primaryOf(x).includes(a.id)).sort((x, y) => ratingOn(y, a.id) - ratingOn(x, a.id))
+  const forArea = (a, list) => list.filter(x => a.rate(x) > 0).sort((x, y) => a.rate(y) - a.rate(x))
   const gap = missing.length ? { names, fills, areas: missing, forArea } : null
   const areas = coverage(list, area)
-  const covering = Object.fromEntries(areas.filter(a => a.by).map(a => [a.by.id, a.id]))
+  // One in it goes under the muscle it covers (a group isn't a section).
+  const covering = Object.fromEntries(areas.filter(a => a.by && MUSCLE_LABEL[a.id]).map(a => [a.by.id, a.id]))
   // Taken out for just this week (or this time): still part of it, so
   // listed with what's in it rather than offered again.
   const off = workoutId === TARGETED.id || store.past ? [] : store.weekDiff(workoutId).exercises.dropped

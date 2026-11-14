@@ -15,6 +15,7 @@ import { useScope } from '../../hooks/useScope'
 import { WeekTag, OffRow } from './weekDiff'
 import { SlotRows } from './slots'
 import { STRETCH_BY_ID } from '../../data/stretches'
+import { STRETCH_ROUTINE } from '../../data/workout'
 import { StretchPage } from '../StretchBank'
 
 // Seconds → "6m 30s" / "6m" / "45s"
@@ -56,6 +57,17 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer }) {
 
   return (
     <>
+      {/* The Full Body Stretch: how long, in minutes. */}
+      {workout.id === STRETCH_ROUTINE.id && (
+        <div className="flex rounded-xl bg-stone-100 p-1" role="radiogroup" aria-label="How long">
+          {Object.keys(STRETCH_ROUTINE.lengths).map(Number).map(m => (
+            <button key={m} role="radio" aria-checked={store.getRoutineLength() === m} onClick={() => store.setRoutineLength(m)}
+              className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-colors ${store.getRoutineLength() === m ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`}>
+              {m}m
+            </button>
+          ))}
+        </div>
+      )}
       <div className="rounded-2xl bg-accent-50 border border-accent-100 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <ClockIcon size={18} />
