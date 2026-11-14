@@ -49,19 +49,23 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
           still to go under the goals instead. */}
       {!live && <p className="mb-2.5 text-sm font-medium text-stone-500">{title}</p>}
       {/* The body figures, front over back, to the right of the goals. */}
-      <div className="flex items-center gap-2">
-      <div className={`flex-1 min-w-0 grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <div className="flex items-stretch gap-2">
+      <div className="flex-1 min-w-0">
+      <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
         <GoalTile label="Stretch days" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
-      </div>
-      {figure && <div className="shrink-0">{figure}</div>}
       </div>
       {live && (
         <p className="mt-1.5 text-sm leading-tight text-stone-500">
           <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} ended={ended} />
         </p>
       )}
+      </div>
+      {/* As tall as the tiles and the line under them, and no taller (the
+          figures scale to fit): front at the top, back at the bottom. */}
+      {figure && <div className="shrink-0 self-stretch relative w-14"><div className="absolute inset-0">{figure}</div></div>}
+      </div>
 
       {/* A count per activity on saved weeks; the live week has the day strip
           under it instead. */}

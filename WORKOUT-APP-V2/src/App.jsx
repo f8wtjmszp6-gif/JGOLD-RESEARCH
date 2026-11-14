@@ -174,11 +174,18 @@ function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretc
     <div className="shrink-0 px-5 pt-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight">Today</h1>
-          <p className="text-sm text-stone-500 mt-0.5 whitespace-nowrap">
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            {' · '}
-            {weekDay().daysLeft === 1 ? 'last day' : `${weekDay().daysLeft} days left`}
+          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
+          {/* The date as the title, then the week as seven dots: the days gone blue,
+              today and the ones left grey. */}
+          <p className="flex items-center gap-2 text-sm text-stone-500 mt-1.5 whitespace-nowrap">
+            {/* Each day's letter in its dot: the days gone blue, today and
+                the ones left grey. */}
+            <span className="flex items-center gap-1" role="img" aria-label={`Day ${8 - weekDay().daysLeft} of 7`}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
+                const today = 7 - weekDay().daysLeft
+                return <span key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i < today ? 'bg-accent-500 text-white' : 'bg-stone-200 text-stone-500'}`}>{d}</span>
+              })}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

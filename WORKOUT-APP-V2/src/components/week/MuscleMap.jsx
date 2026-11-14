@@ -49,15 +49,16 @@ function fillFor(score) {
   return RAMP[Math.min(Math.floor(score), RAMP.length - 1)]
 }
 
-function Figure({ status, classes, view, map }) {
+function Figure({ status, classes, view, map, align }) {
   const scores = regionScores(status, classes, view, map)
-  return <BodyFigure view={view} fills={Object.fromEntries(Object.keys(REGIONS).map(r => [r, fillFor(scores[r])]))} className="w-[30px] h-[38px]" />
+  return <BodyFigure view={view} fills={Object.fromEntries(Object.keys(REGIONS).map(r => [r, fillFor(scores[r])]))} className="flex-1 min-h-0 w-full" align={align} />
 }
 
 // The body figure, front or back, with regions filled in: `fills` maps a
 // region to its color (none: left plain). Also the tiles' icons when
 // building a workout.
-export function BodyFigure({ view, fills, className }) {
+// `align`: where it sits in a box of another shape (preserveAspectRatio).
+export function BodyFigure({ view, fills, className, align }) {
   // Keep the id safe inside an SVG url(#…) reference.
   const clip = 'body' + useId().replace(/[^a-zA-Z0-9_-]/g, '')
   // Back view: the back panel replaces chest + core, and gets a spine line.
@@ -65,7 +66,7 @@ export function BodyFigure({ view, fills, className }) {
     ? ['shoulders', 'arms', 'back', 'hips', 'thighs', 'calves']
     : ['shoulders', 'arms', 'chest', 'core', 'hips', 'thighs', 'calves']
   return (
-    <svg viewBox="0 0 64 80" className={className} aria-hidden="true">
+    <svg viewBox="0 0 64 80" className={className} preserveAspectRatio={align} aria-hidden="true">
       <defs>
         <clipPath id={clip}>{SILHOUETTE}</clipPath>
       </defs>
@@ -100,12 +101,18 @@ export default function MuscleMap({ store }) {
 
   return (
     <div
-      className="flex flex-col items-center gap-0.5"
+      // Fills the height it's given (the goal tiles'), so the card never grows.
+      className="h-full flex flex-col items-center justify-between gap-1.5"
       role="img"
       aria-label={`Muscles this week: ${done.length ? done.join(', ') + ' done' : 'no plans finished yet'}${classes.length ? `, ${classes.length} ${classes.length === 1 ? 'class' : 'classes'}` : ''}`}
     >
-      <Figure status={status} classes={classes} view="front" map={map} />
-      <Figure status={status} classes={classes} view="back" map={map} />
+      {/* Each labeled above it. */}
+      {['front', 'back'].map(view => (
+        <span key={view} className="flex-1 min-h-0 w-full flex flex-col items-center">
+          <span className="shrink-0 text-[9px] leading-none font-semibold uppercase tracking-wide text-stone-400">{view}</span>
+          <Figure status={status} classes={classes} view={view} map={map} align="xMidYMin meet" />
+        </span>
+      ))}
     </div>
   )
 }
