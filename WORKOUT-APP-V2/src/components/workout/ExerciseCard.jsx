@@ -126,6 +126,7 @@ const FROZEN = '[&_button:not([data-keep])]:pointer-events-none [&_button:not([d
 // for this week.
 export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, onClose, onTimer, onSetDone, tag, timing }) {
   const [showSettings, setShowSettings] = useState(false)
+  const [fullStat, setFullStat] = useState(null) // a cut-off stat, shown in full
   const [showTrend, setShowTrend] = useState(false)
   const [showPage, setShowPage] = useState(false) // its page in the Exercises bank
 
@@ -223,13 +224,35 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
       </div>
       {/* Your best, last time and today, in one strip. */}
       <div className="mt-3 flex rounded-xl border border-stone-200 divide-x divide-stone-200">
-        {[['PR', past.pr], ['Last time', past.last], ['Today', today]].map(([k, v]) => (
-          <div key={k} className="flex-1 min-w-0 px-3 py-2">
+        {/* Last time and Today open each set in a pop-up; PR only when it's cut off. */}
+        {[['PR', past.pr], ['Last time', past.last && totalOf(past.lastRaw, past.lastHold)], ['Today', today && totalOf(reps, hold)]].map(([k, v]) => (
+          <button
+            key={k}
+            data-keep
+            onClick={e => { const t = e.currentTarget.lastChild; if (v && (k !== 'PR' || t.scrollWidth > t.clientWidth)) setFullStat(k) }}
+            className="flex-1 min-w-0 px-3 py-2 text-left"
+          >
             <p className="text-[11px] uppercase tracking-wider font-semibold text-stone-500">{k}</p>
-            <p className={`truncate text-[15px] font-bold ${v ? 'text-stone-900' : 'text-stone-300'}`}>{v ?? '—'}</p>
-          </div>
+            <p className={`truncate text-[13px] font-bold ${v ? 'text-stone-900' : 'text-stone-300'}`}>{v ?? '—'}</p>
+          </button>
         ))}
       </div>
+      {fullStat && (
+        <SettingsSheet title={`${exercise.name} · ${fullStat}`} onClose={() => setFullStat(null)}>
+          {fullStat === 'PR' ? (
+            <p className="text-lg font-bold text-stone-900">{past.pr}</p>
+          ) : (
+            <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+              {(fullStat === 'Today' ? reps.map(one) : past.lastSets).map((r, i) => (
+                <div key={i} className="flex items-center justify-between py-2.5">
+                  <span className="text-base text-stone-600">Set {i + 1}</span>
+                  <span className="text-base font-bold text-stone-900 tabular-nums">{r}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </SettingsSheet>
+      )}
 
       {/* Sets */}
       <div className="mt-3 space-y-1">
@@ -470,6 +493,12 @@ function SplitCard({ name, first, part, equipment, bar, hold, timingIndex, next,
 // A small square icon button for the open card's header.
 // From saved weeks (newest first): your best — the most weight, the least
 // help when assisted, the longest hold — and the latest week's sets.
+// Sets and their total, for the strip: "3 sets · 24 reps" (or the hold time).
+function totalOf(raw, timed) {
+  const sum = raw.reduce((a, b) => a + b, 0)
+  return `${raw.length} ${raw.length === 1 ? 'set' : 'sets'} · ${timed ? fmtSecs(sum) : `${sum} reps`}`
+}
+
 function pastOf(history, id) {
   const logged = history.map(e => e.lifts?.[id]).filter(Boolean)
   if (!logged.length) return {}
@@ -486,5 +515,5 @@ function pastOf(history, id) {
     const ws = logged.filter(l => l.mode === 'reps').map(l => l.weight).filter(w => w > 0)
     if (ws.length) pr = `${fmt(last.assist ? Math.min(...ws) : Math.max(...ws))} lbs${last.assist ? ' assist' : ''}`
   }
-  return { pr, last: lastText || null }
+  return { pr, last: lastText || null, lastSets: reps.map(r => one(last, r)), lastRaw: reps, lastHold: last.mode === 'hold' }
 }
