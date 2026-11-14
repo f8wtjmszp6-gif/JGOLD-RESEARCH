@@ -326,8 +326,8 @@ export function ExerciseTrendSheet({ store, exercise, onClose }) {
   return (
     <SettingsSheet title={`${exercise.name} trend`} closeLabel="Done" onClose={onClose}>
       {/* What each week's number is, for this kind of exercise. */}
-      {unit && <p className="-mt-1 text-sm text-stone-500">{{
-        lb: 'Weight is the average across your sets.',
+      {/* Weight says it's an average in its column heading instead. */}
+      {unit && unit !== 'lb' && <p className="-mt-1 text-sm text-stone-500">{{
         s: 'Longest is your best hold that week.',
         reps: 'Most is your best set that week.',
       }[unit]}</p>}
@@ -338,7 +338,7 @@ export function ExerciseTrendSheet({ store, exercise, onClose }) {
         <div className="mt-3 rounded-2xl bg-stone-50 divide-y divide-stone-200/70 text-[15px] tabular-nums">
           <div className={`${ROW} py-2 text-[11px] font-semibold uppercase tracking-wider text-stone-400`}>
             <span>Week</span>
-            <span className="text-center">{{ lb: 'Weight', s: 'Longest', reps: 'Most' }[unit]}</span>
+            <span className="text-center">{{ lb: 'Avg weight', s: 'Longest', reps: 'Most' }[unit]}</span>
             <span className="text-right">{unit === 's' ? 'Sets / time' : 'Sets / reps'}</span>
           </div>
           {[...points].reverse().map(p => (
