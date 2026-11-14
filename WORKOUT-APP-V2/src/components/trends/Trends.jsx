@@ -260,10 +260,9 @@ function seriesFor(exercise, weeks) {
   return points
 }
 
-// One exercise: its name over the same three things for every one, in
-// columns that line up from row to row (its weight now, how much that's
-// moved over the last 12 weeks and its heaviest ever, `best`), with a mini
-// chart down the right.
+// One exercise: its name with its weight now, over its heaviest ever
+// (`best`, the PR) and how much it's moved over the last 12 weeks, split by
+// a dot, with a mini chart down the right.
 function ExerciseTrend({ exercise, weeks, best }) {
   const points = seriesFor(exercise, weeks)
   const latest = points.at(-1)?.m
@@ -272,20 +271,26 @@ function ExerciseTrend({ exercise, weeks, best }) {
   return (
     <div className="bg-white shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3">
       <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-semibold text-stone-900 truncate">{exercise.name}</p>
+        {/* Its name, with its weight now beside it. */}
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="min-w-0 text-[15px] font-semibold text-stone-900 truncate">{exercise.name}</p>
+          {latest && (
+            <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">{fmt(latest.v)} lb</span>
+          )}
+        </div>
         {latest ? (
-          // The same widths on every row, split by a line between each.
-          <div className="grid grid-cols-[3.25rem_6rem_minmax(0,1fr)] divide-x divide-stone-200 text-[13px] text-stone-500 mt-1 tabular-nums whitespace-nowrap">
-            <span className="pr-2">{fmt(latest.v)} lb</span>
-            <span className="px-2 text-center">
+          // The PR · how much it's moved.
+          <div className="text-[13px] text-stone-500 mt-1 tabular-nums whitespace-nowrap truncate">
+            <span>
+              <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px align-[1px]">PR</span>
+              {` ${fmt(best)} lb`}
+            </span>
+            <span className="text-stone-300"> · </span>
+            <span>
               <span className={`font-semibold ${change > 0 ? 'text-emerald-700' : 'text-stone-400'}`}>
                 {`${change >= 0 ? '+' : ''}${fmt(change)}`}
               </span>
               <span className="text-[11px] text-stone-400">{` in ${WEEKS} wks`}</span>
-            </span>
-            <span className="pl-2 truncate">
-              <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px align-[1px]">PR</span>
-              {` ${fmt(best)} lb`}
             </span>
           </div>
         ) : (

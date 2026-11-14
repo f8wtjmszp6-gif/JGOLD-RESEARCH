@@ -106,7 +106,7 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
       onClick={() => step(n)}
       disabled={n < 0 ? !canBack : !canNext}
       aria-label={`${n < 0 ? 'Previous' : 'Next'} ${folded ? 'week' : 'month'}`}
-      className="w-7 shrink-0 flex items-center justify-center text-stone-400 rounded-2xl active:bg-stone-100 disabled:opacity-0 transition-opacity"
+      className="w-7 min-h-7 shrink-0 flex items-center justify-center text-stone-400 rounded-2xl active:bg-stone-100 disabled:opacity-0 transition-opacity"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d={n < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} /></svg>
     </button>
@@ -137,10 +137,15 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
       ) : folded ? (
         <p className="text-center text-xs font-bold tracking-wider text-stone-500 uppercase">{label}</p>
       ) : (
-        <p className="text-center font-semibold text-stone-900">{label}</p>
+        // The month, with its arrows either side of it.
+        <div className="flex items-center justify-center gap-3">
+          {arrow(-1)}
+          <p className="text-center font-semibold text-stone-900">{label}</p>
+          {arrow(1)}
+        </div>
       )}
       <div className="flex items-stretch">
-      {!big && arrow(-1)}
+      {folded && arrow(-1)}
       <div {...swipe} className={`touch-pan-y flex-1 min-w-0 ${folded ? 'space-y-1' : 'space-y-3'}`}>
       <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-stone-400">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} className={(liveShowing || (big && sameDay(month, monthOf(today)))) && i === today.getDay() ? 'text-accent-500' : ''}>{d}</span>)}
@@ -182,7 +187,7 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
         })}
       </div>
       </div>
-      {!big && arrow(1)}
+      {folded && arrow(1)}
       </div>
       {compact && weekFrom && (
         <button onClick={toggle} aria-label={open ? 'Show one week' : 'Show the whole month'} aria-expanded={open} className="w-full -my-1 py-1 flex justify-center text-stone-400 rounded-lg active:bg-stone-100">
