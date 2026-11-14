@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { workouts, STRETCH_ROUTINE, COOL_DOWN_BY_ID, FULL_BODY_BY_ID, TARGETED } from '../../data/workout'
 import { equipmentName, MUSCLE_LABEL, TARGET_AREA_BY_ID } from '../../data/targeted'
-import { gapsAfter, EXERCISE_BY_ID, isCore } from '../../data/exercises'
+import { coverage, gapsAfter, EXERCISE_BY_ID, isCore } from '../../data/exercises'
 import { sameDay, weekdayOf } from '../../utils/days'
 import { TimerBar } from './TimerBar'
 import { StretchesTab, StretchTotal } from './StretchesTab'
@@ -9,7 +9,8 @@ import { ExercisePicker } from './pickers'
 import { ConfirmSheet, SettingsSheet } from '../ui/Sheet'
 import { DayPicker } from '../ui/DayPicker'
 import { LogButton } from '../ui/LogButton'
-import { CoveragePill, AddRow } from './coverage'
+import { CoveragePill, CoverageHead, AddRow } from './coverage'
+import { stretchAreas } from '../../utils/stretchCoverage'
 import { SwipeRow } from '../ui/SwipeRow'
 import { useDragReorder } from '../../hooks/useDragReorder'
 import { useScope } from '../../hooks/useScope'
@@ -220,7 +221,16 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
           {!store.past && (
             <div className="flex items-center gap-2 shrink-0">
               {/* A gym plan's ⓘ is its areas covered: green when all are. */}
-              {gymPlan ? <CoveragePill list={sections.main} area={workoutId} head /> : !FULL_BODY_BY_ID[workoutId] && workoutId !== STRETCH_ROUTINE.id && infoBtn}
+              {gymPlan || FULL_BODY_BY_ID[workoutId] ? (
+                <CoverageHead start={tab} parts={[
+                  { key: 'exercises', label: 'Exercises', areas: coverage(sections.main, workoutId), list: sections.main, noun: 'exercise', listLabel: 'In this plan' },
+                  { key: 'stretches', label: 'Stretches', areas: stretchAreas(store, workoutId, store.getStretches(workoutId)), list: store.getStretches(workoutId), noun: 'stretch', listLabel: 'In this plan' },
+                ]} />
+              ) : workoutId === STRETCH_ROUTINE.id ? (
+                <CoverageHead start="stretches" parts={[
+                  { key: 'stretches', label: 'Stretches', areas: stretchAreas(store, workoutId, store.getStretches(workoutId)), list: store.getStretches(workoutId), noun: 'stretch', listLabel: 'In the routine' },
+                ]} />
+              ) : infoBtn}
               {/* The bell: always here, with a dot while this week differs
                   from your default (Reset is inside). */}
               {(
@@ -279,7 +289,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
 
             <PartHead
               title="Main workout"
-              pill={gymPlan ? null : <CoveragePill list={sections.main} area={workoutId} />}
+              pill={gymPlan || FULL_BODY_BY_ID[workoutId] ? null : <CoveragePill list={sections.main} area={workoutId} />}
               right={partProgress(sections.main, false)}
               done={partDone(sections.main, false)}
             />
@@ -331,7 +341,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
         )}
 
         {tab === 'stretches' && (
-          <StretchesTab workout={workout} store={store} diff={diff} repeat={repeatable} onTimer={startStretch} open={focus?.tab === 'stretches' ? focus.id : null} timing={timingStretch} />
+          <StretchesTab headPill={gymPlan || !!FULL_BODY_BY_ID[workoutId] || workoutId === STRETCH_ROUTINE.id} workout={workout} store={store} diff={diff} repeat={repeatable} onTimer={startStretch} open={focus?.tab === 'stretches' ? focus.id : null} timing={timingStretch} />
         )}
       </div>
 

@@ -54,7 +54,8 @@ export function StretchTotal({ store, listId }) {
   )
 }
 
-export function StretchesTab({ workout, store, diff, repeat, onTimer, open = null, timing = null }) {
+// `headPill`: its ✓ is in the workout's header instead.
+export function StretchesTab({ workout, store, diff, repeat, onTimer, open = null, timing = null, headPill = false }) {
   const list = store.getStretches(workout.id)
   const [adding, setAdding] = useState(false)
   // Adding or removing one asks: just this week, or every week after?
@@ -75,7 +76,7 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer, open = nul
       <div className="flex items-baseline justify-between gap-3 px-1 pt-3">
         <span className="flex items-baseline gap-2">
           <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Stretches</p>
-          <CoveragePill given={areas} noun="stretch" />
+          {!headPill && <CoveragePill given={areas} noun="stretch" />}
         </span>
         <span className={`text-xs font-semibold ${doneCount === list.length ? 'text-accent-500' : 'text-stone-400'}`}>{doneCount} of {list.length} Completed</span>
       </div>

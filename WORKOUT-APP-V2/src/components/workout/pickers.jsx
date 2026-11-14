@@ -55,7 +55,7 @@ export function StretchPicker({ listId, store, onPick, onClose }) {
       rate={(x, muscle) => (muscle && muscle !== 'other' ? on(x, muscle) : stretchRating(x, listId, trained))}
       exclude={current.map(x => x.id)}
       current={current}
-      currentLabel={listId === STRETCH_ROUTINE.id ? 'In the routine' : 'In these stretches'}
+      currentLabel={listId === STRETCH_ROUTINE.id ? 'In the routine' : 'In this plan'}
       countLabel="in stretches"
       first={ids.filter(id => MUSCLE_LABEL[id])}
       onPick={onPick}
@@ -136,7 +136,7 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
       rate={(x, muscle) => (muscle && muscle !== 'other' ? ratingOn(x, muscle) : ratingFor(x, core ? 'core' : workoutId))}
       exclude={store.getExercises(workoutId).map(x => x.id)}
       current={list}
-      currentLabel="In this workout"
+      currentLabel="In this plan"
       countLabel={core ? 'in core' : 'in workout'}
       first={areas.map(a => a.id)}
       onPick={onPick}
