@@ -42,6 +42,7 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   const [pickingDay, setPickingDay] = useState(false)
   const [cancelling, setCancelling] = useState(false) // making sure
   const [showInfo, setShowInfo] = useState(false)
+  const [showNotes, setShowNotes] = useState(false) // the bell
   // What it's for, in a pop-up: a plan's muscles, or what you picked for a
   // built one.
   const infoBtn = (
@@ -220,6 +221,16 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
             <div className="flex items-center gap-2 shrink-0">
               {/* A gym plan's ⓘ is its areas covered: green when all are. */}
               {gymPlan ? <CoveragePill list={sections.main} area={workoutId} head /> : !FULL_BODY_BY_ID[workoutId] && workoutId !== STRETCH_ROUTINE.id && infoBtn}
+              {/* The bell: always here, with a dot while this week differs
+                  from your default (Reset is inside). */}
+              {(
+                <span className="relative">
+                  <HeadBtn label="Notifications" onClick={() => setShowNotes(true)}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></svg>
+                  </HeadBtn>
+                  {diff?.differs && <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-stone-50 pointer-events-none" />}
+                </span>
+              )}
               {calendarBtn}
               <HeadBtn label={`Leave ${title}`} onClick={() => (anyTicked || stamps.day || repeatable ? setLeaving(true) : onBack())}><CrossIcon /></HeadBtn>
             </div>
@@ -255,7 +266,6 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
 
       {/* Content */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-5 space-y-2 pb-6">
-        {diff?.differs && !(tab === 'exercises' && openExercise) && <DiffBar repeat={repeatable} onReset={() => store.resetWeek(workoutId)} />}
         {/* The plan in three parts: an optional warm-up, the main workout,
             and an optional Core section (the gym plans have core in the
             main workout instead). */}
@@ -353,6 +363,13 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
               Cancel {kindWord}
             </button>
           </div>
+        </SettingsSheet>
+      )}
+      {showNotes && (
+        <SettingsSheet title="Notifications" onClose={() => setShowNotes(false)}>
+          {diff?.differs
+            ? <DiffBar repeat={repeatable} onReset={() => { store.resetWeek(workoutId); setShowNotes(false) }} />
+            : <p className="text-sm text-stone-500">No notifications.</p>}
         </SettingsSheet>
       )}
       {showInfo && (
