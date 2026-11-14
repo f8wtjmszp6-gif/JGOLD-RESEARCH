@@ -18,7 +18,11 @@ import { SlotRows } from './slots'
 import { WarmupCard } from './WarmupCard'
 import { ExerciseCard } from './ExerciseCard'
 
-export default function WorkoutDetail({ workoutId, weekStart = null, focus, backLabel, store, timer, onBack }) {
+export default function WorkoutDetail({ workoutId, weekStart = null, focus: asked, backLabel, store, timer, onBack }) {
+  // Opened while its timer is going, it opens on the card being timed, however
+  // you got here.
+  const live = timer.active?.workoutId === workoutId && timer.active?.weekStart === weekStart ? timer.active : null
+  const focus = asked ?? (live && (live.stretchId ? { tab: 'stretches', id: live.stretchId } : { tab: 'exercises', id: live.exercise?.id ?? null }))
   // The full-body stretch routine and the cool-downs reuse this screen with
   // just their stretches.
   const cool = COOL_DOWN_BY_ID[workoutId]

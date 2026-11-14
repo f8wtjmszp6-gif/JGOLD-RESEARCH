@@ -147,7 +147,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
   if (!store) return (
     <div className="h-full flex flex-col">
       {strip}
-      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-24`}>
         <OldWeek entry={entry} />
       </div>
     </div>
@@ -181,7 +181,7 @@ export default function Home({ store, entry, weeks, at, onAt, onOpenWorkout, day
         </button>
       </div>
 
-      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-6`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto px-5 pt-1 pb-24`}>
         {tab === 'gym' && <>
           {gymView === 'plans' ? <Section title="Workout plans" note="Each plan can be completed once a week" aside={gymSwitch}>
             {/* Under way first, then up next; complete ones last. */}

@@ -6,6 +6,7 @@ import SettingsDrawer from './components/SettingsDrawer'
 import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
 import TrendsScreen from './components/trends/Trends'
+import Food, { ModePill } from './components/food/Food'
 import CalendarSheet from './components/week/CalendarSheet'
 import WorkoutDetail from './components/workout/WorkoutDetail'
 import { useWorkoutTimer } from './hooks/useWorkoutTimer'
@@ -27,6 +28,8 @@ export default function App() {
   const [returnWeek, setReturnWeek] = useState(undefined)
   const [view, setView] = useState(null) // 'trends' | null
   const [settings, setSettings] = useState(false)
+  // Workout or Food, from the pill at the bottom.
+  const [mode, setMode] = useState('workout')
   const [calendar, setCalendar] = useState(false)
   const [dayFocus, setDayFocus] = useState(null) // the day picked in the calendar
   const store = useStore()
@@ -100,6 +103,8 @@ export default function App() {
         <div className="flex-1 min-h-0 overflow-hidden">
           <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} backLabel={fromActivities ? 'Activities' : null} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
         </div>
+      ) : mode === 'food' ? (
+        <Food />
       ) : (
         <>
           {past ? (
@@ -142,6 +147,8 @@ export default function App() {
         </>
       )}
 
+      {/* On the home screens only, not inside a workout or Trends. */}
+      {!workoutId && view !== 'trends' && <ModePill mode={mode} onMode={setMode} />}
       {calendar && (
         <CalendarSheet
           weeks={weeks}

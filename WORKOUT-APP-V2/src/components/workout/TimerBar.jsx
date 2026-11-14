@@ -243,14 +243,14 @@ function SoundChips({ settings, onChange, theme, onFull }) {
   const [open, setOpen] = useState(null) // 'volume' | 'ready' | null
   const { sound, volume, prep } = settings
   const ground = onFull ? 'bg-white/80 active:bg-white' : 'bg-stone-100 active:bg-stone-200'
-  const chip = on => `h-9 min-w-0 px-1.5 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${on ? theme.primary : `${ground} ${theme.big}`}`
+  const chip = on => `h-9 shrink-0 px-2 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${on ? theme.primary : `${ground} ${theme.big}`}`
   const toggle = k => setOpen(o => (o === k ? null : k))
   const isVolume = open === 'volume'
   const value = isVolume ? volume : prep
   const shown = isVolume ? (volume === 0 ? 'Off' : `${volume}%`) : (prep === 0 ? 'Off' : `${prep}s`)
   return (
     <div className="mt-2.5 space-y-2">
-      <div className={`grid gap-1.5 ${onFull ? 'grid-cols-[1fr_1fr_1fr_auto]' : 'grid-cols-3'}`}>
+      <div className="flex items-center justify-between gap-1">
         <button onClick={() => { setOpen(null); onChange({ sound: sound === 'music' ? 'silent' : 'music' }) }} className={chip(false)}>
           <Icon name={sound} /><span className="truncate">{sound === 'music' ? 'Over music' : 'On silent'}</span>
         </button>
