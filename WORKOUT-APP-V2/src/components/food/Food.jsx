@@ -135,11 +135,11 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
   if (bare) return sheets
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-28">
-      {/* The header stays put while the day scrolls under it. */}
-      <div className="sticky top-0 z-10 -mx-5 px-5 pt-5 pb-2 bg-stone-50">{header}</div>
-
-      <div className="flex flex-col gap-3 mt-1">
+    <div className="flex-1 min-h-0 flex flex-col">
+      {/* The header, today's numbers and the meal switch stay put; only the
+          meal under them scrolls. */}
+      <div className="shrink-0 px-5 pt-5 pb-3 flex flex-col gap-3">
+        {header}
         {/* Today's numbers as lines, in label order; fiber and added sugar are
             part of carbs, so they sit under it. Green: a goal to reach.
             Amber: a limit. Grey: a guide. */}
@@ -189,12 +189,17 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
 
 
         {/* Meals, one at a time; the + adds to the one showing. */}
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-2">
           <MealSwitch meal={meal} onMeal={setMeal} />
           <button onClick={() => setSheet({ type: 'log' })} aria-label="Log food, water or weight" className="shrink-0 w-10 h-10 rounded-xl bg-white shadow-sm text-accent-500 text-[22px] font-semibold flex items-center justify-center active:bg-stone-100">+</button>
         </div>
+      </div>
+      {/* The meal: its totals stay put (as the card's top) while its foods
+          scroll under them, down behind the bottom bar, with room at the end
+          so the last food scrolls clear of it. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-28">
         <Card className="flex flex-col gap-2">
-          <Numbers n={mealTotal(list)} strip />
+          <div className="sticky top-0 z-[1] -mx-4 -mt-3 px-4 pt-3 pb-1 rounded-t-2xl bg-white"><Numbers n={mealTotal(list)} strip /></div>
           {list.length > 0 && (
             <div className="flex flex-col">
               {list.map((e, i) => (
@@ -260,9 +265,9 @@ function WeightTile({ label, lb, onClick }) {
 // Nutrition, then the bell and settings, which every side shares.
 export function ModePill({ mode, onMode, onBell, unread, onSettings }) {
   // A dark pill of icons; the tab you're on turns white and shows its name.
-  const icon = 'relative w-11 h-11 rounded-full flex items-center justify-center text-stone-400 active:bg-stone-800'
-  const tab = on => `flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold transition-colors ${on ? 'px-4 bg-white text-stone-900' : 'w-12 text-stone-400 active:bg-stone-800'}`
-  const line = <span className="w-px h-5 self-center mx-0.5 bg-stone-700" />
+  const icon = 'relative w-11 h-11 rounded-full flex items-center justify-center text-white active:bg-white/15'
+  const tab = on => `flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold transition-colors ${on ? 'px-4 bg-white text-stone-900' : 'w-12 text-white active:bg-white/15'}`
+  const line = <span className="w-px h-5 self-center mx-0.5 bg-white/30" />
   const TABS = [
     ['home', 'Home', <path key="h" d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />],
     ['workout', 'Fitness', <path key="f" d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" />],
@@ -270,7 +275,7 @@ export function ModePill({ mode, onMode, onBell, unread, onSettings }) {
   ]
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 flex justify-center pointer-events-none" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-      <div role="tablist" className="pointer-events-auto flex items-center gap-1 p-1.5 rounded-full bg-stone-900 shadow-lg">
+      <div role="tablist" className="pointer-events-auto flex items-center gap-1 p-1.5 rounded-full bg-stone-900/45 backdrop-blur-sm shadow-lg">
         {TABS.map(([id, label, path]) => (
           <button key={id} role="tab" aria-selected={mode === id} aria-label={label} onClick={() => onMode(id)} className={tab(mode === id)}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{path}</svg>
@@ -284,7 +289,7 @@ export function ModePill({ mode, onMode, onBell, unread, onSettings }) {
             <path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9z" />
             <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
           </svg>
-          {unread && <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-stone-900" />}
+          {unread && <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-stone-800" />}
         </button>
         <button onClick={onSettings} aria-label="Settings" className={icon}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

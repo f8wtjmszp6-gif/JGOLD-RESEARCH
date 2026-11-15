@@ -150,9 +150,32 @@ export function buildDemo(now = new Date()) {
 
 // ?demo saves what's there (once) and swaps in the demo; ?restore puts it
 // back. Either way the address is cleaned up after.
+// ?meals: adds 10 made-up foods to today's breakfast (on top of what's there),
+// for trying a long meal. Delete them in the app as usual.
+const TEST_FOODS = [
+  ['Eggs', 2, 'large', 70, 5, 0, 6], ['Toast', 1, 'slice', 80, 1, 15, 3], ['Butter', 1, 'tbsp', 100, 11, 0, 0],
+  ['Banana', 1, 'medium', 105, 0, 27, 1], ['Greek yogurt', 1, 'cup', 130, 0, 9, 23], ['Granola', 0.5, 'cup', 210, 8, 30, 5],
+  ['Blueberries', 1, 'cup', 85, 0, 21, 1], ['Coffee', 1, 'cup', 5, 0, 0, 0], ['Orange juice', 1, 'cup', 110, 0, 26, 2],
+  ['Bacon', 3, 'slices', 130, 10, 0, 9],
+]
+function addTestMeals() {
+  const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+  const d = new Date()
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const n = s.nutrition ?? {}
+  const day = n.days?.[key] ?? {}
+  const added = TEST_FOODS.map(([name, amount, unit, cal, fat, carbs, protein], i) => ({
+    id: `test${Date.now()}${i}`, name, servings: 1, serving: { amount, unit },
+    per: { cal, fat, carbs, protein, fiber: 0, sugar: 0 },
+  }))
+  s.nutrition = { ...n, days: { ...n.days, [key]: { ...day, breakfast: [...(day.breakfast ?? []), ...added] } } }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+}
+
 export function runDemoSwitch() {
   const q = new URLSearchParams(location.search)
-  if (q.has('demo')) {
+  if (q.has('meals')) addTestMeals()
+  else if (q.has('demo')) {
     if (localStorage.getItem(BEFORE) === null) localStorage.setItem(BEFORE, localStorage.getItem(STORAGE_KEY) ?? '')
     localStorage.setItem(STORAGE_KEY, JSON.stringify(buildDemo()))
   } else if (q.has('restore')) {
