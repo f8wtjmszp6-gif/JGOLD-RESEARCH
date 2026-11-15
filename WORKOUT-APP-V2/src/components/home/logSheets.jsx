@@ -196,7 +196,7 @@ export function AddCardioSheet({ kind = 'other', store, edit, onClose }) {
                 <span className="truncate">{offTiles ? type : 'Other sports'}</span>
                 {offTiles && !keep && <span className="text-xs font-medium text-lime-700/70 shrink-0">just this once</span>}
               </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
             </button>
           )}
         </div>

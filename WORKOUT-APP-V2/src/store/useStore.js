@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { SPORTS, TARGETED } from '../data/workout'
+import { SPORTS, TARGETED, GYM_ORDER } from '../data/workout'
 import { STRETCH_BY_ID, applyCustomStretches, applyStretchEdits } from '../data/stretches'
 import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } from '../data/exercises'
 import { sameDay } from '../utils/days'
@@ -66,13 +66,9 @@ export function useStore() {
   }, [])
 
   // ── Weekly goals ─────────────────────────────────────────────────────────
-  // A max below the min drags the min down with it (and the other way).
-  function setGoal(key, patch) {
-    update(s => {
-      const g = { ...goalsOf(s)[key], ...patch }
-      const fixed = 'min' in patch ? { min: g.min, max: Math.max(g.min, g.max) } : { min: Math.min(g.min, g.max), max: g.max }
-      return { ...s, goals: { ...s.goals, [key]: fixed } }
-    })
+  // Only the least is kept; goalsOf works out the most from it.
+  function setGoal(key, { min }) {
+    update(s => ({ ...s, goals: { ...s.goals, [key]: { min } } }))
   }
 
   // The notifications you've opened the bell on (the last 50 are plenty).
@@ -171,6 +167,13 @@ export function useStore() {
     restoreData,
     factoryReset,
     lastBackupAt: state.lastBackupAt ?? null,
+    // Food, water and body weight (see utils/nutrition). Kept through new
+    // weeks, and in backups like everything else.
+    nutrition: state.nutrition ?? {},
+    // About you (sex, age), for which recommendations apply.
+    profile: state.profile ?? {},
+    setProfile: patch => update(s => ({ ...s, profile: { ...s.profile, ...patch } })),
+    setNutrition: fn => update(s => ({ ...s, nutrition: fn(s.nutrition ?? {}) })),
   }
 }
 
@@ -457,7 +460,7 @@ function makeStore(state, update) {
     update(s => {
       const ex = EXERCISE_BY_ID[id]
       const section = sectionOf(ex, workoutId)
-      if (section === 'main' && !fitsPlan(ex, workoutId)) return s
+      if (section === 'main' && !GYM_ORDER.includes(workoutId) && !fitsPlan(ex, workoutId)) return s
       if (listIds(s, workoutId, section).includes(id)) return s
       const next = writeList(s, workoutId, section, ids => (ids.includes(id) ? ids : [...ids, id]), listScope(workoutId, scope))
       return section === 'core' ? writeCoreOn(next, workoutId, true, listScope(workoutId, scope)) : next

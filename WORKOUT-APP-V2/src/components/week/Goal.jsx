@@ -8,7 +8,7 @@
 export function GoalTile({ label, count, fills, goal }) {
   return (
     <Tile label={label} value={count} goal={goal}>
-      <GoalBar fills={fills} goal={goal} label={`${label}: ${count} of a ${goal.min}–${goal.max} goal`} />
+      <GoalBar fills={fills} goal={goal} label={`${label}: ${count} of a ${goal.min}+ goal`} />
     </Tile>
   )
 }

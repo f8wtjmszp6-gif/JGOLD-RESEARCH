@@ -14,11 +14,13 @@ function weekKey(d) {
 const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1, 12)
 
 // Picking a day opens its week with that day open. `weeks` is the app's
-// weeks (saved ones and this one), `at` the one showing.
-export default function CalendarSheet({ weeks, at, onPick, onClose }) {
+// weeks (saved ones and this one), `at` the one showing. `daily`
+// (Nutrition, where everything is by the day): jumps to a day, the one
+// showing (`picked`, 0 = Sunday) circled, with no activity dots.
+export default function CalendarSheet({ weeks, at, picked, daily = false, onPick, onClose }) {
   return (
-    <SettingsSheet title="Jump to a week" closeLabel="Cancel" onClose={onClose}>
-      <MonthGrid weeks={weeks} at={at} onPick={onPick} />
+    <SettingsSheet title={daily ? 'Jump to a day' : 'Jump to a week'} closeLabel="Cancel" onClose={onClose}>
+      <MonthGrid weeks={weeks} at={at} picked={picked} daily={daily} onPick={onPick} />
     </SettingsSheet>
   )
 }
@@ -34,7 +36,7 @@ export default function CalendarSheet({ weeks, at, onPick, onClose }) {
 // title with boxed arrows beside it (then `extra`, if any), and the days
 // set tighter.
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
-export function MonthGrid({ weeks, at, picked = null, compact = false, big = false, extra, month: shownMonth, onMonth, aside, onPick, onWeek = onPick }) {
+export function MonthGrid({ weeks, at, picked = null, daily = false, compact = false, big = false, extra, month: shownMonth, onMonth, aside, onPick, onWeek = onPick }) {
   const [open, setOpen] = useState(!compact)
   const today = new Date()
   const byKey = Object.fromEntries(weeks.map(w => [w.weekStart, w]))
@@ -161,7 +163,7 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
           // The week showing is shaded in the month (one week alone needs
           // no shading, like the strip on Today).
           const inWeek = key === showing
-          const shaded = inWeek && !folded
+          const shaded = inWeek && !folded && !daily
           const circled = inWeek && picked === d.getDay() && !isToday
           const items = week?.dayLog?.[d.getDay()] ?? []
           return (
@@ -179,9 +181,11 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
               }`}>
                 {d.getDate()}
               </span>
-              <span className={`flex gap-0.5 ${big ? 'h-[5px]' : 'h-1.5'}`}>
-                {tabsOf(items).map(k => <span key={k} className={`${big ? 'w-[5px] h-[5px]' : 'w-1.5 h-1.5'} rounded-full ${TAB_DOT[k]}`} />)}
-              </span>
+              {!daily && (
+                <span className={`flex gap-0.5 ${big ? 'h-[5px]' : 'h-1.5'}`}>
+                  {tabsOf(items).map(k => <span key={k} className={`${big ? 'w-[5px] h-[5px]' : 'w-1.5 h-1.5'} rounded-full ${TAB_DOT[k]}`} />)}
+                </span>
+              )}
             </button>
           )
         })}
@@ -200,7 +204,7 @@ export function MonthGrid({ weeks, at, picked = null, compact = false, big = fal
           <span className="w-px self-stretch bg-stone-200" />
           <div className="px-4">{aside}</div>
         </div>
-      ) : <Legend />}
+      ) : !daily && <Legend />}
     </div>
   )
 }

@@ -8,13 +8,14 @@ import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
 import TrendsScreen from './components/trends/Trends'
 import Food, { ModePill } from './components/food/Food'
+import HomeScreen from './components/HomeScreen'
 import CalendarSheet from './components/week/CalendarSheet'
 import WorkoutDetail from './components/workout/WorkoutDetail'
 import { useWorkoutTimer } from './hooks/useWorkoutTimer'
 import { useStore } from './store/useStore'
 import { calendarWeekOf } from './store/weeks'
 import { weekDay } from './utils/goal'
-import { weekRange, weeksAgo } from './utils/days'
+import { weekRange, weeksAgo, sameDay } from './utils/days'
 import { setSoundMode, setVolume } from './utils/sound'
 
 export default function App() {
@@ -28,9 +29,24 @@ export default function App() {
   // Activities); back returns to it.
   const [returnWeek, setReturnWeek] = useState(undefined)
   const [view, setView] = useState(null) // 'trends' | null
-  const [settings, setSettings] = useState(false)
-  // Workout or Food, from the pill at the bottom.
-  const [mode, setMode] = useState('workout')
+  // A lift Trends opens on (from a New best notification).
+  const [trendLift, setTrendLift] = useState(null)
+  const [settings, setSettings] = useState(false) // true, or a page to open on ('backup')
+  // Home, Workout or Food, from the pill at the bottom. The app opens on Home.
+  const [mode, setMode] = useState('home')
+  // What Nutrition opens with, from a notification (Weigh in):
+  // { what: 'food' | 'water' | 'weigh', n }. Nutrition starts over on each
+  // (`n` counts up); cleared when you switch with the pill.
+  const [foodOpen, setFoodOpen] = useState(null)
+  function openFood(what) {
+    setFoodDate(null); setFoodAt(null)
+    setFoodOpen(o => ({ what, n: (o?.n ?? 0) + 1 }))
+    setMode('food')
+  }
+  // Nutrition's own place: the week its strip shows (null: this one) and the
+  // day it shows (null: today), picked from its calendar.
+  const [foodAt, setFoodAt] = useState(null)
+  const [foodDate, setFoodDate] = useState(null)
   const [calendar, setCalendar] = useState(false)
   const [dayFocus, setDayFocus] = useState(null) // the day picked in the calendar
   const store = useStore()
@@ -64,8 +80,9 @@ export default function App() {
     store.dismissNote(n.id)
     setBell(null)
     if (n.run === 'week') setWeekStart(n.weekStart)
-    if (n.run === 'backup') setSettings(true)
-    if (n.run === 'trends') setView('trends')
+    if (n.run === 'backup') setSettings('backup')
+    if (n.run === 'weigh') openFood('weigh')
+    if (n.run === 'trends') { setTrendLift(n.lift ?? null); setView('trends') }
     if (n.run === 'plan') { setWeekStart(null); setFocus(null); setWorkoutId(n.plan) }
   }
 
@@ -83,6 +100,7 @@ export default function App() {
       if (document.visibilityState === 'hidden') hiddenAt = Date.now()
       else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) {
         setWeekStart(null)
+        setFoodDate(null); setFoodAt(null)
         setReopenActivities(false); setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
       }
     }
@@ -97,28 +115,45 @@ export default function App() {
     >
       {view === 'trends' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TrendsScreen store={store} onBack={() => setView(null)} />
+          <TrendsScreen store={store} lift={trendLift} onBack={() => { setTrendLift(null); setView(null) }} />
         </div>
       ) : workoutId ? (
         // The workout drill-in owns the full viewport and brings its own header.
         <div className="flex-1 min-h-0 overflow-hidden">
           <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
         </div>
+      ) : mode === 'home' ? (
+        <HomeScreen store={store} onStart={id => { setWeekStart(null); setFocus(null); setWorkoutId(id) }} />
       ) : mode === 'food' ? (
-        <Food />
+        <Food
+          key={foodOpen?.n ?? 0}
+          nutrition={store.nutrition}
+          profile={store.profile}
+          setNutrition={store.setNutrition}
+          date={foodDate}
+          open={foodOpen?.what}
+          header={<TopBar onCalendar={() => setCalendar(true)} onToday={foodDate || foodAt != null ? () => { setFoodDate(null); setFoodAt(null) } : undefined} day={foodDate ?? undefined} onStep={n => {
+            // A day back or forward; today goes back to plain today, and the
+            // week follows the day (for the calendar).
+            const d = new Date(foodDate ?? new Date()); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n)
+            const sun = new Date(d); sun.setDate(d.getDate() - d.getDay())
+            const ws = `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, '0')}-${String(sun.getDate()).padStart(2, '0')}`
+            const i = weeks.findIndex(w => w.weekStart === ws)
+            const today = sameDay(d, new Date())
+            setFoodDate(today ? null : d)
+            setFoodAt(today || i < 0 || weeks[i].live ? null : i)
+          }} />}
+        />
       ) : (
         <>
           {past ? (
             <PastHeader weekStart={weeks[at].weekStart} entry={entry} week={week} goals={store.goals} onToday={() => {
               setWeekStart(null)
               setReopenActivities(false); setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
-            }} onCalendar={() => setCalendar(true)} />
+            }} buttons={{ onTrends: () => setView('trends'), onCalendar: () => setCalendar(true) }} />
           ) : (
             <Header
-              onSettings={() => setSettings(true)}
-              onBell={openBell}
-              unread={unread.length > 0}
-              onTrends={() => setView('trends')}
+              onTrends={() => { setTrendLift(null); setView('trends') }}
               onCalendar={() => setCalendar(true)}
               week={store.week}
               stretch={store.stretchWeek}
@@ -149,70 +184,41 @@ export default function App() {
       )}
 
       {/* On the home screens only, not inside a workout or Trends. */}
-      {!workoutId && view !== 'trends' && <ModePill mode={mode} onMode={m => { if (m === 'workout' && mode !== 'workout') resetHomeView(); setMode(m) }} />}
+      {!workoutId && view !== 'trends' && <ModePill mode={mode} onBell={openBell} unread={notes.length > 0} onSettings={() => setSettings(true)} onMode={m => { if (m === 'workout' && mode !== 'workout') resetHomeView(); setFoodOpen(null); setMode(m) }} />}
       {calendar && (
         <CalendarSheet
           weeks={weeks}
-          at={at}
+          at={mode === 'food' ? (foodAt ?? weeks.length - 1) : at}
+          daily={mode === 'food'}
+          picked={mode === 'food' ? (foodDate ?? new Date()).getDay() : undefined}
           onPick={(w, day) => {
+            setCalendar(false)
+            // On Nutrition it picks the day Nutrition shows (never past today).
+            if (mode === 'food') {
+              const [y, m, d] = w.weekStart.split('-').map(Number)
+              const date = new Date(y, m - 1, d + day, 12)
+              const now = new Date()
+              setFoodAt(w.live ? null : weeks.indexOf(w))
+              setFoodDate(sameDay(date, now) || date > now ? null : date)
+              return
+            }
             setWeekStart(w.live ? null : w.weekStart)
             setReopenActivities(false); setDayFocus(f => ({ day, n: (f?.n ?? 0) + 1 }))
-            setCalendar(false)
           }}
           onClose={() => setCalendar(false)}
         />
       )}
-      {settings && <SettingsDrawer store={store} onClose={() => setSettings(false)} />}
+      {settings && <SettingsDrawer store={store} page={settings === true ? null : settings} onClose={() => setSettings(false)} />}
       {bell && <NotificationsSheet notes={notes} fresh={bell.fresh} onAction={act} onDismiss={store.dismissNote} onClose={() => setBell(null)} />}
     </div>
   )
 }
 
-function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretch, cardio, store }) {
+function Header({ onTrends, onCalendar, week, stretch, cardio, store }) {
   const logged = { class: store.classes.length, cardio: store.otherCardio.length + store.sports.length }
   return (
     <div className="shrink-0 px-5 pt-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
-          {/* The date as the title, then the week as seven dots: the days gone blue,
-              today and the ones left grey. */}
-          <p className="flex items-center gap-2 text-sm text-stone-500 mt-1.5 whitespace-nowrap">
-            {/* Each day's letter in its dot: the days gone blue, today and
-                the ones left grey. */}
-            <span className="flex items-center gap-1" role="img" aria-label={`Day ${8 - weekDay().daysLeft} of 7`}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
-                const today = 7 - weekDay().daysLeft
-                return <span key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i < today ? 'bg-accent-500 text-white' : 'bg-stone-200 text-stone-500'}`}>{d}</span>
-              })}
-            </span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Pick any day to jump to its week. */}
-          <HeaderBtn onClick={onCalendar} label="Jump to a week"><CalendarIcon /></HeaderBtn>
-          <HeaderBtn onClick={onTrends} label="Trends">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19h16" />
-              <polyline points="5 15 10 10 13 13 19 7" />
-              <polyline points="15 7 19 7 19 11" />
-            </svg>
-          </HeaderBtn>
-          {/* Every reminder lives here; a red dot means something new. */}
-          <HeaderBtn onClick={onBell} label={unread ? 'Notifications (new)' : 'Notifications'} dot={unread}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9z" />
-              <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
-            </svg>
-          </HeaderBtn>
-          <HeaderBtn onClick={onSettings} label="Settings">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </HeaderBtn>
-        </div>
-      </div>
+      <TopBar onTrends={onTrends} onCalendar={onCalendar} />
       <div className="mt-3">
         {/* This week's body map sits in the card's title line. */}
         <WeekCard week={week} stretch={stretch} cardio={cardio} goals={store.goals} figure={<MuscleMap store={store} />} live logged={logged} joined />
@@ -221,24 +227,103 @@ function Header({ onSettings, onBell, unread, onTrends, onCalendar, week, stretc
   )
 }
 
+// The date, the lettered week and the round buttons: the same on Fitness
+// and Nutrition.
+// A past week's title (Fitness and Nutrition): its dates and how long ago.
+function DayTitle({ day, arrows }) {
+  const ago = Math.round((new Date().setHours(12, 0, 0, 0) - new Date(day).setHours(12, 0, 0, 0)) / 864e5)
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1">
+        <h1 className="min-w-0 truncate text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
+        {arrows}
+      </div>
+      <p className="text-sm text-stone-500 mt-1 whitespace-nowrap">{day.toLocaleDateString('en-US', { weekday: 'long' })} · {ago === 1 ? 'Yesterday' : `${ago} days ago`}</p>
+    </div>
+  )
+}
+
+function PastTitle({ weekStart }) {
+  return (
+    <div className="min-w-0">
+      {/* A week across two months has a longer name: smaller, so it fits beside the buttons. */}
+      <h1 className={`${weekRange(weekStart).split(' ').length > 4 ? 'text-[22px]' : 'text-[30px]'} leading-[33px] font-bold text-stone-900 tracking-tight whitespace-nowrap truncate`}>{weekRange(weekStart)}</h1>
+      <p className="text-sm text-stone-500 mt-0.5">{weeksAgo(weekStart)}</p>
+    </div>
+  )
+}
+
+// `day` (Nutrition, which is by the day): an earlier day is showing,
+// titled with its date and, under it, its weekday and how long ago.
+// `onStep(n)` (Nutrition): ‹ › beside the date go back or forward a day,
+// never past today.
+export function TopBar({ onTrends, onCalendar, onToday, day, onStep }) {
+  const arrow = (n, path) => (
+    <button onClick={() => onStep(n)} disabled={n > 0 && !day} aria-label={n < 0 ? 'Day before' : 'Day after'} className="shrink-0 w-7 h-9 rounded-lg flex items-center justify-center text-stone-400 active:bg-stone-100 disabled:opacity-30">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
+    </button>
+  )
+  const arrows = onStep && <span className="shrink-0 flex items-center">{arrow(-1, 'M15 18l-6-6 6-6')}{arrow(1, 'M9 18l6-6-6-6')}</span>
+  return (
+    <div className="flex items-center justify-between gap-3">
+      {day ? <DayTitle day={day} arrows={arrows} /> : <div className="min-w-0">
+        <div className="flex items-center gap-1">
+          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
+          {arrows}
+        </div>
+        {/* The date as the title, then the week as seven dots: the days gone blue,
+            today and the ones left grey. */}
+        <p className="flex items-center gap-2 text-sm text-stone-500 mt-1.5 whitespace-nowrap">
+          {/* Each day's letter in its dot: the days gone blue, today and
+              the ones left grey, with today circled. */}
+          <span className="flex items-center gap-1" role="img" aria-label={`Day ${8 - weekDay().daysLeft} of 7`}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
+              const today = 7 - weekDay().daysLeft
+              return <span key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i < today ? 'bg-accent-500 text-white' : 'bg-stone-200 text-stone-500'} ${i === today ? 'outline outline-[1.5px] outline-offset-1 outline-accent-500' : ''}`}>{d}</span>
+            })}
+          </span>
+        </p>
+      </div>}
+      <HeaderButtons onTrends={onTrends} onCalendar={onCalendar} onToday={onToday} />
+    </div>
+  )
+}
+
+// The round buttons at the top right. On a past week, Return to today comes
+// first, before the calendar.
+function HeaderButtons({ onTrends, onCalendar, onToday }) {
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      {onToday && (
+        <HeaderBtn onClick={onToday} label="Return to today">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 14L4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+          </svg>
+        </HeaderBtn>
+      )}
+      {/* Pick any day to jump to its week. */}
+      <HeaderBtn onClick={onCalendar} label={onTrends ? 'Jump to a week' : 'Jump to a day'} text={onTrends ? 'Week' : 'Day'}><CalendarIcon /></HeaderBtn>
+      {onTrends && <HeaderBtn onClick={onTrends} label="Trends" text="Trends">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19h16" />
+          <polyline points="5 15 10 10 13 13 19 7" />
+          <polyline points="15 7 19 7 19 11" />
+        </svg>
+      </HeaderBtn>}
+    </div>
+  )
+}
+
 // A saved week: its dates, how long ago, and a way back to today. Its card
 // shows the week as it ended, with what was left to go. Weeks saved before
 // their details were kept show their totals only.
-function PastHeader({ weekStart, entry, week, goals, onToday, onCalendar }) {
+function PastHeader({ weekStart, entry, week, goals, onToday, buttons }) {
   return (
     <div className="shrink-0 px-5 pt-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          {/* A week across two months has a longer name: smaller, so it fits beside the buttons. */}
-          <h1 className={`${weekRange(weekStart).split(' ').length > 4 ? 'text-[22px]' : 'text-[30px]'} leading-[33px] font-bold text-stone-900 tracking-tight whitespace-nowrap truncate`}>{weekRange(weekStart)}</h1>
-          <p className="text-sm text-stone-500 mt-0.5">{weeksAgo(weekStart)}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <HeaderBtn onClick={onCalendar} label="Jump to a week"><CalendarIcon /></HeaderBtn>
-          <button onClick={onToday} className="h-10 px-3 rounded-xl bg-white shadow-sm text-stone-500 text-sm font-semibold whitespace-nowrap active:bg-stone-100 transition-colors">
-            Return to today
-          </button>
-        </div>
+        <PastTitle weekStart={weekStart} />
+        <HeaderButtons {...buttons} onToday={onToday} />
       </div>
       <div className="mt-3">
         {week ? (
@@ -260,15 +345,17 @@ function CalendarIcon() {
   )
 }
 
-function HeaderBtn({ onClick, label, disabled, dot, children }) {
+// `text`: a word beside the icon (Fitness has room for them).
+function HeaderBtn({ onClick, label, text, disabled, dot, children }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="relative w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-stone-500 active:bg-stone-100 transition-colors disabled:opacity-40"
+      className={`relative h-10 rounded-xl bg-white shadow-sm flex items-center justify-center gap-1.5 text-stone-500 active:bg-stone-100 transition-colors disabled:opacity-40 ${text ? 'px-3' : 'w-10'}`}
     >
       {children}
+      {text && <span className="text-sm font-semibold text-stone-600">{text}</span>}
       {dot && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
     </button>
   )

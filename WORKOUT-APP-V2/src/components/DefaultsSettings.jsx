@@ -59,7 +59,7 @@ function Row({ name, edited, onOpen }) {
     return (
       <div className="py-2.5 flex items-center gap-2">
         <p className="flex-1 min-w-0 text-base text-stone-700">{name}</p>
-        <span className="text-sm text-stone-400">Original</span>
+        <span className="text-sm text-stone-400">Default</span>
       </div>
     )
   }

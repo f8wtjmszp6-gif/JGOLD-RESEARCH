@@ -5,6 +5,7 @@ import { metric } from './lifts'
 import { EXERCISE_BY_ID } from '../data/exercises'
 import { workouts } from '../data/workout'
 import { upNextOf } from './upNext'
+import { weightWeek } from './nutrition'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
@@ -22,19 +23,26 @@ function weekTotals(entry, goals) {
 }
 
 // This week's new bests: each lift that beats every earlier week, the way
-// Trends charts it (more weight, less help when assisted, a longer hold, or
-// more reps on bodyweight moves).
+// Trends charts it. Only lifts done with weight, which Trends lists; not
+// assisted, timed or reps-only ones.
 function newBests(store) {
   const out = []
   for (const [id, lift] of Object.entries(store.current.lifts ?? {})) {
     const m = metric(lift)
-    if (!m) continue
+    if (m?.unit !== 'lb' || m.assist) continue
     const before = store.history.map(e => metric(e.lifts?.[id])).filter(x => x && x.unit === m.unit)
     if (!before.length) continue
     const best = before.reduce((b, x) => ((x.v - b) * m.better > 0 ? x.v : b), before[0].v)
     if ((m.v - best) * m.better > 0) out.push({ id, m, best })
   }
   return out
+}
+
+// "Averaged 182.4 lb, down 0.8 lb from the week before."
+export function weightTrendText(change, avg) {
+  const c = Math.round(change * 10) / 10
+  const moved = c === 0 ? 'the same as the week before' : `${c < 0 ? 'down' : 'up'} ${fmt(Math.abs(c))} lb from the week before`
+  return `Averaged ${avg.toFixed(1)} lb, ${moved}.`
 }
 
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -75,6 +83,7 @@ export function notificationsOf(store, now = new Date()) {
       body: `${fmt(m.v)}${unit}${m.assist ? ' of help' : ''}, ${m.better > 0 ? 'up' : 'down'} from your best of ${fmt(best)}${unit}.`,
       action: 'See in Trends',
       run: 'trends',
+      lift: id,
     })
   }
   // Last week, once it's been saved, with how it went: swipe back to see or
@@ -86,7 +95,7 @@ export function notificationsOf(store, now = new Date()) {
       id: `week:${dayKey(lastSunday)}`,
       icon: 'week',
       title: 'New week started',
-      body: `Last week, ${weekRange(dayKey(lastSunday))}: ${t.text}. ${t.met} of ${t.of} goals met. Swipe back on the days to see it or make changes.`,
+      body: `Last week, ${weekRange(dayKey(lastSunday))}: ${t.text}. ${t.met} of ${t.of} goals met.`,
       action: 'View last week',
       run: 'week',
       weekStart: dayKey(lastSunday),
@@ -103,10 +112,36 @@ export function notificationsOf(store, now = new Date()) {
       id: `next:${week}:${next.id}`,
       icon: 'next',
       title: `Start with ${name}`,
-      body: `You ${next.reason === 'Skipped last week' ? 'skipped it' : 'didn’t finish it'} last week, so it’s up next.`,
+      body: `${next.reason === 'Skipped last week' ? 'Missed' : 'Unfinished'} last week. Pick up where you left off.`,
       action: `Open ${name}`,
       run: 'plan',
       plan: next.id,
+    })
+  }
+  // Weigh in: once you've weighed in before, each day you haven't yet.
+  const n = store.nutrition
+  const today = dayKey(now)
+  if (Object.keys(n?.weights ?? {}).length && n.weights[today] == null) {
+    notes.push({
+      id: `weigh:${today}`,
+      icon: 'weight',
+      title: 'Weigh in',
+      body: 'You haven’t weighed in today.',
+      action: 'Weigh in',
+      run: 'weigh',
+    })
+  }
+  // Last week's average weight against the week before.
+  const lastAvg = weightWeek(n, weekDays(lastSunday)).avg
+  const beforeSunday = new Date(lastSunday)
+  beforeSunday.setDate(lastSunday.getDate() - 7)
+  const beforeAvg = weightWeek(n, weekDays(beforeSunday)).avg
+  if (lastAvg != null && beforeAvg != null) {
+    notes.push({
+      id: `trend:${dayKey(lastSunday)}`,
+      icon: 'weight',
+      title: 'Your weight last week',
+      body: weightTrendText(lastAvg - beforeAvg, lastAvg),
     })
   }
   if (backupDue(store.lastBackupAt)) {
@@ -115,10 +150,10 @@ export function notificationsOf(store, now = new Date()) {
       id: `backup:${dayKey(thisSunday)}`,
       icon: 'backup',
       title: 'Time to back up',
-      body: age ? `Your last backup was ${age}. A backup keeps your weeks safe if the app is ever removed.` : 'You haven’t backed up yet. A backup keeps your weeks safe if the app is ever removed.',
+      body: age ? `Your last backup was ${age}.` : 'You haven’t backed up yet.',
       action: 'Back up',
       run: 'backup',
     })
   }
-  return notes
+  return notes.filter(Boolean)
 }

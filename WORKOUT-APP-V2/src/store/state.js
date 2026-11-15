@@ -497,7 +497,8 @@ export function listIds(s, workoutId, section) {
     : order ?? defaultIds(workoutId)
   const keep = id => {
     const ex = EXERCISE_BY_ID[id]
-    return ex && (section === 'core' ? isCore(ex) : fitsPlan(ex, workoutId))
+    // A gym plan can take anything (as its picker offers); others, what fits.
+    return ex && (section === 'core' ? isCore(ex) : GYM_ORDER.includes(workoutId) || fitsPlan(ex, workoutId))
   }
   const ids = saved.filter(keep)
   return section === 'main' && ids.length === 0 ? defaultIds(workoutId).filter(keep) : ids
@@ -846,10 +847,12 @@ export function timerOf(s) {
 }
 
 // Your weekly goals, falling back to the defaults.
+// You set only the least; the most follows from it: one more day (never past
+// 7), or double the minutes for cardio (150 → 300, as the AHA puts it).
 export function goalsOf(s) {
   return Object.fromEntries(GOAL_SETTINGS.map(({ id, most }) => {
-    const g = { ...GOAL_DEFAULTS[id], ...s.goals?.[id] }
-    return [id, { min: Math.min(g.min, most), max: Math.min(g.max, most) }]
+    const min = Math.min({ ...GOAL_DEFAULTS[id], ...s.goals?.[id] }.min, most)
+    return [id, { min, max: id === 'cardio' ? min * 2 : Math.min(7, min + 1) }]
   }))
 }
 

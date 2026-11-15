@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { workouts, GYM_ORDER } from '../../data/workout'
 import { calendarWeekOf } from '../../store/weeks'
 import { goalLevel } from '../../utils/goal'
@@ -58,7 +58,8 @@ function lastWeeks(history, current, count = WEEKS, all = false) {
 
 
 // The Trends screen: its own page off the header, like Past weeks.
-export default function TrendsScreen({ store, onBack }) {
+// `lift`: one to open on (a New best): its tab, scrolled to and outlined.
+export default function TrendsScreen({ store, lift, onBack }) {
   const past = lastWeeks(store.history, store.current).length - 1
   return (
     <div className="flex flex-col h-full">
@@ -70,15 +71,15 @@ export default function TrendsScreen({ store, onBack }) {
         {/* What the week grid shows, said once here. */}
         <p className="text-stone-400 text-sm mt-1">Last {past} {past === 1 ? 'week' : 'weeks'} and this week so far · ✓ goal met</p>
       </div>
-      <Trends store={store} />
+      <Trends store={store} lift={lift} />
     </div>
   )
 }
 
-function Trends({ store }) {
+function Trends({ store, lift }) {
   const weeks = lastWeeks(store.history, store.current)
   const [view, setView] = useState('strength')
-  const [tabId, setTabId] = useState('upper')
+  const [tabId, setTabId] = useState(() => AREAS.find(([, , groups]) => groups.includes(EXERCISE_BY_ID[lift]?.group))?.[0] ?? 'upper')
   // Lifts by body area: upper body (chest, back, shoulders, arms), legs and
   // core. Only lifts with sets saved show, in the bank's order, and only
   // ones done with weight the last time, where the goal is more: not
@@ -97,7 +98,20 @@ function Trends({ store }) {
   const tab = tabs.find(t => t.id === tabId) ?? tabs[0]
   // Each lift's heaviest ever, from every week saved.
   const bestOf = id => Math.max(0, ...saved.map(w => metric(w.lifts?.[id])).filter(m => m?.unit === 'lb' && !m.assist).map(m => m.v))
-  const shown = tab.ids.map(id => EXERCISE_BY_ID[id])
+  // Only lifts with two or more weeks to compare: a trend needs two points.
+  const shown = tab.ids.map(id => EXERCISE_BY_ID[id]).filter(ex => seriesFor(ex, weeks).length > 1)
+  // Opening on a lift: scroll to its row.
+  const list = useRef(null)
+  const listed = shown.some(ex => ex.id === lift)
+  // Its outline fades after a few seconds.
+  const [flash, setFlash] = useState(true)
+  useEffect(() => {
+    if (!lift || !EXERCISE_BY_ID[lift]) return
+    const row = list.current?.querySelector(`[data-lift="${lift}"]`)
+    row?.scrollIntoView({ block: 'center' })
+    const t = setTimeout(() => setFlash(false), 3000)
+    return () => clearTimeout(t)
+  }, [lift])
 
   return (
     <>
@@ -121,7 +135,7 @@ function Trends({ store }) {
       </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
+      <div ref={list} className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
       {view === 'strength' ? <>
         {/* The plan tiles scroll away; the area tabs stick at the top. */}
         <Balance weeks={weeks} />
@@ -143,7 +157,7 @@ function Trends({ store }) {
         </div>
         {/* One exercise per row. */}
         {shown.length === 0 && (
-          <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you tick them.</p>
+          <p className="bg-white shadow-sm rounded-2xl p-4 text-sm text-stone-400">No {tab.name.toLowerCase()} lifts saved yet. They show here once you’ve done them in two different weeks.</p>
         )}
         {/* Each tab's lifts under headings by muscle. */}
         <div className="space-y-4">
@@ -151,7 +165,7 @@ function Trends({ store }) {
             <section key={label} className="space-y-2">
               <h3 className="px-1 text-xs uppercase tracking-wider font-medium text-stone-400">{label}</h3>
               {list.map(ex => (
-                <ExerciseTrend key={ex.id} exercise={ex} weeks={weeks} best={bestOf(ex.id)} />
+                <ExerciseTrend key={ex.id} exercise={ex} weeks={weeks} best={bestOf(ex.id)} picked={flash && listed && ex.id === lift} />
               ))}
             </section>
           ))}
@@ -161,7 +175,6 @@ function Trends({ store }) {
         <CardioTrends weeks={lastWeeks(store.history, store.current, WEEKS + 1, true)} goal={store.goals.cardio} logOf={store.cardioLogOf} />
       )}
       </div>
-
     </>
   )
 }
@@ -263,13 +276,16 @@ function seriesFor(exercise, weeks) {
 // One exercise: its name with its weight now, over its heaviest ever
 // (`best`, the PR) and how much it's moved over the last 12 weeks, split by
 // a dot, with a mini chart down the right.
-function ExerciseTrend({ exercise, weeks, best }) {
+// `picked`: the one Trends opened on, outlined (for a few seconds).
+function ExerciseTrend({ exercise, weeks, best, picked }) {
   const points = seriesFor(exercise, weeks)
   const latest = points.at(-1)?.m
   const change = latest ? latest.v - points[0].m.v : 0
+  // A trend needs two weeks to compare: until then, no change and no chart.
+  const trend = points.length > 1
 
   return (
-    <div className="bg-white shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3">
+    <div data-lift={exercise.id} className={`bg-white shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3 ring-accent-500 transition-[box-shadow] duration-700 ${picked ? 'ring-2' : 'ring-0'}`}>
       <div className="flex-1 min-w-0">
         {/* Its name, with its weight now beside it. */}
         <div className="flex items-center gap-2 min-w-0">
@@ -285,17 +301,19 @@ function ExerciseTrend({ exercise, weeks, best }) {
               <span className="text-[10px] font-extrabold text-white bg-red-600 rounded px-1 py-px align-[1px]">PR</span>
               {` ${fmt(best)} lb`}
             </span>
-            <span className="font-bold text-stone-500"> · </span>
-            {/* ↑ or ↓ and how much over the weeks shown (said under Trends' title). */}
-            <span className={`font-semibold ${change > 0 ? 'text-emerald-700' : change < 0 ? 'text-red-600' : 'text-stone-400'}`}>
-              {change === 0 ? 'No change' : `${change > 0 ? '↑' : '↓'}${fmt(Math.abs(change))} lb`}
-            </span>
+            {trend && <>
+              <span className="font-bold text-stone-500"> · </span>
+              {/* ↑ or ↓ and how much over the weeks shown (said under Trends' title). */}
+              <span className={`font-semibold ${change > 0 ? 'text-emerald-700' : change < 0 ? 'text-red-600' : 'text-stone-400'}`}>
+                {change === 0 ? 'No change' : `${change > 0 ? '↑' : '↓'}${fmt(Math.abs(change))} lb`}
+              </span>
+            </>}
           </div>
         ) : (
           <p className="text-sm text-stone-400 mt-1">No sets saved yet</p>
         )}
       </div>
-      <Sparkline values={points.map(p => p.m.v)} />
+      {trend && <Sparkline values={points.map(p => p.m.v)} />}
     </div>
   )
 }
@@ -331,7 +349,7 @@ export function ExerciseTrendSheet({ store, exercise, onClose }) {
         s: 'Longest is your best hold that week.',
         reps: 'Most is your best set that week.',
       }[unit]}</p>}
-      {unit === 'lb' && !assist && <ExerciseTrend exercise={exercise} weeks={weeks} best={best} />}
+      {unit === 'lb' && !assist && points.length > 1 && <ExerciseTrend exercise={exercise} weeks={weeks} best={best} />}
       {points.length ? (
         // Three columns: the week, its number (weight, longest hold or most
         // reps), and the sets done that week.

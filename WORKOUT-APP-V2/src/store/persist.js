@@ -18,7 +18,21 @@ export function migrate(s) {
     }
   }
   const next = settings === s.exerciseSettings ? s : { ...s, exerciseSettings: settings }
-  return freshCoolDowns(freshFullBodyPlans(freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next)))))))
+  return customFoodsOnly(freshCoolDowns(freshFullBodyPlans(freshStretches(mergeFullBodyCore(mergeCore(freshFullBody(toSundayWeeks(next))))))))
+}
+
+// My foods used to keep every USDA or barcode food you logged or used as an
+// ingredient; now it's only foods you made. Once, those come out: entries
+// that logged one keep where it came from (so Popular still has it), and a
+// food that used one as an ingredient keeps its own copy.
+function customFoodsOnly(s) {
+  const foods = s.nutrition?.foods
+  if (s.customFoodsOnly || !foods) return s
+  const looked = Object.fromEntries(foods.filter(f => f.usda || f.off).map(f => [f.id, f]))
+  const from = f => Object.fromEntries(['usda', 'off', 'brand', 'barcode', 'fdcId'].filter(k => f[k] != null).map(k => [k, f[k]]))
+  const days = Object.fromEntries(Object.entries(s.nutrition.days ?? {}).map(([k, day]) => [k, Object.fromEntries(Object.entries(day).map(([m, v]) => [m, Array.isArray(v) ? v.map(e => (e && looked[e.foodId] && !e.looked ? { ...e, looked: from(looked[e.foodId]) } : e)) : v]))]))
+  const kept = foods.filter(f => !looked[f.id]).map(f => (f.ingredients ? { ...f, ingredients: f.ingredients.map(i => (looked[i.foodId] ? { food: looked[i.foodId], servings: i.servings } : i)) } : f))
+  return { ...s, customFoodsOnly: true, nutrition: { ...s.nutrition, days, foods: kept } }
 }
 
 // The four gym plans used to keep core in a Core section of its own (on or

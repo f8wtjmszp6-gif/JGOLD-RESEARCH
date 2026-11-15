@@ -23,8 +23,10 @@ function monthsOf(weekStart) {
 // It sits under the This week card as the bottom of the same card: the
 // month on top, then each date with a dot for everything done that day, then
 // the key and Activities (see DaySheet). The days aren't tappable. `weeks` is oldest first, ending with this week; `at` is the
-// one showing; 
-export default function WeekStrip({ weeks, at, onAt, onActivities }) {
+// one showing; `plain` (Nutrition) leaves out the activity dots, their key and Activities.
+// `onPick`/`picked` (Nutrition): today and earlier days can be tapped, and the
+// picked one is filled in.
+export default function WeekStrip({ weeks, at, onAt, onActivities, plain, onPick, picked }) {
   const pager = useRef(null)
   const settle = useRef(null)
   const week = weeks[at]
@@ -62,7 +64,7 @@ export default function WeekStrip({ weeks, at, onAt, onActivities }) {
   }
 
   return (
-    <div className="bg-white rounded-b-2xl shadow-sm border-t border-stone-100 pt-2">
+    <div className={`bg-white rounded-b-2xl shadow-sm border-t border-stone-100 pt-2 ${plain ? 'pb-1.5' : ''}`}>
       <p className="text-center text-xs font-bold tracking-wider text-stone-500 mb-1">{monthsOf(week.weekStart)}</p>
       {/* Arrows either side show the days slide, and step a week at a time;
           each fades out at the end it can't go past. */}
@@ -80,6 +82,9 @@ export default function WeekStrip({ weeks, at, onAt, onActivities }) {
               key={w.weekStart}
               week={w}
               current={wi === at}
+              plain={plain}
+              onPick={onPick}
+              picked={picked}
             />
           ))}
         </div>
@@ -88,15 +93,17 @@ export default function WeekStrip({ weeks, at, onAt, onActivities }) {
       {/* Along the bottom, the key, then Activities, a line between and
           each centered in its part. Weeks saved before days were kept have
           their totals only; a note takes the key's place. */}
-      <div className="border-t border-stone-100 py-1.5 flex items-center">
-        <div className="flex-1 min-w-0 flex justify-center px-2">
-          {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="justify-center gap-x-2.5" />}
+      {!plain && (
+        <div className="border-t border-stone-100 py-1.5 flex items-center">
+          <div className="flex-1 min-w-0 flex justify-center px-2">
+            {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="justify-center gap-x-2.5" />}
+          </div>
+          <span className="w-px self-stretch bg-stone-200" />
+          <button onClick={onActivities} className="px-4 text-xs font-semibold text-accent-500 whitespace-nowrap active:opacity-70">
+            Activities ›
+          </button>
         </div>
-        <span className="w-px self-stretch bg-stone-200" />
-        <button onClick={onActivities} className="px-4 text-xs font-semibold text-accent-500 whitespace-nowrap active:opacity-70">
-          Activities ›
-        </button>
-      </div>
+      )}
     </div>
   )
 }
@@ -117,7 +124,7 @@ function Arrow({ label, right, disabled, onClick }) {
 }
 
 // One week's seven days. Only this week has a today and days still to come.
-function WeekPage({ week, current }) {
+function WeekPage({ week, current, plain, onPick, picked }) {
   const now = new Date()
   const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
@@ -127,26 +134,32 @@ function WeekPage({ week, current }) {
         {days.map((d, i) => {
           const items = week.dayLog?.[i] ?? []
           const isToday = i === today
+          const filled = picked ? sameDay(d, picked) : isToday
+          const name = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+          const Tag = onPick && i <= today ? 'button' : 'div'
           return (
-            // Just shows the day; Activities is where you look at one.
-            <div
+            // On Fitness it just shows the day; Activities is where you look at one.
+            <Tag
               key={i}
-              role="img"
-              aria-label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${items.length ? items.map(x => x.label).join(', ') : 'nothing logged'}`}
-              className={`flex flex-col items-center gap-1 py-0.5 ${i > today ? 'opacity-40' : ''}`}
+              {...(Tag === 'button'
+                ? { onClick: () => onPick(d), 'aria-label': name, 'aria-pressed': filled, tabIndex: current ? 0 : -1 }
+                : { role: 'img', 'aria-label': `${name}, ${items.length ? items.map(x => x.label).join(', ') : 'nothing logged'}` })}
+              className={`flex flex-col items-center gap-1 py-0.5 ${i > today ? 'opacity-40' : ''} ${Tag === 'button' ? 'active:opacity-60' : ''}`}
             >
               <span className={`text-[11px] font-semibold ${isToday ? 'text-accent-500' : 'text-stone-400'}`}>
                 {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
               </span>
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold tabular-nums ${
-                isToday ? 'bg-accent-500 text-white' : 'text-stone-900'
+                filled ? 'bg-accent-500 text-white' : 'text-stone-900'
               }`}>
                 {d.getDate()}
               </span>
-              <span className="flex gap-0.5 h-1.5">
-                {tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)}
-              </span>
-            </div>
+              {!plain && (
+                <span className="flex gap-0.5 h-1.5">
+                  {tabsOf(items).map(k => <span key={k} className={`w-1.5 h-1.5 rounded-full ${TAB_DOT[k]}`} />)}
+                </span>
+              )}
+            </Tag>
           )
         })}
       </div>

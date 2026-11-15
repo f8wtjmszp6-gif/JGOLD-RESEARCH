@@ -30,7 +30,8 @@ const CHIPS = [
 // classes and cardio sessions logged (the live week knows; saved weeks fall
 // back to the ones that counted as workouts). `joined`: the week strip sits
 // right under it, so the two read as one card (see WeekStrip).
-export default function WeekCard({ week, stretch, cardio, goals, figure, live, ended, logged, joined, title = 'This week', children }) {
+// `heading`: a line at the top (Home's This week · days left).
+export default function WeekCard({ week, stretch, cardio, goals, figure, live, ended, logged, joined, title = 'This week', heading, children }) {
   // Weeks saved before cardio counted have no cardio key.
   const count = id => week[id] ?? 0
   const workouts = WORKOUT_KINDS.reduce((n, id) => n + count(id), 0)
@@ -48,12 +49,13 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
       {/* A saved week's title is its dates; the live week's has what's
           still to go under the goals instead. */}
       {!live && <p className="mb-2.5 text-sm font-medium text-stone-500">{title}</p>}
+      {heading}
       {/* The body figures, front over back, to the right of the goals. */}
       <div className="flex items-stretch gap-2">
       <div className="flex-1 min-w-0">
       <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
-        <GoalTile label="Stretch days" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
+        <GoalTile label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
       {live && (

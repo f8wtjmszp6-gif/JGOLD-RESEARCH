@@ -140,7 +140,7 @@ const CARDIO_GOAL = { min: 150, max: 300 }
 export const GOAL_DEFAULTS = { workouts: WEEKLY_GOAL, stretch: WEEKLY_GOAL, cardio: CARDIO_GOAL }
 export const GOAL_SETTINGS = [
   { id: 'workouts', label: 'Workouts', step: 1, least: 1, most: 7, advice: 'The American Heart Association recommends moderate- to high-intensity strength training (weights or resistance) at least 2 days a week, working all the major muscle groups, on top of cardio.' },
-  { id: 'stretch', label: 'Stretching days', step: 1, least: 1, most: 7, advice: 'The American College of Sports Medicine recommends stretching at least 2–3 days a week, holding each stretch 10–30 seconds and repeating it 2–4 times, about 60 seconds per stretch in all.' },
+  { id: 'stretch', label: 'Stretching', step: 1, least: 1, most: 7, advice: 'The American College of Sports Medicine recommends stretching at least 2–3 days a week, holding each stretch 10–30 seconds and repeating it 2–4 times, about 60 seconds per stretch in all.' },
   { id: 'cardio', label: 'Cardio', step: 10, least: 10, most: Infinity, advice: 'The American Heart Association recommends 150–300 minutes a week of moderate activity, like brisk walking, or 75–150 minutes of vigorous activity, like running, spread through the week. Hard minutes count double here.' },
 ]
 
