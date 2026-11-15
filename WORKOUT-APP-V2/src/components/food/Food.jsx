@@ -136,9 +136,10 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-28">
-      <div className="pt-5">{header}</div>
+      {/* The header stays put while the day scrolls under it. */}
+      <div className="sticky top-0 z-10 -mx-5 px-5 pt-5 pb-2 bg-stone-50">{header}</div>
 
-      <div className="flex flex-col gap-3 mt-3">
+      <div className="flex flex-col gap-3 mt-1">
         {/* Today's numbers as lines, in label order; fiber and added sugar are
             part of carbs, so they sit under it. Green: a goal to reach.
             Amber: a limit. Grey: a guide. */}
@@ -258,32 +259,32 @@ function WeightTile({ label, lb, onClick }) {
 // Floats at the bottom of the main screens: Home (a house), Fitness or
 // Nutrition, then the bell and settings, which every side shares.
 export function ModePill({ mode, onMode, onBell, unread, onSettings }) {
-  const icon = 'relative w-10 h-10 rounded-full flex items-center justify-center text-stone-500 active:bg-stone-100'
-  const tab = on => `flex items-center gap-1.5 h-10 px-3.5 rounded-full text-sm font-semibold transition-colors ${on ? 'bg-stone-900 text-white' : 'text-stone-500 active:bg-stone-100'}`
-  const line = <span className="w-px my-2 bg-stone-200" />
+  // A dark pill of icons; the tab you're on turns white and shows its name.
+  const icon = 'relative w-11 h-11 rounded-full flex items-center justify-center text-stone-400 active:bg-stone-800'
+  const tab = on => `flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold transition-colors ${on ? 'px-4 bg-white text-stone-900' : 'w-12 text-stone-400 active:bg-stone-800'}`
+  const line = <span className="w-px h-5 self-center mx-0.5 bg-stone-700" />
+  const TABS = [
+    ['home', 'Home', <path key="h" d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />],
+    ['workout', 'Fitness', <path key="f" d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" />],
+    ['food', 'Nutrition', <g key="n"><path d="M12 7c-1.5-1-3.5-1.3-5-.5C4.5 7.8 4 11 5 14c1 3 3 6 5 6 .8 0 1.3-.4 2-.4s1.2.4 2 .4c2 0 4-3 5-6 1-3 .5-6.2-2-7.5-1.5-.8-3.5-.5-5 .5z" /><path d="M12 7c0-2 1-3.5 3-4" /></g>],
+  ]
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 flex justify-center pointer-events-none" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-      <div role="tablist" className="pointer-events-auto flex gap-1 p-1 rounded-full bg-white/95 backdrop-blur shadow-lg border border-stone-200/70">
-        <button role="tab" aria-selected={mode === 'home'} aria-label="Home" onClick={() => onMode('home')} className={`h-10 w-12 rounded-full flex items-center justify-center transition-colors ${mode === 'home' ? 'bg-stone-900 text-white' : 'text-stone-500 active:bg-stone-100'}`}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" /></svg>
-        </button>
-        {line}
-        <button role="tab" aria-selected={mode === 'workout'} onClick={() => onMode('workout')} className={tab(mode === 'workout')}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" /></svg>
-          Fitness
-        </button>
-        <button role="tab" aria-selected={mode === 'food'} onClick={() => onMode('food')} className={tab(mode === 'food')}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 7c-1.5-1-3.5-1.3-5-.5C4.5 7.8 4 11 5 14c1 3 3 6 5 6 .8 0 1.3-.4 2-.4s1.2.4 2 .4c2 0 4-3 5-6 1-3 .5-6.2-2-7.5-1.5-.8-3.5-.5-5 .5z" /><path d="M12 7c0-2 1-3.5 3-4" /></svg>
-          Nutrition
-        </button>
+      <div role="tablist" className="pointer-events-auto flex items-center gap-1 p-1.5 rounded-full bg-stone-900 shadow-lg">
+        {TABS.map(([id, label, path]) => (
+          <button key={id} role="tab" aria-selected={mode === id} aria-label={label} onClick={() => onMode(id)} className={tab(mode === id)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{path}</svg>
+            {mode === id && label}
+          </button>
+        ))}
         {line}
         {/* Every reminder lives here; a red dot means something new. */}
         <button onClick={onBell} aria-label={unread ? 'Notifications (new)' : 'Notifications'} className={icon}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9z" />
             <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
           </svg>
-          {unread && <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
+          {unread && <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-stone-900" />}
         </button>
         <button onClick={onSettings} aria-label="Settings" className={icon}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

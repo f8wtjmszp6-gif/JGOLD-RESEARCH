@@ -48,10 +48,11 @@ export default function HomeScreen({ store, onStart }) {
   const heading = 'px-1 -mb-1 mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-stone-500'
   const action = 'h-11 rounded-xl bg-white shadow-sm text-sm font-semibold text-stone-900 active:bg-stone-100'
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-5 pb-28">
+    <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-28">
       <div className="flex flex-col gap-3.5">
-        {/* Today's day of the month, big, beside the greeting and the date. */}
-        <div className="flex items-center gap-3">
+        {/* Today's day of the month, big, beside the greeting and the date.
+            It stays put while the rest scrolls under it. */}
+        <div className="sticky top-0 z-10 -mx-5 px-5 pt-5 pb-2 bg-stone-50 flex items-center gap-3">
           <span className="text-[52px] leading-[0.9] font-extrabold text-accent-500 tracking-[-0.04em]">{now.getDate()}</span>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl leading-tight font-bold text-stone-900 tracking-tight">{greeting}</h1>
