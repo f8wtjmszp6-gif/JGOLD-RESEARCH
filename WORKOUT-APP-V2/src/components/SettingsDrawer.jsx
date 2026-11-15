@@ -109,7 +109,7 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
-              <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition) ?? store.profile.weight ?? null} profile={store.profile} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
+              <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition) ?? store.profile.weight ?? null} profile={store.profile} paceNote={store.nutrition?.paceNote} onClearPaceNote={() => store.setNutrition(x => ({ ...x, paceNote: undefined }))} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
             </div>
           </SettingsSheet>
         )}
@@ -188,6 +188,8 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
   const [zipDraft, setZipDraft] = useState(null)
   const est = calorieBurn(profile, shownLb)
   const fastest = est ? maxPace(est) : null
+  // A target on the wrong side of your weight (you've passed it, or changed goal).
+  const wrongSide = profile.targetLb != null && shownLb != null && (profile.goal === 'lose' ? profile.targetLb >= shownLb : profile.goal === 'gain' ? profile.targetLb <= shownLb : false)
   function save() {
     const n = parseInt(draft, 10)
     if (!isNaN(n)) onChange({ age: Math.min(110, Math.max(13, n)) })
@@ -266,8 +268,15 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
             go faster than eating what you burn at rest allows. */}
         {(profile.goal === 'lose' || profile.goal === 'gain') && (
           <>
-            <NumberRow label="Target weight" value={profile.targetLb ?? null} step={1} min={50} max={600} start={shownLb != null ? Math.round(shownLb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb" onChange={v => onChange({ targetLb: v })} />
+            <NumberRow label="Target weight" value={profile.targetLb ?? null} step={1}
+              min={profile.goal === 'gain' && shownLb != null ? Math.floor(shownLb) + 1 : 50}
+              max={profile.goal === 'lose' && shownLb != null ? Math.ceil(shownLb) - 1 : 600}
+              start={shownLb != null ? Math.round(shownLb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb"
+              hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${shownLb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'build muscle'}.` : null}
+              onChange={v => onChange({ targetLb: v })} />
             <NumberRow label="Pace" value={profile.pace ?? null} step={0.25} min={0.25} max={profile.goal === 'lose' && fastest != null ? fastest : 10} start={profile.goal === 'lose' ? 1 : 0.25} unit="lb/wk"
+              disabled={profile.goal === 'lose' && fastest == null}
+              hint={profile.goal === 'lose' && fastest == null ? 'Fill in About you and Activity first: your fastest pace comes from them.' : null}
               note={profile.goal === 'lose'
                 ? `Most people aim for 0.5–1 lb a week (about 0.5–1% of your weight).${fastest != null ? ` Your fastest is ${fastest} lb a week; any faster would mean eating less than you burn at rest.` : ''}`
                 : 'Muscle builds slowly: most people aim for 0.25–0.5 lb a week. Gaining faster mostly adds fat.'}
@@ -295,7 +304,9 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
 
 // A number with − / + (tap it to type one), and a note under it. Blank
 // shows — and the first tap starts from `start`.
-function NumberRow({ label, value, step, min, max, start, unit, note, onChange }) {
+// `disabled`: greyed out, with `hint` saying why; `hint` also shows on its
+// own (a warning, in amber) when it's set.
+function NumberRow({ label, value, step, min, max, start, unit, note, hint, disabled = false, onChange }) {
   const [draft, setDraft] = useState(null)
   const [info, setInfo] = useState(false) // the note, behind ⓘ
   const clamp = v => Math.min(max, Math.max(min, Math.round(v * 100) / 100))
@@ -304,25 +315,40 @@ function NumberRow({ label, value, step, min, max, start, unit, note, onChange }
     if (!isNaN(n)) onChange(clamp(n))
     setDraft(null)
   }
-  const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0'
+  const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0 disabled:opacity-30'
   return (
-    <div className="py-3">
+    <div className="py-3 space-y-1.5">
       <div className="flex items-center gap-2">
         <p className="flex-1 min-w-0 flex items-center gap-1.5 text-base text-stone-700">{label}
           {note && <button onClick={() => setInfo(true)} aria-label={`About ${label.toLowerCase()}`} className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>}
         </p>
-        <button onClick={() => onChange(clamp(value != null ? value - step : start))} className={btn} aria-label={`${label} down`}>−</button>
+        <button onClick={() => onChange(clamp(value != null ? value - step : start))} disabled={disabled} className={btn} aria-label={`${label} down`}>−</button>
         {draft !== null ? (
           <input type="number" inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && save()} autoFocus className="w-[5.5rem] text-center text-lg font-bold bg-white rounded-lg py-0.5 text-stone-900 outline-none" />
         ) : (
-          <button onClick={() => setDraft(value != null ? String(value) : '')} className={`min-w-[5.5rem] text-center text-lg font-bold tabular-nums active:opacity-60 ${value != null ? 'text-stone-900' : 'text-stone-400'}`}>
+          <button onClick={() => setDraft(value != null ? String(value) : '')} disabled={disabled} className={`min-w-[5.5rem] disabled:opacity-40 text-center text-lg font-bold tabular-nums active:opacity-60 ${value != null ? 'text-stone-900' : 'text-stone-400'}`}>
             {value ?? '—'}<span className="text-xs font-medium text-stone-400"> {unit}</span>
           </button>
         )}
-        <button onClick={() => onChange(clamp(value != null ? value + step : start))} className={btn} aria-label={`${label} up`}>+</button>
+        <button onClick={() => onChange(clamp(value != null ? value + step : start))} disabled={disabled} className={btn} aria-label={`${label} up`}>+</button>
       </div>
+      {hint && <p className={`text-xs leading-relaxed ${disabled ? 'text-stone-500' : 'text-amber-700'}`}>{hint}</p>}
       {info && <InfoSheet icon={<InfoIcon />} title={label} text={note} onClose={() => setInfo(false)} />}
     </div>
+  )
+}
+
+// You reached your target weight (losing: at or under it; gaining: at or
+// over): switch to Maintain, or set a new target. Shown once per target.
+export function TargetReached({ lb, target, onMaintain, onNewTarget, onLater }) {
+  return (
+    <SettingsSheet title="You hit your target" closeLabel="Not now" onClose={onLater}>
+      <p className="text-sm text-stone-600 leading-relaxed">You weighed in at {lb} lb, reaching your target of {target} lb. Switch to Maintain to keep it, or set a new target.</p>
+      <div className="space-y-2">
+        <button onClick={onMaintain} className="w-full h-12 rounded-[14px] bg-accent-500 text-base font-bold text-white active:bg-accent-600">Switch to Maintain</button>
+        <button onClick={onNewTarget} className="w-full h-12 rounded-[14px] bg-stone-100 text-base font-semibold text-stone-700 active:bg-stone-200">Set a new target</button>
+      </div>
+    </SettingsSheet>
   )
 }
 

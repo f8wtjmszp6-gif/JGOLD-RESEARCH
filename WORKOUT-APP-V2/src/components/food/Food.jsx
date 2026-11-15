@@ -128,7 +128,7 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
           />
         )}
         {sheet?.type === 'goals' && (
-          <GoalsSheet goals={goals} lb={lastWeight(n) ?? profile.weight ?? null} profile={profile} onSet={(k, v) => setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} onSetAll={all => setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} onClose={() => setSheet(null)} />
+          <GoalsSheet goals={goals} lb={lastWeight(n) ?? profile.weight ?? null} profile={profile} paceNote={n.paceNote} onClearPaceNote={() => setNutrition(x => ({ ...x, paceNote: undefined }))} onSet={(k, v) => setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} onSetAll={all => setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} onClose={() => setSheet(null)} />
         )}
     </>
   )

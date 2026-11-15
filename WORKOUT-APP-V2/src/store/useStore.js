@@ -5,6 +5,7 @@ import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } fr
 import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, routineLengthOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession, REPEATABLE } from './state'
+import { capPace } from '../utils/targets'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 import { cardioMinutes } from '../utils/format'
 
@@ -29,7 +30,7 @@ export function useStore() {
 
   function update(fn) {
     setState(s => {
-      const next = settleRest(endPastSessions(fn(s)))
+      const next = capPace(settleRest(endPastSessions(fn(s))))
       saveState(next)
       return next
     })
@@ -641,7 +642,7 @@ function makeStore(state, update) {
   }
 
   // ── Classes ──────────────────────────────────────────────────────────────
-  // Logs a class with your answers, and remembers them for the next one.
+  // Logs a class with your answers.
   function logClass(answers) {
     const { cardio, minutes, hard, strength, areas, stretch, stretchMinutes } = answers
     const entry = { at: answers.at ?? nowIso(), cardio, minutes, hard, strength, areas, stretch, stretchMinutes }
@@ -649,7 +650,6 @@ function makeStore(state, update) {
       ...s,
       activities: { ...s.activities, class: countOf(s, 'class') + 1 },
       classLog: [...classesOf(s), entry],
-      lastClass: { cardio, minutes, hard, strength, areas, stretch, stretchMinutes },
     }))
   }
 
@@ -819,12 +819,12 @@ function makeStore(state, update) {
   }
 
   function getNewClass() {
-    return newClassOf(state)
+    return newClassOf()
   }
 
   // ── Cardio ───────────────────────────────────────────────────────────────
   function getCardioSetting(kind) {
-    return cardioSettingOf(state, kind)
+    return cardioSettingOf(kind)
   }
 
   // Cardio that isn't a class or a walk — a run, a bike ride — logged with
@@ -838,7 +838,7 @@ function makeStore(state, update) {
   }
   const cardioLabel = kind => cardioMinutes(cardioSessionsOf(state).filter(x => x.kind === kind))
 
-  // A walk with its own length and effort; the next walk starts from these.
+  // A walk with its own length and effort.
   function addWalk(minutes, hard, at = nowIso()) {
     update(s => {
       const kept = cardioSessionsOf(s).filter(x => x.kind === 'walk')
@@ -847,7 +847,6 @@ function makeStore(state, update) {
         ...s,
         activities: { ...s.activities, walk: countOf(s, 'walk') + 1 },
         cardio: [...others, ...kept, { kind: 'walk', minutes, hard, at }],
-        cardioSettings: { ...s.cardioSettings, walk: { minutes, hard } },
       }
     })
   }
@@ -855,12 +854,11 @@ function makeStore(state, update) {
   // This week's walks, each with its length (oldest first).
   const walks = cardioSessionsOf(state).filter(x => x.kind === 'walk')
 
-  // A run, ride, swim…: `type` is what it was. The next one starts from it.
+  // A run, ride, swim…: `type` is what it was.
   function addOtherCardio(minutes, hard, at = nowIso(), type) {
     update(s => ({
       ...s,
       cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at, ...(type && { type }) }],
-      cardioSettings: { ...s.cardioSettings, other: { minutes, hard, ...(type && { type }) } },
     }))
   }
 
@@ -873,13 +871,12 @@ function makeStore(state, update) {
   const sports = (state.cardio ?? []).filter(x => x.kind === 'sport')
 
   // `keep` false: a one-off (an adventure course, say) is logged with its
-  // name but stays off your list, and the next sport doesn't start from it.
+  // name but stays off your list.
   function addSport(minutes, hard, at = nowIso(), type, keep = true) {
     update(s => {
       const next = {
         ...s,
         cardio: [...(s.cardio ?? []), { kind: 'sport', minutes, hard, at, type }],
-        cardioSettings: { ...s.cardioSettings, sport: { minutes, hard, type: keep ? type : cardioSettingOf(s, 'sport').type } },
       }
       return keep ? rememberSport(next, type) : next
     })
@@ -930,7 +927,6 @@ function makeStore(state, update) {
       ...s,
       stretchExtra: (Number(s.stretchExtra) || 0) + 1,
       stretchLog: [...ownStretchesOf(s), { at, minutes }],
-      lastOwnStretch: minutes,
     }))
   }
 
@@ -1139,7 +1135,7 @@ function makeStore(state, update) {
     addOwnStretch,
     removeOwnStretch,
     ownStretches,
-    lastOwnStretch: state.lastOwnStretch ?? 15,
+    lastOwnStretch: 15, // a stretch on your own always starts at 15 minutes
     routineMinutes,
     getListMinutes,
     getSetup,

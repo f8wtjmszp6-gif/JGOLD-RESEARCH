@@ -1,6 +1,6 @@
 // Your nutrition targets: what's recommended for you, and the numbers to
 // suggest for each (Targets' Use buttons and the bell's "review" note).
-import { calorieBurn } from './nutrition'
+import { calorieBurn, lastWeight } from './nutrition'
 
 // What's recommended for you: by sex (and age, for fiber) once Personal info
 // has them; until then both men's and women's, and either counts.
@@ -86,3 +86,16 @@ export function suggestedTargets(goals, lb, profile, all = false) {
   return out
 }
 
+
+// After every change: losing faster than your resting burn allows (a new
+// weigh-in, less activity…) lowers your pace to the fastest, and leaves a
+// note for Targets (`nutrition.paceNote`: { from, to }).
+export function capPace(s) {
+  const p = s.profile
+  if (p?.goal !== 'lose' || !(p.pace > 0)) return s
+  const est = calorieBurn(p, lastWeight(s.nutrition) ?? p.weight ?? null)
+  if (!est) return s
+  const max = maxPace(est)
+  if (p.pace <= max || max <= 0) return s
+  return { ...s, profile: { ...p, pace: max }, nutrition: { ...s.nutrition, paceNote: { from: p.pace, to: max } } }
+}

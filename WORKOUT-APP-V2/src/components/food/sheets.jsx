@@ -656,7 +656,7 @@ function TargetRow({ label, value, step, suffix, check, advice, action, onChange
 
 // Your daily targets, one −/+ row each with what's recommended under it
 // (here and in Settings). `lb`: your last weigh-in, for protein.
-export function TargetRows({ goals, lb, profile, onSet }) {
+export function TargetRows({ goals, lb, profile, paceNote, onClearPaceNote, onSet }) {
   const note = guidance(goals, lb, profile)
   const r = recsFor(profile)
   // Your numbers, or (not knowing yet) the easier of the two.
@@ -716,6 +716,14 @@ export function TargetRows({ goals, lb, profile, onSet }) {
     ['sugar', 'Added sugar', 1, 'g'], ['protein', 'Protein', 5, 'g'], ['water', 'Water', 8, 'oz'],
   ]
   return (
+    <>
+    {/* Your pace was lowered to stay above your resting burn. */}
+    {paceNote && (
+      <div className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 flex items-start gap-2">
+        <p className="flex-1 text-sm text-amber-900 leading-relaxed">Your pace was lowered from {paceNote.from} to {paceNote.to} lb a week. Any faster would mean eating less than you burn at rest.</p>
+        <button onClick={onClearPaceNote} aria-label="Dismiss" className="-mr-1 w-7 h-7 shrink-0 rounded-lg text-amber-700 flex items-center justify-center active:bg-amber-100">✕</button>
+      </div>
+    )}
     <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
       {rows.map(([k, label, step, suffix]) => (
         <TargetRow key={k} label={label} value={goals[k]} step={step} suffix={suffix} check={status(k) && (
@@ -728,6 +736,7 @@ export function TargetRows({ goals, lb, profile, onSet }) {
         <InfoSheet icon={<RangeMark state={status(showing).state} size={20} />} title={`${NAMES[showing]} ${RANGE_TITLE[status(showing).state]}`} text={status(showing).text} onClose={() => setShowing(null)} />
       )}
     </div>
+    </>
   )
 }
 
@@ -739,10 +748,10 @@ export function UseAllButton({ goals, lb, profile, onSetAll }) {
   return <button onClick={() => onSetAll(all)} className="ml-auto mr-2 shrink-0 h-9 px-3 rounded-[10px] bg-accent-500 text-sm font-semibold text-white active:bg-accent-600">Use all suggested</button>
 }
 
-export function GoalsSheet({ goals, lb, profile, onSet, onSetAll, onClose }) {
+export function GoalsSheet({ goals, lb, profile, paceNote, onClearPaceNote, onSet, onSetAll, onClose }) {
   return (
     <SettingsSheet title="Targets" tall action={<UseAllButton goals={goals} lb={lb} profile={profile} onSetAll={onSetAll} />} onClose={onClose}>
-      <TargetRows goals={goals} lb={lb} profile={profile} onSet={onSet} />
+      <TargetRows goals={goals} lb={lb} profile={profile} paceNote={paceNote} onClearPaceNote={onClearPaceNote} onSet={onSet} />
     </SettingsSheet>
   )
 }

@@ -24,9 +24,9 @@ import { buildTargeted, targetName } from '../data/targeted'
 //     perSide           { [stretchId]: bool }
 //     stretchSets       { [stretchId]: count }  (rounds of a stretch, default 1 or its list's)
 //     stretchRest       { [stretchId]: seconds } (rest between those rounds, default 20 or its list's)
-//     cardioSettings    { walk | other | sport: { minutes, hard, type? } }  (where the next one starts)
+//     cardioSettings    { walk | other | sport: { minutes, hard, type? } }  (no longer used: each starts from its default)
 //     sportNames        [name, …]  (sports you typed in, offered next to SPORTS)
-//     lastClass         your answers for the last class logged (its length and effort carry over)
+//     lastClass         your answers for the last class logged (no longer used: each class starts from the defaults)
 //     lastBackupAt      ISO time of the last backup file you saved
 //     history           [weekSummary, …] newest first — saved by each reset, never cleared
 //     lastResetAt       ISO time of the last reset (the start of the current week)
@@ -370,8 +370,9 @@ export function countOf(s, id) {
 }
 
 // How long one class or walk is, and whether it's hard (vigorous) work.
-export function cardioSettingOf(s, kind) {
-  return { ...CARDIO_DEFAULTS[kind], ...s.cardioSettings?.[kind] }
+// Each starts from its default every time, not from the last one.
+export function cardioSettingOf(kind) {
+  return { ...CARDIO_DEFAULTS[kind] }
 }
 
 // This week's classes with what you did in each. The class count is the
@@ -383,15 +384,10 @@ export function classesOf(s) {
   return [...log, ...Array.from({ length: n - log.length }, () => CLASS_LEGACY)]
 }
 
-function lastClassOf(s) {
-  return { ...CLASS_DEFAULT, ...s.lastClass }
-}
-
-// Where the Log a class sheet starts: everything off, with the last class's
-// length and effort ready for when you turn cardio on.
-export function newClassOf(s) {
-  const { minutes, hard, stretchMinutes } = lastClassOf(s)
-  return { ...CLASS_DEFAULT, minutes, hard, stretchMinutes }
+// Where the Log a class sheet starts: the defaults every time, not the last
+// class.
+export function newClassOf() {
+  return { ...CLASS_DEFAULT }
 }
 
 // Every cardio session this week: each class with cardio, plus walks and
@@ -403,7 +399,7 @@ export function cardioSessionsOf(s) {
   out.push(...logged.filter(x => x.kind === 'other' || x.kind === 'sport'))
   const walks = logged.filter(x => x.kind === 'walk').slice(0, countOf(s, 'walk'))
   const missing = countOf(s, 'walk') - walks.length
-  out.push(...walks, ...Array.from({ length: missing }, () => ({ kind: 'walk', ...cardioSettingOf(s, 'walk') })))
+  out.push(...walks, ...Array.from({ length: missing }, () => ({ kind: 'walk', ...cardioSettingOf('walk') })))
   // A gym plan's warm-up, once it's on and ticked.
   for (const id of PLAN_IDS) {
     const w = warmupOf(s, id)

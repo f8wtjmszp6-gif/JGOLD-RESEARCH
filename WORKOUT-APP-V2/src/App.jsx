@@ -3,7 +3,7 @@ import Home from './components/home/Home'
 import { resetHomeView } from './utils/homeView'
 import MuscleMap from './components/week/MuscleMap'
 import WeekCard from './components/week/WeekCard'
-import SettingsDrawer, { ProfileRequired } from './components/SettingsDrawer'
+import SettingsDrawer, { ProfileRequired, TargetReached } from './components/SettingsDrawer'
 import { lastWeight, profileMissing, dayKey } from './utils/nutrition'
 import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
@@ -47,6 +47,10 @@ export default function App() {
   const store = useStore()
   const weightNow = lastWeight(store.nutrition) ?? store.profile.weight ?? null
   const needsProfile = profileMissing(store.profile, weightNow).length > 0
+  // Reached your target weight (and not told yet for this target).
+  const { goal, targetLb, reachedAt } = store.profile
+  const reached = !needsProfile && targetLb != null && weightNow != null && reachedAt !== targetLb &&
+    ((goal === 'lose' && weightNow <= targetLb) || (goal === 'gain' && weightNow >= targetLb))
 
   // The week showing, by its Sunday; null is this week. A saved week shows
   // in the same screens as this one and can be changed there, unless it was
@@ -210,6 +214,12 @@ export default function App() {
       {weigh > 0 && <Food key={weigh} bare open="weigh" nutrition={store.nutrition} setNutrition={store.setNutrition} profile={store.profile} />}
       {settings && <SettingsDrawer store={store} page={settings === true ? null : settings} onClose={() => setSettings(false)} />}
       {bell && <NotificationsSheet notes={notes} fresh={bell.fresh} onAction={act} onDismiss={store.dismissNote} onClose={() => setBell(null)} />}
+      {reached && (
+        <TargetReached lb={weightNow} target={targetLb}
+          onMaintain={() => store.setProfile({ goal: 'maintain', reachedAt: targetLb })}
+          onNewTarget={() => { store.setProfile({ reachedAt: targetLb }); setSettings('personal') }}
+          onLater={() => store.setProfile({ reachedAt: targetLb })} />
+      )}
       {/* Personal info, whenever any of it's missing: over everything. */}
       {needsProfile && (
         <ProfileRequired profile={store.profile} lastLb={weightNow} onSave={(p, lb) => {
