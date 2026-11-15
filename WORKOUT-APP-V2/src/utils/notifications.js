@@ -5,9 +5,11 @@ import { metric } from './lifts'
 import { EXERCISE_BY_ID } from '../data/exercises'
 import { workouts } from '../data/workout'
 import { upNextOf } from './upNext'
-import { weightWeek } from './nutrition'
+import { weightWeek, goalsOf, lastWeight } from './nutrition'
+import { suggestedTargets } from './targets'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
+const TARGET_KEYS = ['cal', 'protein', 'fat', 'carbs', 'fiber', 'sugar', 'water']
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 // A week's totals against your goals: "3 workouts, 2 stretches, 180 cardio
@@ -129,6 +131,20 @@ export function notificationsOf(store, now = new Date()) {
       body: 'You haven’t weighed in today.',
       action: 'Weigh in',
       run: 'weigh',
+    })
+  }
+  // New suggested targets (only when a row in Targets shows Use): back again whenever the
+  // suggestions change, so keeping your own numbers doesn't nag.
+  const goals = goalsOf(n)
+  const suggested = suggestedTargets(goals, lastWeight(n) ?? store.profile?.weight ?? null, store.profile)
+  const off = TARGET_KEYS.filter(k => suggested[k] != null && suggested[k] !== goals[k])
+  if (off.length) {
+    notes.push({
+      id: `targets:${off.map(k => `${k}=${suggested[k]}`).join(',')}`,
+      icon: 'targets',
+      title: 'Review your targets',
+      action: 'Review',
+      run: 'targets',
     })
   }
   // Last week's average weight against the week before.

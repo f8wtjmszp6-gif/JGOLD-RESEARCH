@@ -140,3 +140,38 @@ export const lastWeight = n => {
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
+
+// How active you are, workouts included, as the usual multipliers on what
+// you burn at rest.
+export const ACTIVITY = [
+  { id: 'low', label: 'Low', factor: 1.2, note: 'Mostly sitting (a desk job) and little or no exercise.' },
+  { id: 'light', label: 'Light', factor: 1.375, note: 'Workouts 1–3 days a week, or on your feet some of the day.' },
+  { id: 'moderate', label: 'Moderate', factor: 1.55, note: 'Workouts 3–5 days a week, or on your feet most of the day.' },
+  { id: 'high', label: 'High', factor: 1.725, note: 'Hard workouts 6–7 days a week, or a physical job.' },
+]
+
+// What you burn in a day to keep your weight: resting burn (Mifflin–St Jeor,
+// from weight, height, age and sex) times your activity, to the nearest 50.
+// null until Personal info has all of them (and you've weighed in).
+export function calorieBurn(profile, lb) {
+  const { sex, age, heightIn, activity } = profile ?? {}
+  const act = ACTIVITY.find(a => a.id === activity)
+  if (!lb || !heightIn || !age || !act || (sex !== 'man' && sex !== 'woman')) return null
+  const rest = 10 * (lb / 2.2046) + 6.25 * (heightIn * 2.54) - 5 * age + (sex === 'man' ? 5 : -161)
+  return { rest: Math.round(rest), burn: Math.round((rest * act.factor) / 50) * 50 }
+}
+
+export const feetInches = inches => `${Math.floor(inches / 12)}′${inches % 12}″`
+
+// What Personal info still needs (by name): sex, age, height, weight,
+// activity, goal and ZIP code, plus target weight and pace when losing or
+// gaining. `lb`: your weight (last weigh-in).
+export function profileMissing(profile, lb) {
+  const p = profile ?? {}
+  const moving = p.goal === 'lose' || p.goal === 'gain'
+  return [
+    ['sex', !p.sex], ['age', !p.age], ['height', !p.heightIn], ['weight', !lb], ['activity', !p.activity], ['goal', !p.goal],
+    ['target weight', moving && !p.targetLb], ['pace', moving && !(p.pace > 0)],
+    ['ZIP code', !/^\d{5}$/.test(p.zip ?? '')],
+  ].filter(([, missing]) => missing).map(([name]) => name)
+}

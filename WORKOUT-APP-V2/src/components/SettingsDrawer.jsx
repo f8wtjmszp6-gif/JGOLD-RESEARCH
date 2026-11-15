@@ -7,9 +7,11 @@ import { ExerciseBank } from './ExerciseBank'
 import { StretchBank } from './StretchBank'
 import { SettingsSheet } from './ui/Sheet'
 import { InfoSheet } from './ui/InfoMark'
+import { InfoIcon } from './ui/glyphs'
 import { RangeMark } from './ui/RangeMark'
-import { TargetRows } from './food/sheets'
-import { goalsOf, lastWeight } from '../utils/nutrition'
+import { TargetRows, UseAllButton } from './food/sheets'
+import { goalsOf, lastWeight, ACTIVITY, feetInches, calorieBurn, profileMissing } from '../utils/nutrition'
+import { maxPace } from '../utils/targets'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend),
@@ -103,6 +105,7 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           <SettingsSheet title="Targets" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
               <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Targets</h2>
+              <UseAllButton goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition) ?? store.profile.weight ?? null} profile={store.profile} onSetAll={all => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} />
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
@@ -164,18 +167,27 @@ function FactoryReset({ store, onDone }) {
 // Sex and age: they decide which recommendations apply (fiber, added sugar,
 // water and calories differ for men and women; fiber drops after 50).
 // What each nutrition goal does to your Targets.
+const GOAL_TITLE = { lose: 'Lose fat', maintain: 'Maintain', gain: 'Build muscle' }
 const GOAL_NOTE = {
-  lose: 'Lose fat: about 0.5–1 lb a week by eating 300–500 calories less than it takes to keep your weight. Protein goes up to 1.6–2.4g per kg of body weight so the weight you lose is fat, not muscle.',
+  lose: 'Lose fat: eat under what it takes to keep your weight, by your pace below (about 500 calories a day for each pound a week). Protein goes up to 1.6–2.4g per kg of body weight so the weight you lose is fat, not muscle.',
   maintain: 'Keep your weight: calories are set to what you burn in a day. Protein is 1.6–2.2g per kg of body weight, enough to lose fat and build muscle at the same time if you lift.',
-  gain: 'Build muscle: gain about 0.25–0.5 lb a week by eating 250–500 calories more than it takes to keep your weight. Protein is 1.6–2.2g per kg of body weight so the weight you gain is mostly muscle.',
+  gain: 'Build muscle: eat over what it takes to keep your weight, by your pace below (about 500 calories a day for each pound a week). Protein is 1.6–2.2g per kg of body weight so the weight you gain is mostly muscle.',
   none: 'Pick whether you want to lose fat, maintain your weight, or build muscle.',
 }
 
-function PersonalInfo({ profile, lastLb, onChange }) {
+function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
   const [draft, setDraft] = useState(null)
   // Weight: your last weigh-in from Nutrition's Body weight (logged there).
   const shownLb = lastLb ?? profile.weight ?? null
   const age = profile.age ?? null
+  const height = profile.heightIn ?? null
+  const startIn = profile.sex === 'woman' ? 64 : 69
+  const [goalInfo, setGoalInfo] = useState(false)
+  // A ZIP being typed: saved once it's 5 digits (leaving it short puts the
+  // saved one back), so a half-typed one never counts as missing.
+  const [zipDraft, setZipDraft] = useState(null)
+  const est = calorieBurn(profile, shownLb)
+  const fastest = est ? maxPace(est) : null
   function save() {
     const n = parseInt(draft, 10)
     if (!isNaN(n)) onChange({ age: Math.min(110, Math.max(13, n)) })
@@ -183,44 +195,158 @@ function PersonalInfo({ profile, lastLb, onChange }) {
   }
   const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0'
   const seg = on => `px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`
+  // In three parts: you, your goal, and the weather.
   return (
-    <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
-      <div className="py-3 flex items-center justify-between gap-3">
-        <p className="text-base text-stone-700">Sex</p>
-        <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Sex">
-          <button role="radio" aria-checked={profile.sex === 'man'} onClick={() => onChange({ sex: 'man' })} className={seg(profile.sex === 'man')}>Man</button>
-          <button role="radio" aria-checked={profile.sex === 'woman'} onClick={() => onChange({ sex: 'woman' })} className={seg(profile.sex === 'woman')}>Woman</button>
+    <div className="space-y-2">
+      <GroupLabel>About you</GroupLabel>
+      <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+        <div className="py-3 flex items-center justify-between gap-3">
+          <p className="text-base text-stone-700">Sex</p>
+          <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Sex">
+            <button role="radio" aria-checked={profile.sex === 'man'} onClick={() => onChange({ sex: 'man' })} className={seg(profile.sex === 'man')}>Man</button>
+            <button role="radio" aria-checked={profile.sex === 'woman'} onClick={() => onChange({ sex: 'woman' })} className={seg(profile.sex === 'woman')}>Woman</button>
+          </div>
         </div>
-      </div>
-      <div className="py-3 flex items-center gap-2">
-        <p className="flex-1 min-w-0 text-base text-stone-700">Age</p>
-        <button onClick={() => onChange({ age: Math.max(13, (age ?? 31) - 1) })} className={btn} aria-label="Age down">−</button>
-        {draft !== null ? (
-          <input type="number" inputMode="numeric" value={draft} onChange={e => setDraft(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && save()} autoFocus className="w-[4.5rem] text-center text-lg font-bold bg-white rounded-lg py-0.5 text-stone-900 outline-none" />
+        <div className="py-3 flex items-center gap-2">
+          <p className="flex-1 min-w-0 text-base text-stone-700">Age</p>
+          <button onClick={() => onChange({ age: Math.max(13, (age ?? 31) - 1) })} className={btn} aria-label="Age down">−</button>
+          {draft !== null ? (
+            <input type="number" inputMode="numeric" value={draft} onChange={e => setDraft(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && save()} autoFocus className="w-[4.5rem] text-center text-lg font-bold bg-white rounded-lg py-0.5 text-stone-900 outline-none" />
+          ) : (
+            <button onClick={() => setDraft(age != null ? String(age) : '')} className={`min-w-[4.5rem] text-center text-lg font-bold tabular-nums active:opacity-60 ${age != null ? 'text-stone-900' : 'text-stone-400'}`}>{age ?? '—'}</button>
+          )}
+          <button onClick={() => onChange({ age: Math.min(110, (age ?? 29) + 1) })} className={btn} aria-label="Age up">+</button>
+        </div>
+        {/* Height, an inch at a time (blank starts at 5′9″ / 5′4″). */}
+        <div className="py-3 flex items-center gap-2">
+          <p className="flex-1 min-w-0 text-base text-stone-700">Height</p>
+          <button onClick={() => onChange({ heightIn: Math.max(48, (height ?? startIn + 1) - 1) })} className={btn} aria-label="Height down">−</button>
+          <span className={`min-w-[4.5rem] text-center text-lg font-bold tabular-nums ${height != null ? 'text-stone-900' : 'text-stone-400'}`}>{height != null ? feetInches(height) : '—'}</span>
+          <button onClick={() => onChange({ heightIn: Math.min(90, (height ?? startIn - 1) + 1) })} className={btn} aria-label="Height up">+</button>
+        </div>
+        {/* Weight: typed here when it's asked for (the profile pop-up), else
+            your last weigh-in, logged in Nutrition. */}
+        {onWeight ? (
+          <NumberRow label="Weight" value={shownLb} step={1} min={50} max={600} start={170} unit="lb" onChange={onWeight} />
         ) : (
-          <button onClick={() => setDraft(age != null ? String(age) : '')} className={`min-w-[4.5rem] text-center text-lg font-bold tabular-nums active:opacity-60 ${age != null ? 'text-stone-900' : 'text-stone-400'}`}>{age ?? '—'}</button>
+          <div className="py-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-base text-stone-700">Weight</p>
+              <span className={`shrink-0 text-right text-lg font-bold tabular-nums ${shownLb != null ? 'text-stone-900' : 'text-stone-400'}`}>
+                {shownLb != null ? shownLb : '—'}<span className="text-xs font-medium text-stone-400"> lb</span>
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 leading-relaxed">{lastLb != null ? 'From your last weigh-in. ' : ''}Log it in Nutrition under Body weight.</p>
+          </div>
         )}
-        <button onClick={() => onChange({ age: Math.min(110, (age ?? 29) + 1) })} className={btn} aria-label="Age up">+</button>
       </div>
-      <div className="py-3 space-y-2">
-      <p className="text-base text-stone-700">Nutrition goal</p>
-      <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Nutrition goal">
-        {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Build muscle']].map(([id, label]) => (
-          <button key={id} role="radio" aria-checked={profile.goal === id} onClick={() => onChange({ goal: id })} className={`flex-1 ${seg(profile.goal === id).replace('px-4', 'px-2')}`}>{label}</button>
-        ))}
-      </div>
-      <p className="text-xs text-stone-500 leading-relaxed">{GOAL_NOTE[profile.goal] ?? GOAL_NOTE.none}</p>
-      </div>
-      <div className="py-3 space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-base text-stone-700">Weight</p>
-          <span className={`shrink-0 text-right text-lg font-bold tabular-nums ${shownLb != null ? 'text-stone-900' : 'text-stone-400'}`}>
-            {shownLb != null ? shownLb : '—'}<span className="text-xs font-medium text-stone-400"> lb</span>
-          </span>
+      <GroupLabel>Activity and goal</GroupLabel>
+      <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+        <div className="py-3 space-y-2">
+          <p className="text-base text-stone-700">Activity</p>
+          <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Activity">
+            {ACTIVITY.map(a => (
+              <button key={a.id} role="radio" aria-checked={profile.activity === a.id} onClick={() => onChange({ activity: a.id })} className={`flex-1 ${seg(profile.activity === a.id).replace('px-4', 'px-2')}`}>{a.label}</button>
+            ))}
+          </div>
+          <p className="text-xs text-stone-500 leading-relaxed">{ACTIVITY.find(a => a.id === profile.activity)?.note ?? 'How active you are in a normal week, workouts included.'}</p>
         </div>
-        <p className="text-xs text-stone-500 leading-relaxed">{lastLb != null ? 'From your last weigh-in. ' : ''}Log it in Nutrition under Body weight.</p>
+        <div className="py-3 space-y-2">
+        <p className="flex items-center gap-1.5 text-base text-stone-700">Nutrition goal
+          <button onClick={() => setGoalInfo(true)} aria-label="About your nutrition goal" className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
+        </p>
+        <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Nutrition goal">
+          {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Build muscle']].map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={profile.goal === id} onClick={() => onChange({ goal: id })} className={`flex-1 ${seg(profile.goal === id).replace('px-4', 'px-2')}`}>{label}</button>
+          ))}
+        </div>
+        {goalInfo && <InfoSheet icon={<InfoIcon />} title={GOAL_TITLE[profile.goal] ?? 'Nutrition goal'} text={(GOAL_NOTE[profile.goal] ?? GOAL_NOTE.none).replace(/^[^:]+: /, s => (profile.goal ? '' : s)).replace(/^./, c => c.toUpperCase())} onClose={() => setGoalInfo(false)} />}
+        </div>
+        {/* Losing or gaining: where you're headed and how fast. Losing can't
+            go faster than eating what you burn at rest allows. */}
+        {(profile.goal === 'lose' || profile.goal === 'gain') && (
+          <>
+            <NumberRow label="Target weight" value={profile.targetLb ?? null} step={1} min={50} max={600} start={shownLb != null ? Math.round(shownLb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb" onChange={v => onChange({ targetLb: v })} />
+            <NumberRow label="Pace" value={profile.pace ?? null} step={0.25} min={0.25} max={profile.goal === 'lose' && fastest != null ? fastest : 10} start={profile.goal === 'lose' ? 1 : 0.25} unit="lb/wk"
+              note={profile.goal === 'lose'
+                ? `Most people aim for 0.5–1 lb a week (about 0.5–1% of your weight).${fastest != null ? ` Your fastest is ${fastest} lb a week; any faster would mean eating less than you burn at rest.` : ''}`
+                : 'Muscle builds slowly: most people aim for 0.25–0.5 lb a week. Gaining faster mostly adds fat.'}
+              onChange={v => onChange({ pace: v })} />
+          </>
+        )}
+      </div>
+      <GroupLabel>Weather</GroupLabel>
+      <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+        {/* ZIP code, for the weather on Home. */}
+        <div className="py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-base text-stone-700">ZIP code</p>
+            <input type="text" inputMode="numeric" maxLength={5} placeholder="—" value={zipDraft ?? profile.zip ?? ''}
+              onChange={e => { const z = e.target.value.replace(/\D/g, '').slice(0, 5); if (z.length === 5) { onChange({ zip: z }); setZipDraft(null) } else setZipDraft(z) }}
+              onBlur={() => setZipDraft(null)}
+              className="w-[5.5rem] text-center text-lg font-bold bg-white rounded-lg py-1 text-stone-900 placeholder:text-stone-400 outline-none select-text tabular-nums" />
+          </div>
+          <p className="text-xs text-stone-500 leading-relaxed">For today's weather on Home.</p>
+        </div>
       </div>
     </div>
+  )
+}
+
+// A number with − / + (tap it to type one), and a note under it. Blank
+// shows — and the first tap starts from `start`.
+function NumberRow({ label, value, step, min, max, start, unit, note, onChange }) {
+  const [draft, setDraft] = useState(null)
+  const [info, setInfo] = useState(false) // the note, behind ⓘ
+  const clamp = v => Math.min(max, Math.max(min, Math.round(v * 100) / 100))
+  function save() {
+    const n = parseFloat(draft)
+    if (!isNaN(n)) onChange(clamp(n))
+    setDraft(null)
+  }
+  const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0'
+  return (
+    <div className="py-3">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 min-w-0 flex items-center gap-1.5 text-base text-stone-700">{label}
+          {note && <button onClick={() => setInfo(true)} aria-label={`About ${label.toLowerCase()}`} className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>}
+        </p>
+        <button onClick={() => onChange(clamp(value != null ? value - step : start))} className={btn} aria-label={`${label} down`}>−</button>
+        {draft !== null ? (
+          <input type="number" inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && save()} autoFocus className="w-[5.5rem] text-center text-lg font-bold bg-white rounded-lg py-0.5 text-stone-900 outline-none" />
+        ) : (
+          <button onClick={() => setDraft(value != null ? String(value) : '')} className={`min-w-[5.5rem] text-center text-lg font-bold tabular-nums active:opacity-60 ${value != null ? 'text-stone-900' : 'text-stone-400'}`}>
+            {value ?? '—'}<span className="text-xs font-medium text-stone-400"> {unit}</span>
+          </button>
+        )}
+        <button onClick={() => onChange(clamp(value != null ? value + step : start))} className={btn} aria-label={`${label} up`}>+</button>
+      </div>
+      {info && <InfoSheet icon={<InfoIcon />} title={label} text={note} onClose={() => setInfo(false)} />}
+    </div>
+  )
+}
+
+// Personal info, required: shown whenever any of it is missing, every row
+// of it (filled ones as they are), and it can't be closed; Save works once
+// nothing's left. A weight typed here is today's weigh-in.
+export function ProfileRequired({ profile, lastLb, onSave }) {
+  const [draft, setDraft] = useState(profile)
+  const [lb, setLb] = useState(lastLb)
+  const left = profileMissing(draft, lb).length
+  return (
+    <SettingsSheet title="Finish setting up your profile" bare split locked onClose={() => {}}>
+      <div className="space-y-1">
+        <h2 className="text-[22px] font-bold text-stone-900 tracking-tight">Finish setting up your profile</h2>
+        <p className="text-sm text-stone-500">We use this to set your targets and show your weather.</p>
+      </div>
+      <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5">
+        <PersonalInfo profile={draft} lastLb={lb} onChange={p => setDraft(d => ({ ...d, ...p }))} onWeight={setLb} />
+      </div>
+      <div className="space-y-2">
+        <button onClick={() => onSave(draft, lb)} disabled={left > 0} className="w-full h-[52px] rounded-[14px] bg-accent-500 text-base font-bold text-white active:bg-accent-600 disabled:bg-stone-200 disabled:text-stone-500">Save</button>
+        {left > 0 && <p className="text-center text-[13px] text-stone-500">{left} left to fill in</p>}
+      </div>
+    </SettingsSheet>
   )
 }
 

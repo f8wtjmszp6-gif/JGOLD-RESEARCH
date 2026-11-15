@@ -9,6 +9,8 @@ import { InfoIcon } from '../ui/glyphs'
 import { MUSCLES } from '../../utils/muscles'
 import { InfoSheet } from '../ui/InfoMark'
 import { SettingsSheet } from '../ui/Sheet'
+import { ExercisePage } from '../ExerciseBank'
+import { StretchPage } from '../StretchBank'
 
 // Like Add an exercise, by targeted muscle (the one each stretches most),
 // starting with the muscles this workout mainly works. When one of those has no stretch of its own,
@@ -58,6 +60,7 @@ export function StretchPicker({ listId, store, onPick, onClose }) {
       currentLabel={listId === STRETCH_ROUTINE.id ? 'In the routine' : 'In this plan'}
       countLabel="in stretches"
       first={ids.filter(id => MUSCLE_LABEL[id])}
+      newOne={{ add: store.addCustomStretch, page: (id, onSaved, onClose) => <StretchPage store={store} stretch={STRETCH_BY_ID[id]} fresh popup onSaved={onSaved} onClose={onClose} /> }}
       onPick={onPick}
       onClose={onClose}
     />
@@ -129,7 +132,7 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
       noun="exercises"
       kind="exercise"
       sections={MUSCLE_SECTIONS}
-      sectionName="Muscle"
+      sectionName="Targeted muscle"
       menuGroups={MUSCLE_MENU}
       sectionOf={x => covering[x.id] ?? primaryOf(x)[0] ?? coversOf(x)[0] ?? 'other'}
       bank={bank}
@@ -139,6 +142,7 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
       currentLabel="In this plan"
       countLabel={core ? 'in core' : 'in workout'}
       first={areas.map(a => a.id)}
+      newOne={{ add: store.addCustomExercise, page: (id, onSaved, onClose) => <ExercisePage store={store} exercise={EXERCISE_BY_ID[id]} fresh popup onSaved={onSaved} onClose={onClose} /> }}
       onPick={onPick}
       onClose={onClose}
     />
@@ -149,16 +153,17 @@ export function ExercisePicker({ workoutId, store, section, onPick, onClose }) {
 // Each shows anything that fills a gap in the list, what's already in it
 // from that group, then the bank's Recommended picks for it, and
 // "Show more" adds the rest under plain headings instead of grades.
-// Search looks through every group.
+// Search looks only in the group picked, graded for it.
 const TIERS = [
   [3, g => `Recommended for ${g}`],
   [2, (g, kind) => `Also ${kind === 'stretch' ? 'stretches' : 'works'} ${g}`],
   [1, (g, kind) => `${kind === 'stretch' ? 'Stretches' : 'Hits'} ${g} less directly`],
 ]
-const SEARCH_TIERS = { 3: 'Recommended', 2: 'Also works', 1: 'Less direct' }
 
-function BankPicker({ title, noun, kind, sections, sectionName = 'Area', menuGroups, sectionOf, alsoIn = () => false, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, gap, off = [], elsewhere = () => [], onPick, onClose }) {
+function BankPicker({ title, noun, kind, sections, sectionName = 'Area', menuGroups, sectionOf, alsoIn = () => false, bank, exclude, current, currentLabel, countLabel = 'added', first, rate, gap, off = [], elsewhere = () => [], newOne, onPick, onClose }) {
   const [query, setQuery] = useState('')
+  // One made with + (on its page until saved, then offered to add).
+  const [made, setMade] = useState(null)
   const [more, setMore] = useState(false)
   const [showCurrent, setShowCurrent] = useState(false)
   const [tabMenu, setTabMenu] = useState(false)
@@ -174,9 +179,10 @@ function BankPicker({ title, noun, kind, sections, sectionName = 'Area', menuGro
   const tabs = [...sections]
     .sort((a, b) => rank(a) - rank(b))
     .filter(sec => left.some(x => sectionOf(x) === sec.id || alsoIn(x, sec.id)) || current.some(x => sectionOf(x) === sec.id))
-  // With a gap, it opens on the first group that can fill it.
-  const [tab, setTab] = useState(() => (gap && tabs.find(t => left.some(x => sectionOf(x) === t.id && gap.fills(x) > 0))?.id) ?? tabs[0]?.id)
-  const sec = tabs.find(s => s.id === tab) ?? tabs[0]
+  // With a gap, it opens on the first group that can fill it; without one,
+  // on no group (you pick), unless there's only the one.
+  const [tab, setTab] = useState(() => (gap ? (tabs.find(t => left.some(x => sectionOf(x) === t.id && gap.fills(x) > 0)) ?? tabs[0])?.id : null))
+  const sec = tabs.find(s => s.id === tab) ?? (tabs.length === 1 ? tabs[0] : null)
   const group = sec?.label.toLowerCase()
 
   function pickTab(id) {
@@ -233,133 +239,11 @@ function BankPicker({ title, noun, kind, sections, sectionName = 'Area', menuGro
   )
   const box = 'rounded-xl bg-stone-50 overflow-hidden divide-y divide-stone-100'
 
-  let body
-  if (q) {
-    const hits = left.filter(x => x.name.toLowerCase().includes(q))
-    body = hits.length === 0
-      ? <p className="text-sm text-stone-400">No {noun} match “{query}”.</p>
-      : (
-        <div className={box}>
-          {[3, 2, 1].map(r => {
-            const rows = hits.filter(x => rate(x, sectionOf(x)) === r)
-            return rows.length > 0 && (
-              <Fragment key={r}>
-                {heading(SEARCH_TIERS[r], r === 3)}
-                {rows.map(x => row(x))}
-              </Fragment>
-            )
-          })}
-        </div>
-      )
-  } else if (sec) {
-    // Its own, plus any that also reach it (`alsoIn`), rated lower.
-    const inTab = left.filter(x => sectionOf(x) === sec.id || alsoIn(x, sec.id))
-    // Ones already in another of your plans stay in their tier, after the
-    // rest and marked with the plan, so you don't do one twice a week.
-    const byPlan = (x, y) => Number(elsewhere(x).length > 0) - Number(elsewhere(y).length > 0)
-    const tiers = TIERS.map(([r, label]) => [r, label(group, kind), inTab.filter(x => rate(x, sec.id) === r).sort(byPlan)])
-    // Recommended shows its first three (not in another plan, when there
-    // are any); the rest wait for "Show more".
-    const FIRST = 3
-    const fresh = tiers[0][2].filter(x => !elsewhere(x).length)
-    const top = (fresh.length ? fresh : tiers[0][2]).slice(0, FIRST)
-    const extra = inTab.length - top.length
-    // One section per missing area: its top three, then Show more.
-    const fillers = filling ? gap.areas.map(a => [a, gap.forArea(a, inTab)]).filter(([, list]) => list.length) : []
-    body = filling ? (
-      <div className="space-y-3">
-        {fillers.map(([a, list]) => {
-          const all = openGaps.includes(a.id)
-          return (
-            <div key={a.id} className={box}>
-              {heading(`Fills ${a.label.toLowerCase()}`, true)}
-              {(all ? list : list.slice(0, 3)).map(x => row(x))}
-              {list.length > 3 && (
-                <button onClick={() => setOpenGaps(all ? openGaps.filter(id => id !== a.id) : [...openGaps, a.id])} className="w-full px-3.5 py-3 text-left text-sm font-semibold text-accent-500 active:bg-stone-100">
-                  {all ? 'Show fewer' : `Show ${list.length - 3} more`}
-                </button>
-              )}
-            </div>
-          )
-        })}
-        {!fillers.length && <p className="text-sm text-stone-400">Nothing in {group} fills {gap.names.toLowerCase()}. Try another {sectionName.toLowerCase()}.</p>}
-      </div>
-    ) : (
-      <div className={box}>
-        {tiers.map(([r, label, rows]) => {
-          const shown = more ? rows : r === 3 ? top : []
-          return shown.length > 0 && (
-            <Fragment key={r}>
-              {heading(label, r === 3)}
-              {shown.map(x => row(x))}
-            </Fragment>
-          )
-        })}
-        {top.length === 0 && !more && (
-          <p className="px-3.5 py-2.5 text-sm text-stone-400">The recommended {noun} for {group} are all in.</p>
-        )}
-        {(extra > 0 || more) && (
-          <button onClick={() => setMore(!more)} className="w-full px-3.5 py-3 text-left text-sm font-semibold text-accent-500 active:bg-stone-100">
-            {more ? 'Show fewer' : `Show ${extra} more`}
-          </button>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <SettingsSheet title={title} closeLabel="Cancel" tall onClose={onClose}>
-      <input
-        id="bank-search"
-        type="search"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder={`Search ${noun}`}
-        className="w-full rounded-xl bg-stone-100 px-3.5 py-2.5 text-base text-stone-900 placeholder:text-stone-400 outline-none select-text"
-      />
-      {/* What's in it and which muscle (or area) to pick from, as one card
-          of rows like the weight settings. */}
-      {!q && (current.length + off.length > 0 || tabs.length > 1) && (
-        <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
-          {current.length + off.length > 0 && (
-            <button onClick={() => setShowCurrent(true)} className="w-full flex items-center gap-2 px-4 py-3 text-left active:bg-stone-100">
-              <span className="flex-1 text-base text-stone-600">{currentLabel}</span>
-              {off.length > 0 && <span className="text-base text-stone-400">{off.length} off</span>}
-              {chevron}
-            </button>
-          )}
-          {tabs.length > 1 && (
-            <button onClick={() => setTabMenu(true)} aria-haspopup="listbox" className="w-full flex items-center gap-2 px-4 py-3 text-left active:bg-stone-100">
-              <span className="flex-1 text-base text-stone-600">{sectionName}</span>
-              <span className="min-w-0 truncate text-base font-semibold text-stone-900">{sec?.label}</span>
-              {chevron}
-            </button>
-          )}
-        </div>
-      )}
-      {showCurrent && (
-        <SettingsSheet title={currentLabel} closeLabel="Done" onClose={() => setShowCurrent(false)}>
-          {/* By group when there are groups (in the plan's order), else one list. */}
-          {(menuGroups
-            ? menuGroups.map(([label, ids]) => [label, sections.filter(sc => ids.includes(sc.id))])
-            : [[null, sections]]
-          ).map(([label, secs]) => [label, secs.flatMap(sc => [
-            ...current.filter(x => sectionOf(x) === sc.id).map(x => row(x, true, null, sc.label)),
-            ...off.filter(x => sectionOf(x) === sc.id).map(x => row(x, false, null, sc.label, true)),
-          ]), secs])
-            .filter(([, rows]) => rows.length)
-            .sort(([, , a], [, , b]) => sections.indexOf(a.find(sc => [...current, ...off].some(x => sectionOf(x) === sc.id))) - sections.indexOf(b.find(sc => [...current, ...off].some(x => sectionOf(x) === sc.id))))
-            .map(([label, rows]) => (
-              <div key={label ?? 'all'} className={`${box} mb-3`}>
-                {label && heading(label)}
-                {rows}
-              </div>
-            ))}
-        </SettingsSheet>
-      )}
-      {tabMenu && (
-        <SettingsSheet title={sectionName} closeLabel="Done" onClose={() => setTabMenu(false)}>
-          {/* By group (the plan's first) when there are groups, else one list. */}
+  // The groups to pick from, by group (the plan's first) when there are
+  // groups, else one list: in the menu, or right on the sheet before one's
+  // picked.
+  const tabList = (
+    <>
           {(menuGroups
             ? menuGroups.map(([label, ids]) => [label, tabs.filter(t => ids.includes(t.id))]).filter(([, ts]) => ts.length)
               .sort(([, a], [, b]) => tabs.indexOf(a[0]) - tabs.indexOf(b[0]))
@@ -381,6 +265,145 @@ function BankPicker({ title, noun, kind, sections, sectionName = 'Area', menuGro
               })}
             </div>
           ))}
+    </>
+  )
+
+  // What's in it, by group when there are groups (in the plan's order),
+  // else one list: in its own sheet, or right on this one until a group's
+  // picked.
+  const currentList = (
+    <>
+          {(menuGroups
+            ? menuGroups.map(([label, ids]) => [label, sections.filter(sc => ids.includes(sc.id))])
+            : [[null, sections]]
+          ).map(([label, secs]) => [label, secs.flatMap(sc => [
+            ...current.filter(x => sectionOf(x) === sc.id).map(x => row(x, true, null, sc.label)),
+            ...off.filter(x => sectionOf(x) === sc.id).map(x => row(x, false, null, sc.label, true)),
+          ]), secs])
+            .filter(([, rows]) => rows.length)
+            .sort(([, , a], [, , b]) => sections.indexOf(a.find(sc => [...current, ...off].some(x => sectionOf(x) === sc.id))) - sections.indexOf(b.find(sc => [...current, ...off].some(x => sectionOf(x) === sc.id))))
+            .map(([label, rows]) => (
+              <div key={label ?? 'all'} className={`${box} mb-3`}>
+                {label && heading(label)}
+                {rows}
+              </div>
+            ))}
+    </>
+  )
+
+  let body
+  if (sec) {
+    // Its own, plus any that also reach it (`alsoIn`), rated lower.
+    // A search looks only in this muscle, graded for it.
+    const inTab = left.filter(x => (sectionOf(x) === sec.id || alsoIn(x, sec.id)) && (!q || x.name.toLowerCase().includes(q)))
+    // Ones already in another of your plans stay in their tier, after the
+    // rest and marked with the plan, so you don't do one twice a week.
+    const byPlan = (x, y) => Number(elsewhere(x).length > 0) - Number(elsewhere(y).length > 0)
+    const tiers = TIERS.map(([r, label]) => [r, label(group, kind), inTab.filter(x => rate(x, sec.id) === r).sort(byPlan)])
+    // Recommended shows its first three (not in another plan, when there
+    // are any); the rest wait for "Show more".
+    const FIRST = 3
+    const fresh = tiers[0][2].filter(x => !elsewhere(x).length)
+    const top = (fresh.length ? fresh : tiers[0][2]).slice(0, FIRST)
+    const extra = inTab.length - top.length
+    // One section per missing area: its top three, then Show more.
+    const fillers = filling ? gap.areas.map(a => [a, gap.forArea(a, inTab)]).filter(([, list]) => list.length) : []
+    const all = more || !!q
+    body = q && !inTab.length ? (
+      <p className="text-sm text-stone-400">No {group} {noun} match “{query}”.</p>
+    ) : filling && !q ? (
+      <div className="space-y-3">
+        {fillers.map(([a, list]) => {
+          const all = openGaps.includes(a.id)
+          return (
+            <div key={a.id} className={box}>
+              {heading(`Fills ${a.label.toLowerCase()}`, true)}
+              {(all ? list : list.slice(0, 3)).map(x => row(x))}
+              {list.length > 3 && (
+                <button onClick={() => setOpenGaps(all ? openGaps.filter(id => id !== a.id) : [...openGaps, a.id])} className="w-full px-3.5 py-3 text-left text-sm font-semibold text-accent-500 active:bg-stone-100">
+                  {all ? 'Show fewer' : `Show ${list.length - 3} more`}
+                </button>
+              )}
+            </div>
+          )
+        })}
+        {!fillers.length && <p className="text-sm text-stone-400">Nothing in {group} fills {gap.names.toLowerCase()}. Try another {sectionName.toLowerCase()}.</p>}
+      </div>
+    ) : (
+      <div className={box}>
+        {tiers.map(([r, label, rows]) => {
+          const shown = all ? rows : r === 3 ? top : []
+          return shown.length > 0 && (
+            <Fragment key={r}>
+              {heading(label, r === 3)}
+              {shown.map(x => row(x))}
+            </Fragment>
+          )
+        })}
+        {top.length === 0 && !all && (
+          <p className="px-3.5 py-2.5 text-sm text-stone-400">The recommended {noun} for {group} are all in.</p>
+        )}
+        {!q && (extra > 0 || more) && (
+          <button onClick={() => setMore(!more)} className="w-full px-3.5 py-3 text-left text-sm font-semibold text-accent-500 active:bg-stone-100">
+            {more ? 'Show fewer' : `Show ${extra} more`}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <SettingsSheet title={title} closeLabel="Cancel" tall onClose={onClose}>
+      {/* What's in it and which muscle (or area) to pick from, as one card
+          of rows like the weight settings. */}
+      {(current.length + off.length > 0 || tabs.length > 1) && (
+        <div className="rounded-2xl bg-stone-50 divide-y divide-stone-200/70 overflow-hidden">
+          {current.length + off.length > 0 && (
+            <button onClick={() => setShowCurrent(true)} className="w-full flex items-center gap-2 px-4 py-3 text-left active:bg-stone-100">
+              <span className="flex-1 text-base text-stone-600">{currentLabel}</span>
+              {off.length > 0 && <span className="text-base text-stone-400">{off.length} off</span>}
+              {chevron}
+            </button>
+          )}
+          {tabs.length > 1 && (
+            <button onClick={() => setTabMenu(true)} aria-haspopup="listbox" className="w-full flex items-center gap-2 px-4 py-3 text-left active:bg-stone-100">
+              <span className="flex-1 min-w-0">
+                <span className="block text-base text-stone-600">{sectionName}</span>
+                <span className="block text-xs text-stone-400 mt-0.5">Pick one to see recommended {noun}</span>
+              </span>
+              <span className={`min-w-0 truncate text-base font-semibold ${sec ? 'text-stone-900' : 'text-accent-500'}`}>{sec?.label ?? 'Choose'}</span>
+              {chevron}
+            </button>
+          )}
+        </div>
+      )}
+      {/* Search, once there's a muscle: just its exercises, graded for it. */}
+      {sec && (
+        <div className="flex items-center gap-2">
+        <input
+          id="bank-search"
+          type="search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder={`Search ${group} ${noun}`}
+          className="flex-1 min-w-0 rounded-xl bg-stone-100 px-3.5 py-2.5 text-base text-stone-900 placeholder:text-stone-400 outline-none select-text"
+        />
+        {/* + makes a new one; saving it offers to add it. */}
+        <button onClick={() => setMade(newOne.add())} aria-label={`New ${kind === 'stretch' ? 'stretch' : 'exercise'}`}
+          className="shrink-0 w-11 h-11 rounded-xl bg-stone-100 flex items-center justify-center text-stone-600 active:bg-stone-200">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+        </div>
+      )}
+      {made && newOne.page(made, () => { const id = made; setMade(null); onPick(id) }, () => setMade(null))}
+      {showCurrent && (
+        <SettingsSheet title={currentLabel} closeLabel="Done" onClose={() => setShowCurrent(false)}>
+          {currentList}
+        </SettingsSheet>
+      )}
+      {tabMenu && (
+        <SettingsSheet title={sectionName} closeLabel="Done" onClose={() => setTabMenu(false)}>
+          {tabList}
         </SettingsSheet>
       )}
       {!q && gap && (

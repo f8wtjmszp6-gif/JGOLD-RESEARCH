@@ -9,7 +9,8 @@ import { RangeMark } from '../ui/RangeMark'
 
 const RANGE_TITLE = { ok: 'in range', low: 'below the recommendation', high: 'above the recommendation' }
 import { StepperRow } from '../ui/controls'
-import { NUTRIENTS, UNITS, GLASSES, ZERO, mealName, foodsOf, popularFoods, scale, servingText, amount, num, fromIngredients, ingredientFood, weightWeek, newId, dayKey } from '../../utils/nutrition'
+import { NUTRIENTS, UNITS, GLASSES, ZERO, mealName, foodsOf, popularFoods, scale, servingText, amount, num, fromIngredients, ingredientFood, weightWeek, newId, dayKey, calorieBurn } from '../../utils/nutrition'
+import { recsFor, aimOf, aimText, calFor, keepBand, suggestFor, restFloor, suggestedTargets } from '../../utils/targets'
 import { Numbers, Toggle, SectionLabel, Field, BoxStepper, BigButton, MealSwitch } from './parts'
 
 // "620 cal · 40g protein · 6g fiber"
@@ -581,33 +582,6 @@ export function WeightSheet({ n, days, onDay, onClose }) {
   )
 }
 
-// What's recommended for you: by sex (and age, for fiber) once Personal info
-// has them; until then both men's and women's, and either counts.
-function recsFor(profile) {
-  const sex = profile?.sex
-  const age = profile?.age ?? null
-  const older = (age ?? 0) > 50
-  // Calories by age, as the Dietary Guidelines give them (19–30, 31–50, 51+).
-  const band = age == null ? null : age <= 30 ? 0 : age <= 50 ? 1 : 2
-  const MEN_CAL = [[2400, 3000], [2200, 3000], [2000, 2800]]
-  const WOMEN_CAL = [[1800, 2400], [1800, 2200], [1600, 2200]]
-  const ages = ['19–30', '31–50', 'over 50']
-  const MEN = { who: older ? 'men over 50' : 'men', calWho: band == null ? 'men' : `men ${ages[band]}`, cal: band == null ? [2000, 3000] : MEN_CAL[band], fiber: older ? 30 : 38, sugar: 36, water: 104, cups: 13 }
-  const WOMEN = { who: older ? 'women over 50' : 'women', calWho: band == null ? 'women' : `women ${ages[band]}`, cal: band == null ? [1600, 2400] : WOMEN_CAL[band], fiber: older ? 21 : 25, sugar: 25, water: 72, cups: 9 }
-  return sex === 'man' ? { one: MEN } : sex === 'woman' ? { one: WOMEN } : { men: MEN, women: WOMEN }
-}
-
-// Your nutrition goal (Personal info) moves calories and protein: losing is
-// about 300–500 under maintenance, gaining about 250–500 over it, and both
-// want more protein per kg than maintaining.
-const AIMS = {
-  lose: { shift: [-500, -300], protein: [1.6, 2.4], cal: 'To lose about 0.5–1 lb a week, eat 300–500 calories under that', why: 'Research on dieting lifters suggests 1.6–2.4g per kg to hold on to muscle while losing fat' },
-  maintain: { shift: [0, 0], protein: [1.6, 2.2], why: 'If you lift, 1.6–2.2g per kg is enough to lose fat and build muscle at the same time' },
-  gain: { shift: [250, 500], protein: [1.6, 2.2], cal: 'To build muscle, eat about 250–500 calories over that', why: 'Research on lifters finds muscle gains top out around 1.6g per kg, up to 2.2g' },
-}
-const aimOf = profile => AIMS[profile?.goal] ?? AIMS.maintain
-const calFor = (band, profile) => band.map((c, i) => c + aimOf(profile).shift[i])
-
 // What well-known bodies recommend, under each target. Fat, carbs and
 // protein are shown in grams too, from your calories and your last weigh-in.
 function guidance(goals, lb, profile) {
@@ -617,14 +591,19 @@ function guidance(goals, lb, profile) {
   const at = `at ${num(goals.cal)} calories`
   const aim = aimOf(profile)
   const range = c => `${num(c[0])}–${num(c[1])}`
-  const base = r.one
+  const est = calorieBurn(profile, lb)
+  const base = est
+    ? `From your height, weight, age and activity, you burn about ${num(est.burn)} calories a day.`
+    : r.one
     ? `The Dietary Guidelines for Americans suggest about ${range(r.one.cal)} calories a day for ${r.one.calWho} to keep your weight, depending on how active you are.`
     : 'The Dietary Guidelines for Americans suggest about 2,000–3,000 calories a day for men and 1,600–2,400 for women to keep your weight, depending on how active you are.'
   const [pa, pb] = aim.protein
   return {
-    cal: aim.cal
-      ? `${base} ${aim.cal}: about ${r.one ? range(calFor(r.one.cal, profile)) : `${range(calFor([2000, 3000], profile))} for men and ${range(calFor([1600, 2400], profile))} for women`}.`
-      : base,
+    cal: (est
+      ? (aimText(profile) ? `${base} ${aimText(profile)}: about ${num(suggestFor(est, profile))}.${suggestFor(est, profile) === restFloor(est) && calFor([est.burn, est.burn], profile)[0] < restFloor(est) ? ` That's held at ${num(restFloor(est))}, what you burn at rest; it never goes lower.` : ''}` : base)
+      : aimText(profile)
+      ? `${base} ${aimText(profile)}: about ${r.one ? range(calFor(r.one.cal, profile)) : `${range(calFor([2000, 3000], profile))} for men and ${range(calFor([1600, 2400], profile))} for women`}.`
+      : base) + (est ? '' : ' Fill in Personal info (with your height and activity) for an estimate of your own.'),
     fat: `The National Academies recommend getting 20–35% of your calories from fat, which is ${g(0.2, 9)}–${g(0.35, 9)}g ${at}.`,
     carbs: `The National Academies recommend getting 45–65% of your calories from carbs, which is ${g(0.45, 4)}–${g(0.65, 4)}g ${at}.`,
     fiber: r.one
@@ -646,7 +625,7 @@ function guidance(goals, lb, profile) {
 
 // One target, laid out like a Weekly goals row: name, − value +, and what's
 // recommended underneath. Tap the value to type it.
-function TargetRow({ label, value, step, suffix, check, advice, onChange }) {
+function TargetRow({ label, value, step, suffix, check, advice, action, onChange }) {
   const [draft, setDraft] = useState(null)
   const set = v => onChange(Math.max(0, Math.round(v)))
   function save() {
@@ -670,6 +649,7 @@ function TargetRow({ label, value, step, suffix, check, advice, onChange }) {
         <button onClick={() => set(value + step)} className={btn} aria-label={`${label} up`}>+</button>
       </div>
       <p className="text-xs text-stone-500 leading-relaxed">{advice}</p>
+      {action}
     </div>
   )
 }
@@ -682,7 +662,9 @@ export function TargetRows({ goals, lb, profile, onSet }) {
   // Your numbers, or (not knowing yet) the easier of the two.
   const lo = k => (r.one ? r.one[k] : Math.min(r.men[k], r.women[k]))
   const hi = k => (r.one ? r.one[k] : Math.max(r.men[k], r.women[k]))
-  const calRange = calFor(r.one ? r.one.cal : [1600, 3000], profile)
+  const est = calorieBurn(profile, lb)
+  const calRange = est ? keepBand(est, profile) : calFor(r.one ? r.one.cal : [1600, 3000], profile)
+  const suggest = suggestedTargets(goals, lb, profile)
   const aim = aimOf(profile)
   const [showing, setShowing] = useState(null) // the in-range pop-up, by key
   // Fat and carbs: in range inside the recommended share of your calories.
@@ -704,7 +686,7 @@ export function TargetRows({ goals, lb, profile, onSet }) {
       return out('ok', `${v}g of ${name} is ${pct}% of your ${num(goals.cal)} calories. ${range}`)
     }
     if (k === 'cal') {
-      const fits = aim.cal ? `fits your goal to ${profile.goal === 'lose' ? 'lose fat' : 'build muscle'}` : 'is inside what the Dietary Guidelines suggest'
+      const fits = aim.cal ? `fits your goal to ${profile.goal === 'lose' ? 'lose fat' : 'build muscle'}` : est ? 'is close to what you burn' : 'is inside what the Dietary Guidelines suggest'
       if (v < calRange[0]) return out('low', `${num(v)} calories is too low${aim.cal ? ' for your goal' : ''}. ${note.cal} Raise it to at least ${num(calRange[0])}.`)
       if (v > calRange[1]) return out('high', `${num(v)} calories is too high${aim.cal ? ' for your goal' : ''}. ${note.cal} Lower it to ${num(calRange[1])} or less.`)
       return out('ok', `${num(v)} calories ${fits}. ${note.cal}`)
@@ -738,7 +720,9 @@ export function TargetRows({ goals, lb, profile, onSet }) {
       {rows.map(([k, label, step, suffix]) => (
         <TargetRow key={k} label={label} value={goals[k]} step={step} suffix={suffix} check={status(k) && (
           <button onClick={() => setShowing(k)} aria-label={`${label}: ${RANGE_TITLE[status(k).state]}`} className="-m-1.5 p-1.5 active:opacity-60"><RangeMark state={status(k).state} /></button>
-        )} advice={note[k]} onChange={v => onSet(k, v)} />
+        )} advice={note[k]} action={suggest[k] != null && suggest[k] !== goals[k] && (
+          <button onClick={() => onSet(k, suggest[k])} className="h-8 px-3 rounded-lg bg-accent-50 text-sm font-semibold text-accent-500 active:bg-accent-100">Use {num(suggest[k])}{suffix && ` ${suffix}`}</button>
+        )} onChange={v => onSet(k, v)} />
       ))}
       {showing && status(showing) && (
         <InfoSheet icon={<RangeMark state={status(showing).state} size={20} />} title={`${NAMES[showing]} ${RANGE_TITLE[status(showing).state]}`} text={status(showing).text} onClose={() => setShowing(null)} />
@@ -747,9 +731,17 @@ export function TargetRows({ goals, lb, profile, onSet }) {
   )
 }
 
-export function GoalsSheet({ goals, lb, profile, onSet, onClose }) {
+// Use all: every suggested number at once (blue, beside Done), while any
+// differs from yours.
+export function UseAllButton({ goals, lb, profile, onSetAll }) {
+  const all = suggestedTargets(goals, lb, profile, true)
+  if (!Object.keys(all).some(k => all[k] !== goals[k])) return null
+  return <button onClick={() => onSetAll(all)} className="ml-auto mr-2 shrink-0 h-9 px-3 rounded-[10px] bg-accent-500 text-sm font-semibold text-white active:bg-accent-600">Use all suggested</button>
+}
+
+export function GoalsSheet({ goals, lb, profile, onSet, onSetAll, onClose }) {
   return (
-    <SettingsSheet title="Targets" tall onClose={onClose}>
+    <SettingsSheet title="Targets" tall action={<UseAllButton goals={goals} lb={lb} profile={profile} onSetAll={onSetAll} />} onClose={onClose}>
       <TargetRows goals={goals} lb={lb} profile={profile} onSet={onSet} />
     </SettingsSheet>
   )

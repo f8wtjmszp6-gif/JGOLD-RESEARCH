@@ -3,7 +3,8 @@ import Home from './components/home/Home'
 import { resetHomeView } from './utils/homeView'
 import MuscleMap from './components/week/MuscleMap'
 import WeekCard from './components/week/WeekCard'
-import SettingsDrawer from './components/SettingsDrawer'
+import SettingsDrawer, { ProfileRequired } from './components/SettingsDrawer'
+import { lastWeight, profileMissing, dayKey } from './utils/nutrition'
 import NotificationsSheet from './components/Notifications'
 import { notificationsOf } from './utils/notifications'
 import TrendsScreen from './components/trends/Trends'
@@ -34,15 +35,9 @@ export default function App() {
   const [settings, setSettings] = useState(false) // true, or a page to open on ('backup')
   // Home, Workout or Food, from the pill at the bottom. The app opens on Home.
   const [mode, setMode] = useState('home')
-  // What Nutrition opens with, from a notification (Weigh in):
-  // { what: 'food' | 'water' | 'weigh', n }. Nutrition starts over on each
-  // (`n` counts up); cleared when you switch with the pill.
-  const [foodOpen, setFoodOpen] = useState(null)
-  function openFood(what) {
-    setFoodDate(null); setFoodAt(null)
-    setFoodOpen(o => ({ what, n: (o?.n ?? 0) + 1 }))
-    setMode('food')
-  }
+  // The Weigh in pop-up from a notification, over whatever tab you're on
+  // (counts up so each one opens fresh).
+  const [weigh, setWeigh] = useState(0)
   // Nutrition's own place: the week its strip shows (null: this one) and the
   // day it shows (null: today), picked from its calendar.
   const [foodAt, setFoodAt] = useState(null)
@@ -50,6 +45,8 @@ export default function App() {
   const [calendar, setCalendar] = useState(false)
   const [dayFocus, setDayFocus] = useState(null) // the day picked in the calendar
   const store = useStore()
+  const weightNow = lastWeight(store.nutrition) ?? store.profile.weight ?? null
+  const needsProfile = profileMissing(store.profile, weightNow).length > 0
 
   // The week showing, by its Sunday; null is this week. A saved week shows
   // in the same screens as this one and can be changed there, unless it was
@@ -79,9 +76,12 @@ export default function App() {
   function act(n) {
     store.dismissNote(n.id)
     setBell(null)
+    // Anything that lands on a Fitness page switches the pill to Fitness.
+    if (['week', 'trends', 'plan'].includes(n.run)) setMode('workout')
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings('backup')
-    if (n.run === 'weigh') openFood('weigh')
+    if (n.run === 'targets') setSettings('targets')
+    if (n.run === 'weigh') setWeigh(w => w + 1)
     if (n.run === 'trends') { setTrendLift(n.lift ?? null); setView('trends') }
     if (n.run === 'plan') { setWeekStart(null); setFocus(null); setWorkoutId(n.plan) }
   }
@@ -90,15 +90,16 @@ export default function App() {
   useEffect(() => setSoundMode(store.timer.sound), [store.timer.sound])
   useEffect(() => setVolume(store.timer.volume / 100), [store.timer.volume])
 
-  // Coming back after a while (10+ minutes away) goes back to today, all of
-  // it, as Return to today does, unless a workout is open. A quick trip to
-  // another app leaves everything where it was.
+  // Coming back after a while (an hour+ away) goes back to Home and today,
+  // all of it, as Return to today does, unless a workout is open. A quick
+  // trip to another app leaves everything where it was.
   useEffect(() => {
     if (workoutId) return
     let hiddenAt = null
     const back = () => {
       if (document.visibilityState === 'hidden') hiddenAt = Date.now()
-      else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) {
+      else if (hiddenAt && Date.now() - hiddenAt > 60 * 60 * 1000) {
+        setMode('home')
         setWeekStart(null)
         setFoodDate(null); setFoodAt(null)
         setReopenActivities(false); setDayFocus(f => ({ day: new Date().getDay(), n: (f?.n ?? 0) + 1 }))
@@ -126,12 +127,10 @@ export default function App() {
         <HomeScreen store={store} onStart={id => { setWeekStart(null); setFocus(null); setWorkoutId(id) }} />
       ) : mode === 'food' ? (
         <Food
-          key={foodOpen?.n ?? 0}
           nutrition={store.nutrition}
           profile={store.profile}
           setNutrition={store.setNutrition}
           date={foodDate}
-          open={foodOpen?.what}
           header={<TopBar onCalendar={() => setCalendar(true)} onToday={foodDate || foodAt != null ? () => { setFoodDate(null); setFoodAt(null) } : undefined} day={foodDate ?? undefined} onStep={n => {
             // A day back or forward; today goes back to plain today, and the
             // week follows the day (for the calendar).
@@ -184,7 +183,7 @@ export default function App() {
       )}
 
       {/* On the home screens only, not inside a workout or Trends. */}
-      {!workoutId && view !== 'trends' && <ModePill mode={mode} onBell={openBell} unread={notes.length > 0} onSettings={() => setSettings(true)} onMode={m => { if (m === 'workout' && mode !== 'workout') resetHomeView(); setFoodOpen(null); setMode(m) }} />}
+      {!workoutId && view !== 'trends' && <ModePill mode={mode} onBell={openBell} unread={notes.length > 0} onSettings={() => setSettings(true)} onMode={m => { if (m === 'workout' && mode !== 'workout') resetHomeView(); setMode(m) }} />}
       {calendar && (
         <CalendarSheet
           weeks={weeks}
@@ -208,8 +207,16 @@ export default function App() {
           onClose={() => setCalendar(false)}
         />
       )}
+      {weigh > 0 && <Food key={weigh} bare open="weigh" nutrition={store.nutrition} setNutrition={store.setNutrition} profile={store.profile} />}
       {settings && <SettingsDrawer store={store} page={settings === true ? null : settings} onClose={() => setSettings(false)} />}
       {bell && <NotificationsSheet notes={notes} fresh={bell.fresh} onAction={act} onDismiss={store.dismissNote} onClose={() => setBell(null)} />}
+      {/* Personal info, whenever any of it's missing: over everything. */}
+      {needsProfile && (
+        <ProfileRequired profile={store.profile} lastLb={weightNow} onSave={(p, lb) => {
+          store.setProfile(p)
+          if (lb !== weightNow) store.setNutrition(x => ({ ...x, weights: { ...x.weights, [dayKey()]: lb } }))
+        }} />
+      )}
     </div>
   )
 }

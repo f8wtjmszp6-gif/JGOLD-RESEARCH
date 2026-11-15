@@ -6,13 +6,14 @@ const ICONS = {
   pr: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7l-.8-3h-5.4z" /></>,
   next: <><path d="M5 12h12M13 7l5 5-5 5" /></>,
   weight: <><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M9 9.5a4 4 0 0 1 6 0L12 12" /></>,
+  targets: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>,
   backup: <><path d="M7 18a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5A4 4 0 0 1 17.5 18" /><path d="M12 12v8M9 15l3-3 3 3" /></>,
 }
 
 // Which part of the app each kind is about, in the order they're listed.
 const GROUPS = [
   ['Fitness', ['goals', 'pr', 'week', 'next']],
-  ['Nutrition', ['weight']],
+  ['Nutrition', ['weight', 'targets']],
   ['App', ['backup']],
 ]
 
@@ -42,7 +43,7 @@ export default function NotificationsSheet({ notes, fresh, onAction, onDismiss, 
                   {fresh.includes(n.id) && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" aria-label="New" />}
                   {n.title}
                 </p>
-                <p className="text-sm text-stone-500 leading-relaxed">{n.body}</p>
+                {n.body && <p className="text-sm text-stone-500 leading-relaxed">{n.body}</p>}
                 {n.action && <button onClick={() => onAction(n)} className="text-sm font-semibold text-accent-500 active:opacity-60">{n.action} ›</button>}
               </div>
               <button

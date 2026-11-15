@@ -56,17 +56,19 @@ export function ScopeSheet({ title, note, repeat, onPick, onClose }) {
 const NO_DRAG = { current: null }
 
 // `action`: a button beside Done (Notifications' Clear all).
-export function SettingsSheet({ title, bare = false, subtitle, closeLabel = 'Done', tall = false, split = false, full = false, action, onClose, children }) {
+export function SettingsSheet({ title, bare = false, subtitle, closeLabel = 'Done', tall = false, split = false, full = false, locked = false, action, onClose, children }) {
   const panel = useRef(null)
   // A full-screen one is a page, not a pop-up: swiping down doesn't close it.
-  const { offset, dragging, fade } = useDragToClose(full ? NO_DRAG : panel, onClose)
+  // `locked`: one you can't close at all (swipe or tap outside); it closes
+  // itself.
+  const { offset, dragging, fade } = useDragToClose(full || locked ? NO_DRAG : panel, onClose)
   // React still passes events up to the component that opened the sheet (a
   // swipeable row, say); stop them here so touching the sheet can't move it.
   const stop = e => e.stopPropagation()
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center touch-none"
-      onClick={e => { stop(e); onClose() }}
+      onClick={e => { stop(e); if (!locked) onClose() }}
       onPointerDown={stop}
       onPointerMove={stop}
       onPointerUp={stop}
