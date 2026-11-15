@@ -15,7 +15,6 @@ import WorkoutDetail from './components/workout/WorkoutDetail'
 import { useWorkoutTimer } from './hooks/useWorkoutTimer'
 import { useStore } from './store/useStore'
 import { calendarWeekOf } from './store/weeks'
-import { weekDay } from './utils/goal'
 import { weekRange, weeksAgo, sameDay } from './utils/days'
 import { setSoundMode, setVolume } from './utils/sound'
 
@@ -252,10 +251,10 @@ function DayTitle({ day, arrows }) {
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-1">
-        <h1 className="min-w-0 truncate text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
+        <h1 className="min-w-0 truncate text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h1>
         {arrows}
       </div>
-      <p className="text-sm text-stone-500 mt-1 whitespace-nowrap">{day.toLocaleDateString('en-US', { weekday: 'long' })} · {ago === 1 ? 'Yesterday' : `${ago} days ago`}</p>
+      <p className="text-sm text-stone-500 mt-1 whitespace-nowrap">{ago === 1 ? 'Yesterday' : `${ago} days ago`}</p>
     </div>
   )
 }
@@ -285,21 +284,9 @@ export function TopBar({ onTrends, onCalendar, onToday, day, onStep }) {
     <div className="flex items-center justify-between gap-3">
       {day ? <DayTitle day={day} arrows={arrows} /> : <div className="min-w-0">
         <div className="flex items-center gap-1">
-          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</h1>
+          <h1 className="text-[34px] leading-[1.05] font-bold text-stone-900 tracking-tight whitespace-nowrap">{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h1>
           {arrows}
         </div>
-        {/* The date as the title, then the week as seven dots: the days gone blue,
-            today and the ones left grey. */}
-        <p className="flex items-center gap-2 text-sm text-stone-500 mt-1.5 whitespace-nowrap">
-          {/* Each day's letter in its dot: the days gone blue, today and
-              the ones left grey, with today circled. */}
-          <span className="flex items-center gap-1" role="img" aria-label={`Day ${8 - weekDay().daysLeft} of 7`}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
-              const today = 7 - weekDay().daysLeft
-              return <span key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i < today ? 'bg-accent-500 text-white' : 'bg-stone-200 text-stone-500'} ${i === today ? 'outline outline-[1.5px] outline-offset-1 outline-accent-500' : ''}`}>{d}</span>
-            })}
-          </span>
-        </p>
       </div>}
       <HeaderButtons onTrends={onTrends} onCalendar={onCalendar} onToday={onToday} />
     </div>

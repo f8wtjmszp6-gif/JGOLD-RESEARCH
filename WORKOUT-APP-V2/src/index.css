@@ -22,7 +22,19 @@
   --ink: #1c1917;
 }
 
+/* The page itself never scrolls or bounces: only the lists inside it do.
+   (On iPhone, dragging a part that doesn't scroll used to drag the whole
+   page instead.) */
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
   margin: 0;
   background: var(--page);
   color: var(--ink);
@@ -38,9 +50,32 @@ button {
 }
 
 #root {
-  height: 100dvh;
+  height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+/* Portrait only. iPhone ignores the manifest's "orientation" for home-screen
+   apps, so a phone turned sideways (landscape and short) gets this cover. */
+#rotate {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  #rotate {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--page);
+    color: #57534e;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  #rotate p { margin: 0; }
 }
 
 /* The settings drawer slides in from the right over a fading shade. */
