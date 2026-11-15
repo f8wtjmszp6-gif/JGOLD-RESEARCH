@@ -447,12 +447,6 @@ export function writeSessions(s, kind, list) {
   return kind === 'walk' ? { ...next, activities: { ...s.activities, walk: list.length } } : next
 }
 
-// Drops the latest logged session of a kind.
-export function dropLastCardio(list, kind) {
-  const i = list.findLastIndex(x => x.kind === kind)
-  return i < 0 ? list : list.filter((_, j) => j !== i)
-}
-
 // A gym workout counts toward the week only once every set of every exercise
 // is ticked. (The warm-up and stretches aren't required.)
 function workoutComplete(s, workoutId) {

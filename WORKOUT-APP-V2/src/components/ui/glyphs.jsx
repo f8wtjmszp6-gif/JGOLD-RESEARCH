@@ -13,15 +13,6 @@ export function InfoIcon({ size = 18 }) {
   )
 }
 
-export function CheckIcon({ size = 18 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9.5" />
-      <path d="M8 12.5l2.8 2.8L16 10" />
-    </svg>
-  )
-}
-
 export function ClockIcon({ size = 16, color = 'var(--color-accent-500)' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">

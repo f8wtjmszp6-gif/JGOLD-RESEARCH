@@ -360,7 +360,7 @@ const editTitle = (at, name) => `${at ? weekdayOf(at) : 'Earlier'} · ${name}`
 
 // Logs a stretch session on your own; 30+ minutes also counts as a workout.
 export function AddStretchSheet({ store, edit, onClose }) {
-  const [minutes, setMinutes] = useState(edit?.entry.minutes ?? store.lastOwnStretch)
+  const [minutes, setMinutes] = useState(edit?.entry.minutes ?? 15) // a stretch on your own starts at 15 minutes
   const [at, setAt] = useState(edit?.entry.at ?? store.today.toISOString())
   const need = STRETCH_WORKOUT_MINUTES - minutes
   return (

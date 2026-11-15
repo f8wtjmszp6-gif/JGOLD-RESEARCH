@@ -93,7 +93,7 @@ export function suggestedTargets(goals, lb, profile, all = false) {
 export function capPace(s) {
   const p = s.profile
   if (p?.goal !== 'lose' || !(p.pace > 0)) return s
-  const est = calorieBurn(p, lastWeight(s.nutrition) ?? p.weight ?? null)
+  const est = calorieBurn(p, lastWeight(s.nutrition))
   if (!est) return s
   const max = maxPace(est)
   if (p.pace <= max || max <= 0) return s

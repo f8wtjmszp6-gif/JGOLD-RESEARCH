@@ -64,8 +64,8 @@ export default function WeekStrip({ weeks, at, onAt, onActivities, plain, onPick
   }
 
   return (
-    <div className={`bg-white rounded-b-2xl shadow-sm border-t border-stone-100 pt-2 ${plain ? 'pb-1.5' : ''}`}>
-      <p className="text-center text-xs font-bold tracking-wider text-stone-500 mb-1">{monthsOf(week.weekStart)}</p>
+    <div className={`bg-white rounded-b-2xl shadow-sm border-t border-stone-100 pt-3 ${plain ? 'pb-1.5' : ''}`}>
+      <p className="text-center text-xs font-bold tracking-wider text-stone-500 mb-1.5">{monthsOf(week.weekStart)}</p>
       {/* Arrows either side show the days slide, and step a week at a time;
           each fades out at the end it can't go past. */}
       <div className="flex items-stretch">
@@ -94,7 +94,7 @@ export default function WeekStrip({ weeks, at, onAt, onActivities, plain, onPick
           each centered in its part. Weeks saved before days were kept have
           their totals only; a note takes the key's place. */}
       {!plain && (
-        <div className="border-t border-stone-100 py-1.5 flex items-center">
+        <div className="border-t border-stone-100 py-2.5 flex items-center">
           <div className="flex-1 min-w-0 flex justify-center px-2">
             {!week.dayLog ? <p className="text-[11px] text-stone-400">Days weren’t recorded this week</p> : <Legend className="justify-center gap-x-2.5" />}
           </div>
@@ -129,7 +129,7 @@ function WeekPage({ week, current, plain, onPick, picked }) {
   const days = weekDays(firstDay(week.weekStart))
   const today = week.live ? days.findIndex(d => sameDay(d, now)) : 7
   return (
-    <div className="w-full shrink-0 snap-center snap-always py-1.5" aria-hidden={!current}>
+    <div className="w-full shrink-0 snap-center snap-always py-2" aria-hidden={!current}>
       <div className="grid grid-cols-7">
         {days.map((d, i) => {
           const items = week.dayLog?.[i] ?? []
@@ -144,7 +144,7 @@ function WeekPage({ week, current, plain, onPick, picked }) {
               {...(Tag === 'button'
                 ? { onClick: () => onPick(d), 'aria-label': name, 'aria-pressed': filled, tabIndex: current ? 0 : -1 }
                 : { role: 'img', 'aria-label': `${name}, ${items.length ? items.map(x => x.label).join(', ') : 'nothing logged'}` })}
-              className={`flex flex-col items-center gap-1 py-0.5 ${i > today ? 'opacity-40' : ''} ${Tag === 'button' ? 'active:opacity-60' : ''}`}
+              className={`flex flex-col items-center gap-1.5 py-0.5 ${i > today ? 'opacity-40' : ''} ${Tag === 'button' ? 'active:opacity-60' : ''}`}
             >
               <span className={`text-[11px] font-semibold ${isToday ? 'text-accent-500' : 'text-stone-400'}`}>
                 {d.toLocaleDateString('en-US', { weekday: 'narrow' })}

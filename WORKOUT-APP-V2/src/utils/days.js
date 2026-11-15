@@ -15,17 +15,6 @@ export function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-// "Mon", or "Earlier" for something logged before days were saved.
-export function dayLabel(at) {
-  return at ? new Date(at).toLocaleDateString('en-US', { weekday: 'short' }) : 'Earlier'
-}
-
-// Logged items in day order (undated ones first), each with its place in
-// its own list so it can be edited.
-export function inDayOrder(list) {
-  return list.map((entry, index) => ({ entry, index })).sort((a, b) => (a.entry.at ?? '').localeCompare(b.entry.at ?? ''))
-}
-
 const short = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const startDate = weekStart => {
   const [y, m, d] = weekStart.split('-').map(Number)

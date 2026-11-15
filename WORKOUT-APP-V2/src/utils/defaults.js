@@ -11,9 +11,3 @@ export const GROUPS = [
 ]
 export const IDS = GROUPS.flatMap(([, rows]) => rows.map(([id]) => id))
 export const nameOf = id => EXERCISE_BY_ID[id]?.name ?? STRETCH_BY_ID[id]?.name ?? id
-
-// For the section's closed row.
-export function defaultsSummary(store) {
-  const n = IDS.filter(id => store.defaultEdits(id).edited).length
-  return { text: n ? `${n} edited` : 'All default' }
-}

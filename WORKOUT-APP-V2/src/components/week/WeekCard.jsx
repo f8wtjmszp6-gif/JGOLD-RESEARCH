@@ -45,21 +45,21 @@ export default function WeekCard({ week, stretch, cardio, goals, figure, live, e
   }
 
   return (
-    <div className={`bg-white shadow-sm px-4 pt-3 ${joined ? 'rounded-t-2xl pb-2' : 'rounded-2xl pb-2.5'}`}>
+    <div className={`bg-white shadow-sm px-4 pt-4 ${joined ? 'rounded-t-2xl pb-3' : 'rounded-2xl pb-3.5'}`}>
       {/* A saved week's title is its dates; the live week's has what's
           still to go under the goals instead. */}
       {!live && <p className="mb-2.5 text-sm font-medium text-stone-500">{title}</p>}
       {heading}
       {/* The body figures, front over back, to the right of the goals. */}
-      <div className="flex items-stretch gap-2">
+      <div className="flex items-stretch gap-3">
       <div className="flex-1 min-w-0">
-      <div className={`grid gap-2 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <div className={`grid gap-2.5 ${cardio ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <GoalTile label="Workouts" count={workouts} goal={goals.workouts} fills={Array(workouts).fill(goalFill(goalLevel(workouts, goals.workouts)))} />
         <GoalTile label="Stretching" count={stretch.total} goal={goals.stretch} fills={Array(stretch.total).fill(goalFill(goalLevel(stretch.total, goals.stretch)))} />
         {cardio && <CardioTile minutes={cardio.total} goal={goals.cardio} fill={goalFill(goalLevel(cardio.total, goals.cardio))} />}
       </div>
       {live && (
-        <p className="mt-1.5 text-sm leading-tight text-stone-500">
+        <p className="mt-2.5 text-sm leading-tight text-stone-500">
           <ToGo workouts={workouts} stretches={stretch.total} cardio={cardio ? cardio.total : null} goals={goals} ended={ended} />
         </p>
       )}

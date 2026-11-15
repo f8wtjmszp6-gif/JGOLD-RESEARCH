@@ -44,7 +44,7 @@ export default function App() {
   const [calendar, setCalendar] = useState(false)
   const [dayFocus, setDayFocus] = useState(null) // the day picked in the calendar
   const store = useStore()
-  const weightNow = lastWeight(store.nutrition) ?? store.profile.weight ?? null
+  const weightNow = lastWeight(store.nutrition)
   const needsProfile = profileMissing(store.profile, weightNow).length > 0
   // Reached your target weight (and not told yet for this target).
   const { goal, targetLb, reachedAt } = store.profile
@@ -235,7 +235,7 @@ function Header({ onTrends, onCalendar, week, stretch, cardio, store }) {
   return (
     <div className="shrink-0 px-5 pt-5">
       <TopBar onTrends={onTrends} onCalendar={onCalendar} />
-      <div className="mt-3">
+      <div className="mt-4">
         {/* This week's body map sits in the card's title line. */}
         <WeekCard week={week} stretch={stretch} cardio={cardio} goals={store.goals} figure={<MuscleMap store={store} />} live logged={logged} joined />
       </div>

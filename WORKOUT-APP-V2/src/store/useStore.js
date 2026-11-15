@@ -2,12 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { SPORTS, TARGETED, GYM_ORDER } from '../data/workout'
 import { STRETCH_BY_ID, applyCustomStretches, applyStretchEdits } from '../data/stretches'
 import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } from '../data/exercises'
-import { sameDay } from '../utils/days'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
-import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, dropLastCardio, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, routineLengthOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession, REPEATABLE } from './state'
+import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession, REPEATABLE } from './state'
 import { capPace } from '../utils/targets'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
-import { cardioMinutes } from '../utils/format'
 
 // The store every screen reads and changes: this week's state plus the
 // functions that change it (see makeStore), saved on every change.
@@ -629,18 +627,6 @@ function makeStore(state, update) {
     }))
   }
 
-  function removeActivity(id) {
-    update(s => ({
-      ...s,
-      activities: { ...s.activities, [id]: Math.max(0, countOf(s, id) - 1) },
-      ...(id === 'class'
-        ? { classLog: classesOf(s).slice(0, -1) }
-        : id === 'rest'
-          ? { restLog: restDaysOf(s).slice(0, -1) }
-          : { cardio: dropLastCardio(s.cardio ?? [], id) }),
-    }))
-  }
-
   // ── Classes ──────────────────────────────────────────────────────────────
   // Logs a class with your answers.
   function logClass(answers) {
@@ -743,15 +729,6 @@ function makeStore(state, update) {
 
   // Files the finished one so a fresh one starts; a no-op if it isn't
   // finished, so the one under way just opens.
-  // A card's sessions this week, each finished one on its own line, oldest
-  // first: the filed ones (`filed`), then the newest of each, still open to
-  // tick or untick.
-  function sessionsFor(ids) {
-    const filed = sessions.filter(x => ids.includes(x.id)).map(x => ({ ...x, filed: true }))
-    const open = ids.map(currentSession).filter(x => x.finished)
-    return [...filed, ...open].sort((a, b) => new Date(a.at) - new Date(b.at))
-  }
-
   function startAgain(id) {
     update(s => fileSession(s, id))
   }
@@ -804,12 +781,6 @@ function makeStore(state, update) {
     return entry.details ? cardioSessionsOf(weekStateOf(state, entry)) : null
   }
 
-  // Which rest day falls on the day of `at`, or -1 if none does.
-  function restIndexOn(at) {
-    const day = new Date(at)
-    return restDaysOf(state).findIndex(r => r && sameDay(new Date(r), day))
-  }
-
   // When a plan's first set was ticked (`at`), its stretches finished
   // (`stretchedAt`) and its warm-up ticked (`warmedAt`), as ISO times, and
   // the day picked for it (`day`).
@@ -830,13 +801,6 @@ function makeStore(state, update) {
   // Cardio that isn't a class or a walk — a run, a bike ride — logged with
   // its own minutes and effort.
   const otherCardio = (state.cardio ?? []).filter(x => x.kind === 'other')
-
-  // Clock minutes logged this week for a kind (class, walk or other), and
-  // as a label with what they count as (see cardioMinutes).
-  function getCardioMinutes(kind) {
-    return cardioSessionsOf(state).filter(x => x.kind === kind).reduce((n, x) => n + x.minutes, 0)
-  }
-  const cardioLabel = kind => cardioMinutes(cardioSessionsOf(state).filter(x => x.kind === kind))
 
   // A walk with its own length and effort.
   function addWalk(minutes, hard, at = nowIso()) {
@@ -860,10 +824,6 @@ function makeStore(state, update) {
       ...s,
       cardio: [...(s.cardio ?? []), { kind: 'other', minutes, hard, at, ...(type && { type }) }],
     }))
-  }
-
-  function removeOtherCardio() {
-    update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'other') }))
   }
 
   // ── Sports & hikes ───────────────────────────────────────────────────────
@@ -890,10 +850,6 @@ function makeStore(state, update) {
   // Takes a sport you typed in off your list. Sessions logged with it stay.
   function forgetSport(name) {
     update(s => ({ ...s, sportNames: (s.sportNames ?? []).filter(x => x !== name) }))
-  }
-
-  function removeSport() {
-    update(s => ({ ...s, cardio: dropLastCardio(s.cardio ?? [], 'sport') }))
   }
 
   // Sports you typed in, each once and none that's already built in, whatever
@@ -930,16 +886,7 @@ function makeStore(state, update) {
     }))
   }
 
-  // Drops the latest session on your own.
-  function removeOwnStretch() {
-    update(s => {
-      const list = ownStretchesOf(s).slice(0, -1)
-      return { ...s, stretchExtra: list.length, stretchLog: list }
-    })
-  }
-
   const ownStretches = ownStretchesOf(state)
-  const routineMinutes = Math.round(routineSecondsOf(state) / 60)
   const getListMinutes = listId => Math.round(routineSecondsOf(state, listId) / 60)
 
 
@@ -990,8 +937,7 @@ function makeStore(state, update) {
     update(s => ({ ...s, perSide: { ...s.perSide, [itemId]: value } }))
   }
 
-  // The Full Body Stretch's length in minutes.
-  const getRoutineLength = () => routineLengthOf(state)
+  // Sets the Full Body Stretch's length in minutes.
   function setRoutineLength(minutes) {
     update(s => ({ ...s, routineLength: minutes }))
   }
@@ -1076,18 +1022,15 @@ function makeStore(state, update) {
     toggleStretch,
     getStretchHolds,
     toggleStretchHold,
-    removeActivity,
     restDays: restDaysOf(state),
     addRest,
     editRest,
     deleteRest,
-    restIndexOn,
     cardioLogOf,
     setPlanDay,
     stampsOf,
     sessions,
     currentSession,
-    sessionsFor,
     startAgain,
     begin,
     targeted: targetedOf(state),
@@ -1120,7 +1063,6 @@ function makeStore(state, update) {
     otherCardio,
     sports,
     addSport,
-    removeSport,
     sportNames: [...SPORTS, ...ownSports],
     recentSports,
     ownSports,
@@ -1128,15 +1070,9 @@ function makeStore(state, update) {
     forgetSport,
     walks,
     addWalk,
-    getCardioMinutes,
-    cardioLabel,
     addOtherCardio,
-    removeOtherCardio,
     addOwnStretch,
-    removeOwnStretch,
     ownStretches,
-    lastOwnStretch: 15, // a stretch on your own always starts at 15 minutes
-    routineMinutes,
     getListMinutes,
     getSetup,
     setSetup,
@@ -1147,7 +1083,6 @@ function makeStore(state, update) {
     getPerSide,
     setPerSide,
     getStretchSets,
-    getRoutineLength,
     setRoutineLength,
     setStretchSets,
     getStretchRest,

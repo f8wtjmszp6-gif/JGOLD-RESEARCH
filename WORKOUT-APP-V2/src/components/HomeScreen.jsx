@@ -17,6 +17,9 @@ export default function HomeScreen({ store, onStart }) {
   // The pop-up open: { what: 'food' | 'water' | 'weigh', n } (each tap
   // starts it fresh).
   const [log, setLog] = useState(null)
+  // How far the cards have scrolled (up to 24px): the top of the list fades
+  // out under the header that much, so cards fold away into it.
+  const [fade, setFade] = useState(0)
   const onLog = what => setLog(l => ({ what, n: (l?.n ?? 0) + 1 }))
   const now = new Date()
   const hour = now.getHours()
@@ -48,11 +51,10 @@ export default function HomeScreen({ store, onStart }) {
   const heading = 'px-1 -mb-1 mt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-stone-500'
   const action = 'h-11 rounded-xl bg-white shadow-sm text-sm font-semibold text-stone-900 active:bg-stone-100'
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-28">
-      <div className="flex flex-col gap-3.5">
+    <div className="flex-1 min-h-0 flex flex-col">
         {/* Today's day of the month, big, beside the greeting and the date.
-            It stays put while the rest scrolls under it. */}
-        <div className="sticky top-0 z-10 -mx-5 px-5 pt-5 pb-2 bg-stone-50 flex items-center gap-3">
+            Outside the scrolling part, so it never moves. */}
+        <div className="shrink-0 px-5 pt-5 pb-2 bg-stone-50 flex items-center gap-3">
           <span className="text-[52px] leading-[0.9] font-extrabold text-accent-500 tracking-[-0.04em]">{now.getDate()}</span>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl leading-tight font-bold text-stone-900 tracking-tight">{greeting}</h1>
@@ -70,6 +72,12 @@ export default function HomeScreen({ store, onStart }) {
           )}
         </div>
 
+      <div
+        onScroll={e => setFade(Math.min(24, Math.max(0, e.currentTarget.scrollTop)))}
+        style={{ maskImage: `linear-gradient(to bottom, transparent, black ${fade}px)`, WebkitMaskImage: `linear-gradient(to bottom, transparent, black ${fade}px)` }}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-1.5 pb-28"
+      >
+      <div className="flex flex-col gap-3.5">
         <p className={heading}>Fitness</p>
         {going ? (
           <div className="rounded-[20px] bg-accent-500 text-white p-4 flex flex-col gap-3">
@@ -116,6 +124,7 @@ export default function HomeScreen({ store, onStart }) {
           <div className="mx-4 border-t border-stone-100" />
           <div className="px-4 py-3"><WaterBar drunk={drunk} goal={goals.water} /></div>
         </div>
+      </div>
       </div>
       {log && <Food key={log.n} bare open={log.what} nutrition={store.nutrition} setNutrition={store.setNutrition} profile={store.profile} />}
     </div>

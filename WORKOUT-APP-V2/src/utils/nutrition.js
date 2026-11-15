@@ -65,7 +65,6 @@ export const dayTotal = day => MEALS.reduce((t, [m]) => add(t, mealTotal(day[m])
 
 // Whole numbers, with a comma past a thousand.
 export const num = v => Math.round(v).toLocaleString('en-US')
-export const val = (k, v) => `${num(v)}${NUTRIENTS.find(x => x.key === k)?.unit ?? ''}`
 
 // ½, 1½, ¼… for amounts and servings.
 const FRACTIONS = { 0.25: '¼', 0.5: '½', 0.75: '¾' }
