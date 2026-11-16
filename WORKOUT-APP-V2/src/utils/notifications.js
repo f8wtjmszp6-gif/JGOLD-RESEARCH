@@ -161,7 +161,7 @@ export function notificationsOf(store, now = new Date()) {
       title: 'Your target date is too soon',
       body: `At your fastest safe pace you'll reach ${p.targetLb} lb around ${when}.`,
       action: 'Change date',
-      run: 'personal',
+      run: 'targets',
     })
   }
   // Last week's average weight against the week before.

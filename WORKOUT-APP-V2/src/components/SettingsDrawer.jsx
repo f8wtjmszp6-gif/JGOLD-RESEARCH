@@ -54,31 +54,31 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           {/* Grouped by side of the app: Fitness, Nutrition, then the app itself. */}
           <div className="space-y-3">
             <GroupLabel>Profile</GroupLabel>
-            <PageRow title="Personal info" tile="bg-sky-500" icon={ICONS.person} onOpen={() => setPage('personal')} />
+            <PageRow title="Personal Info" tile="bg-sky-500" icon={ICONS.person} onOpen={() => setPage('personal')} />
           </div>
           <div className="space-y-3">
             <GroupLabel>Fitness</GroupLabel>
-            <PageRow title="Weekly goals" tile="bg-green-600" icon={ICONS.goals} onOpen={() => setPage('goals')} />
-            <PageRow title="Plan defaults" tile="bg-orange-500" icon={ICONS.defaults} onOpen={() => setPage('defaults')} />
+            <PageRow title="Weekly Goals" tile="bg-green-600" icon={ICONS.goals} onOpen={() => setPage('goals')} />
+            <PageRow title="Plan Defaults" tile="bg-orange-500" icon={ICONS.defaults} onOpen={() => setPage('defaults')} />
             <PageRow title="Exercises" tile="bg-teal-600" icon={ICONS.exercises} onOpen={() => setPage('exercises')} />
             <PageRow title="Stretches" tile="bg-violet-500" icon={ICONS.stretches} onOpen={() => setPage('stretches')} />
           </div>
           <div className="space-y-3">
             <GroupLabel>Nutrition</GroupLabel>
-            <PageRow title="Targets" tile="bg-emerald-500" icon={ICONS.targets} onOpen={() => setPage('targets')} />
+            <PageRow title="Goal & Targets" tile="bg-emerald-500" icon={ICONS.targets} onOpen={() => setPage('targets')} />
           </div>
           <div className="space-y-3">
             <GroupLabel>App</GroupLabel>
             <PageRow title="Backup" summary={backupSummary(store.lastBackupAt).text} warn={backupSummary(store.lastBackupAt).warn} tile="bg-blue-600" icon={ICONS.backup} onOpen={() => setPage('backup')} />
-            <PageRow title="Reset the app" red tile="bg-stone-500" icon={ICONS.reset} onOpen={() => setPage('reset')} />
+            <PageRow title="Reset the App" red tile="bg-stone-500" icon={ICONS.reset} onOpen={() => setPage('reset')} />
           </div>
         </div>
         {page === 'exercises' && <ExerciseBank store={store} onClose={() => setPage(null)} />}
         {page === 'stretches' && <StretchBank store={store} onClose={() => setPage(null)} />}
         {page === 'goals' && (
-          <SettingsSheet title="Weekly goals" bare split full onClose={() => setPage(null)}>
+          <SettingsSheet title="Weekly Goals" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Weekly goals</h2>
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Weekly Goals</h2>
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
@@ -91,9 +91,9 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           </SettingsSheet>
         )}
         {page === 'personal' && (
-          <SettingsSheet title="Personal info" bare split full onClose={() => setPage(null)}>
+          <SettingsSheet title="Personal Info" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Personal info</h2>
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Personal Info</h2>
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
@@ -102,21 +102,27 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           </SettingsSheet>
         )}
         {page === 'targets' && (
-          <SettingsSheet title="Targets" bare split full onClose={() => setPage(null)}>
+          <SettingsSheet title="Goal & Targets" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Targets</h2>
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Goal & Targets</h2>
               <UseAllButton goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSetAll={all => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} />
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
-              <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
+              {/* Your goal first: it sets the calories (and so the rest) below. */}
+              <div className="space-y-2">
+                <GroupLabel>Goal</GroupLabel>
+                <GoalFields profile={store.profile} lb={lastWeight(store.nutrition)} onChange={store.setProfile} />
+                <GroupLabel>Daily targets</GroupLabel>
+                <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
+              </div>
             </div>
           </SettingsSheet>
         )}
         {page === 'defaults' && (
-          <SettingsSheet title="Plan defaults" bare split full onClose={() => setPage(null)}>
+          <SettingsSheet title="Plan Defaults" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Plan defaults</h2>
+              <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Plan Defaults</h2>
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <p className="-mt-2 text-sm text-stone-500 leading-snug">The exercises and stretches each plan starts with every week. A plan shows Edited when you add, remove or move an exercise or stretch in it and pick Every week. Picking Just this week changes only that week and leaves it Default.</p>
@@ -129,7 +135,7 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           <Page title="Backup" onClose={() => setPage(null)}><Backup store={store} /></Page>
         )}
         {page === 'reset' && (
-          <Page title="Reset the app" onClose={() => setPage(null)}><FactoryReset store={store} onDone={() => setPage(null)} /></Page>
+          <Page title="Reset the App" onClose={() => setPage(null)}><FactoryReset store={store} onDone={() => setPage(null)} /></Page>
         )}
       </aside>
     </div>
@@ -175,20 +181,16 @@ const GOAL_NOTE = {
   none: 'Pick whether you want to lose fat, maintain your weight, or bulk.',
 }
 
-function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
+function PersonalInfo({ profile, lastLb, onChange, onWeight, withGoal = false }) {
   const [draft, setDraft] = useState(null)
   // Weight: your last weigh-in from Nutrition's Body weight (logged there).
   const shownLb = lastLb ?? null
   const age = profile.age ?? null
   const height = profile.heightIn ?? null
   const startIn = profile.sex === 'woman' ? 64 : 69
-  const [goalInfo, setGoalInfo] = useState(false)
   // A ZIP being typed: saved once it's 5 digits (leaving it short puts the
   // saved one back), so a half-typed one never counts as missing.
   const [zipDraft, setZipDraft] = useState(null)
-  const fastest = fastestPace(profile, shownLb)
-  // A target on the wrong side of your weight (you've passed it, or changed goal).
-  const wrongSide = profile.targetLb != null && shownLb != null && (profile.goal === 'lose' ? profile.targetLb >= shownLb : profile.goal === 'gain' ? profile.targetLb <= shownLb : false)
   function save() {
     const n = parseInt(draft, 10)
     if (!isNaN(n)) onChange({ age: Math.min(110, Math.max(13, n)) })
@@ -196,7 +198,7 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
   }
   const btn = 'w-9 h-9 rounded-xl bg-white flex items-center justify-center text-stone-600 text-lg font-medium shadow-sm active:bg-stone-100 shrink-0'
   const seg = on => `px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`
-  // In three parts: you, your goal, and the weather.
+  // In parts: you, how active you are, (your goal) and the weather.
   return (
     <div className="space-y-2">
       <GroupLabel>About you</GroupLabel>
@@ -241,7 +243,7 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
           </div>
         )}
       </div>
-      <GroupLabel>Activity and goal</GroupLabel>
+      <GroupLabel>Activity</GroupLabel>
       <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
         <div className="py-3 space-y-2">
           <p className="text-base text-stone-700">Activity</p>
@@ -252,31 +254,12 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
           </div>
           <p className="text-xs text-stone-500 leading-relaxed">{ACTIVITY.find(a => a.id === profile.activity)?.note ?? 'How active you are in a normal week, workouts included.'}</p>
         </div>
-        <div className="py-3 space-y-2">
-        <p className="flex items-center gap-1.5 text-base text-stone-700">Nutrition goal
-          <button onClick={() => setGoalInfo(true)} aria-label="About your nutrition goal" className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
-        </p>
-        <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Nutrition goal">
-          {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Bulk']].map(([id, label]) => (
-            <button key={id} role="radio" aria-checked={profile.goal === id} onClick={() => onChange({ goal: id })} className={`flex-1 ${seg(profile.goal === id).replace('px-4', 'px-2')}`}>{label}</button>
-          ))}
-        </div>
-        {goalInfo && <InfoSheet icon={<InfoIcon />} title={GOAL_TITLE[profile.goal] ?? 'Nutrition goal'} text={(GOAL_NOTE[profile.goal] ?? GOAL_NOTE.none).replace(/^[^:]+: /, s => (profile.goal ? '' : s)).replace(/^./, c => c.toUpperCase())} onClose={() => setGoalInfo(false)} />}
-        </div>
-        {/* Losing or gaining: where you're headed and by when. Losing can't
-            go faster than eating what you burn at rest allows. */}
-        {(profile.goal === 'lose' || profile.goal === 'gain') && (
-          <>
-            <NumberRow label="Target weight" value={profile.targetLb ?? null} step={1}
-              min={profile.goal === 'gain' && shownLb != null ? Math.floor(shownLb) + 1 : 50}
-              max={profile.goal === 'lose' && shownLb != null ? Math.ceil(shownLb) - 1 : 600}
-              start={shownLb != null ? Math.round(shownLb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb"
-              hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${shownLb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'bulk'}.` : null}
-              onChange={v => onChange({ targetLb: v })} />
-            <TargetDateRow profile={profile} lb={shownLb} fastest={fastest} onChange={onChange} />
-          </>
-        )}
       </div>
+      {/* The required pop-up asks for your goal too, all in one place. */}
+      {withGoal && <>
+        <GroupLabel>Goal</GroupLabel>
+        <GoalFields profile={profile} lb={shownLb} onChange={onChange} />
+      </>}
       <GroupLabel>Weather</GroupLabel>
       <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
         {/* ZIP code, for the weather on Home. */}
@@ -327,6 +310,44 @@ function NumberRow({ label, value, step, min, max, start, unit, note, hint, disa
       </div>
       {hint && <p className={`text-xs leading-relaxed ${disabled ? 'text-stone-500' : 'text-amber-700'}`}>{hint}</p>}
       {info && <InfoSheet icon={<InfoIcon />} title={label} text={note} onClose={() => setInfo(false)} />}
+    </div>
+  )
+}
+
+// Your nutrition goal, and losing or bulking, where you're headed and by
+// when: at the top of Targets (and in the required pop-up).
+function GoalFields({ profile, lb, onChange }) {
+  const [goalInfo, setGoalInfo] = useState(false)
+  const fastest = fastestPace(profile, lb)
+  // A target on the wrong side of your weight (you've passed it, or changed goal).
+  const wrongSide = profile.targetLb != null && lb != null && (profile.goal === 'lose' ? profile.targetLb >= lb : profile.goal === 'gain' ? profile.targetLb <= lb : false)
+  const seg = on => `flex-1 px-2 py-1.5 rounded-lg text-sm font-semibold transition-colors ${on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-400'}`
+  return (
+    <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
+        <div className="py-3 space-y-2">
+        <p className="flex items-center gap-1.5 text-base text-stone-700">Nutrition goal
+          <button onClick={() => setGoalInfo(true)} aria-label="About your nutrition goal" className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
+        </p>
+        <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Nutrition goal">
+          {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Bulk']].map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={profile.goal === id} onClick={() => onChange({ goal: id })} className={seg(profile.goal === id)}>{label}</button>
+          ))}
+        </div>
+        {goalInfo && <InfoSheet icon={<InfoIcon />} title={GOAL_TITLE[profile.goal] ?? 'Nutrition goal'} text={(GOAL_NOTE[profile.goal] ?? GOAL_NOTE.none).replace(/^[^:]+: /, s => (profile.goal ? '' : s)).replace(/^./, c => c.toUpperCase())} onClose={() => setGoalInfo(false)} />}
+        </div>
+        {/* Losing or gaining: where you're headed and by when. Losing can't
+            go faster than eating what you burn at rest allows. */}
+        {(profile.goal === 'lose' || profile.goal === 'gain') && (
+          <>
+            <NumberRow label="Target weight" value={profile.targetLb ?? null} step={1}
+              min={profile.goal === 'gain' && lb != null ? Math.floor(lb) + 1 : 50}
+              max={profile.goal === 'lose' && lb != null ? Math.ceil(lb) - 1 : 600}
+              start={lb != null ? Math.round(lb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb"
+              hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${lb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'bulk'}.` : null}
+              onChange={v => onChange({ targetLb: v })} />
+            <TargetDateRow profile={profile} lb={lb} fastest={fastest} onChange={onChange} />
+          </>
+        )}
     </div>
   )
 }
@@ -402,7 +423,7 @@ export function ProfileRequired({ profile, lastLb, onSave }) {
         <p className="text-sm text-stone-500">We use this to set your targets and show your weather.</p>
       </div>
       <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5">
-        <PersonalInfo profile={draft} lastLb={lb} onChange={p => setDraft(d => ({ ...d, ...p }))} onWeight={setLb} />
+        <PersonalInfo profile={draft} lastLb={lb} onChange={p => setDraft(d => ({ ...d, ...p }))} onWeight={setLb} withGoal />
       </div>
       <div className="space-y-2">
         <button onClick={() => onSave(draft, lb)} disabled={left > 0} className="w-full h-[52px] rounded-[14px] bg-accent-500 text-base font-bold text-white active:bg-accent-600 disabled:bg-stone-200 disabled:text-stone-500">Save</button>

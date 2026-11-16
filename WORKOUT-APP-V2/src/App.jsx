@@ -84,7 +84,6 @@ export default function App() {
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings('backup')
     if (n.run === 'targets') setSettings('targets')
-    if (n.run === 'personal') setSettings('personal')
     if (n.run === 'weigh') setWeigh(w => w + 1)
     if (n.run === 'trends') { setTrendLift(n.lift ?? null); setView('trends') }
     if (n.run === 'plan') { setWeekStart(null); setFocus(null); setWorkoutId(n.plan) }
@@ -217,7 +216,7 @@ export default function App() {
       {reached && (
         <TargetReached lb={weightNow} target={targetLb}
           onMaintain={() => store.setProfile({ goal: 'maintain', reachedAt: targetLb })}
-          onNewTarget={() => { store.setProfile({ reachedAt: targetLb }); setSettings('personal') }}
+          onNewTarget={() => { store.setProfile({ reachedAt: targetLb }); setSettings('targets') }}
           onLater={() => store.setProfile({ reachedAt: targetLb })} />
       )}
       {/* Personal info, whenever any of it's missing: over everything. */}

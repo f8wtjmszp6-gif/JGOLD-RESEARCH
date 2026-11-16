@@ -5,6 +5,7 @@ import Scanner from './Scanner'
 import { sameCode } from '../../utils/barcode'
 import { SettingsSheet, ConfirmSheet } from '../ui/Sheet'
 import { InfoSheet } from '../ui/InfoMark'
+import { InfoIcon } from '../ui/glyphs'
 import { RangeMark } from '../ui/RangeMark'
 
 const RANGE_TITLE = { ok: 'in range', low: 'below the recommendation', high: 'above the recommendation' }
@@ -625,7 +626,7 @@ function guidance(goals, lb, profile) {
 
 // One target, laid out like a Weekly goals row: name, − value +, and what's
 // recommended underneath. Tap the value to type it.
-function TargetRow({ label, value, step, suffix, check, advice, action, onChange }) {
+function TargetRow({ label, value, step, suffix, check, action, onChange }) {
   const [draft, setDraft] = useState(null)
   const set = v => onChange(Math.max(0, Math.round(v)))
   function save() {
@@ -648,14 +649,13 @@ function TargetRow({ label, value, step, suffix, check, advice, action, onChange
         )}
         <button onClick={() => set(value + step)} className={btn} aria-label={`${label} up`}>+</button>
       </div>
-      <p className="text-xs text-stone-500 leading-relaxed">{advice}</p>
       {action}
     </div>
   )
 }
 
-// Your daily targets, one −/+ row each with what's recommended under it
-// (here and in Settings). `lb`: your last weigh-in, for protein.
+// Your daily targets, one −/+ row each, with what's recommended behind
+// its mark (here and in Settings). `lb`: your last weigh-in, for protein.
 export function TargetRows({ goals, lb, profile, onSet }) {
   const note = guidance(goals, lb, profile)
   const r = recsFor(profile)
@@ -719,15 +719,21 @@ export function TargetRows({ goals, lb, profile, onSet }) {
     <>
     <div className="rounded-2xl bg-stone-50 px-4 divide-y divide-stone-200/70">
       {rows.map(([k, label, step, suffix]) => (
-        <TargetRow key={k} label={label} value={goals[k]} step={step} suffix={suffix} check={status(k) && (
+        // The why lives behind the mark (✓ or !): tap it to read. With
+        // nothing to compare yet, an ⓘ shows what's recommended instead.
+        <TargetRow key={k} label={label} value={goals[k]} step={step} suffix={suffix} check={status(k) ? (
           <button onClick={() => setShowing(k)} aria-label={`${label}: ${RANGE_TITLE[status(k).state]}`} className="-m-1.5 p-1.5 active:opacity-60"><RangeMark state={status(k).state} /></button>
-        )} advice={note[k]} action={suggest[k] != null && suggest[k] !== goals[k] && (
+        ) : note[k] && (
+          <button onClick={() => setShowing(k)} aria-label={`About ${label.toLowerCase()}`} className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
+        )} action={suggest[k] != null && suggest[k] !== goals[k] && (
           <button onClick={() => onSet(k, suggest[k])} className="h-8 px-3 rounded-lg bg-accent-50 text-sm font-semibold text-accent-500 active:bg-accent-100">Use {num(suggest[k])}{suffix && ` ${suffix}`}</button>
         )} onChange={v => onSet(k, v)} />
       ))}
-      {showing && status(showing) && (
+      {showing && (status(showing) ? (
         <InfoSheet icon={<RangeMark state={status(showing).state} size={20} />} title={`${NAMES[showing]} ${RANGE_TITLE[status(showing).state]}`} text={status(showing).text} onClose={() => setShowing(null)} />
-      )}
+      ) : (
+        <InfoSheet icon={<InfoIcon />} title={rows.find(([k]) => k === showing)[1]} text={note[showing]} onClose={() => setShowing(null)} />
+      ))}
     </div>
     </>
   )
