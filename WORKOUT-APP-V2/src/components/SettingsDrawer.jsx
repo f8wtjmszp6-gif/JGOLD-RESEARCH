@@ -10,8 +10,8 @@ import { InfoSheet } from './ui/InfoMark'
 import { InfoIcon } from './ui/glyphs'
 import { RangeMark } from './ui/RangeMark'
 import { TargetRows, UseAllButton } from './food/sheets'
-import { goalsOf, lastWeight, ACTIVITY, feetInches, calorieBurn, profileMissing } from '../utils/nutrition'
-import { maxPace } from '../utils/targets'
+import { goalsOf, lastWeight, ACTIVITY, feetInches, profileMissing } from '../utils/nutrition'
+import { fastestPace, paceFor, earliestDate, paceRange } from '../utils/targets'
 
 // App settings, full screen, sliding in from the right (and swiping back out
 // to close): your weekly goals (with what the guidelines recommend),
@@ -105,11 +105,11 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
           <SettingsSheet title="Targets" bare split full onClose={() => setPage(null)}>
             <div className="flex items-center gap-2">
               <h2 className="flex-1 min-w-0 text-2xl font-bold text-stone-900 tracking-tight">Targets</h2>
-              <UseAllButton goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition) ?? store.profile.weight ?? null} profile={store.profile} onSetAll={all => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} />
+              <UseAllButton goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSetAll={all => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), ...all } }))} />
               <button onClick={() => setPage(null)} className="h-9 px-3 rounded-[10px] bg-stone-100 text-sm font-semibold text-stone-600 active:bg-stone-200">Done</button>
             </div>
             <div data-scroll className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-5 px-5 pb-2">
-              <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition) ?? store.profile.weight ?? null} profile={store.profile} paceNote={store.nutrition?.paceNote} onClearPaceNote={() => store.setNutrition(x => ({ ...x, paceNote: undefined }))} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
+              <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
             </div>
           </SettingsSheet>
         )}
@@ -167,18 +167,18 @@ function FactoryReset({ store, onDone }) {
 // Sex and age: they decide which recommendations apply (fiber, added sugar,
 // water and calories differ for men and women; fiber drops after 50).
 // What each nutrition goal does to your Targets.
-const GOAL_TITLE = { lose: 'Lose fat', maintain: 'Maintain', gain: 'Build muscle' }
+const GOAL_TITLE = { lose: 'Lose fat', maintain: 'Maintain', gain: 'Bulk' }
 const GOAL_NOTE = {
-  lose: 'Lose fat: eat under what it takes to keep your weight, by your pace below (about 500 calories a day for each pound a week). Protein goes up to 1.6–2.4g per kg of body weight so the weight you lose is fat, not muscle.',
+  lose: 'Lose fat: eat under what it takes to keep your weight, by the pace your target date sets (about 500 calories a day for each pound a week; a healthy pace is 0.5–1% of your body weight a week). Protein goes up to 1.6–2.4g per kg of body weight so the weight you lose is fat, not muscle.',
   maintain: 'Keep your weight: calories are set to what you burn in a day. Protein is 1.6–2.2g per kg of body weight, enough to lose fat and build muscle at the same time if you lift.',
-  gain: 'Build muscle: eat over what it takes to keep your weight, by your pace below (about 500 calories a day for each pound a week). Protein is 1.6–2.2g per kg of body weight so the weight you gain is mostly muscle.',
-  none: 'Pick whether you want to lose fat, maintain your weight, or build muscle.',
+  gain: 'Bulk: eat over what it takes to keep your weight, by the pace your target date sets (about 500 calories a day for each pound a week; a standard bulk is 0.25–0.5% of your body weight a week). Protein is 1.6–2.2g per kg of body weight so the weight you gain is mostly muscle.',
+  none: 'Pick whether you want to lose fat, maintain your weight, or bulk.',
 }
 
 function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
   const [draft, setDraft] = useState(null)
   // Weight: your last weigh-in from Nutrition's Body weight (logged there).
-  const shownLb = lastLb ?? profile.weight ?? null
+  const shownLb = lastLb ?? null
   const age = profile.age ?? null
   const height = profile.heightIn ?? null
   const startIn = profile.sex === 'woman' ? 64 : 69
@@ -186,8 +186,7 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
   // A ZIP being typed: saved once it's 5 digits (leaving it short puts the
   // saved one back), so a half-typed one never counts as missing.
   const [zipDraft, setZipDraft] = useState(null)
-  const est = calorieBurn(profile, shownLb)
-  const fastest = est ? maxPace(est) : null
+  const fastest = fastestPace(profile, shownLb)
   // A target on the wrong side of your weight (you've passed it, or changed goal).
   const wrongSide = profile.targetLb != null && shownLb != null && (profile.goal === 'lose' ? profile.targetLb >= shownLb : profile.goal === 'gain' ? profile.targetLb <= shownLb : false)
   function save() {
@@ -258,13 +257,13 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
           <button onClick={() => setGoalInfo(true)} aria-label="About your nutrition goal" className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
         </p>
         <div className="bg-stone-200/60 rounded-xl p-1 flex" role="radiogroup" aria-label="Nutrition goal">
-          {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Build muscle']].map(([id, label]) => (
+          {[['lose', 'Lose fat'], ['maintain', 'Maintain'], ['gain', 'Bulk']].map(([id, label]) => (
             <button key={id} role="radio" aria-checked={profile.goal === id} onClick={() => onChange({ goal: id })} className={`flex-1 ${seg(profile.goal === id).replace('px-4', 'px-2')}`}>{label}</button>
           ))}
         </div>
         {goalInfo && <InfoSheet icon={<InfoIcon />} title={GOAL_TITLE[profile.goal] ?? 'Nutrition goal'} text={(GOAL_NOTE[profile.goal] ?? GOAL_NOTE.none).replace(/^[^:]+: /, s => (profile.goal ? '' : s)).replace(/^./, c => c.toUpperCase())} onClose={() => setGoalInfo(false)} />}
         </div>
-        {/* Losing or gaining: where you're headed and how fast. Losing can't
+        {/* Losing or gaining: where you're headed and by when. Losing can't
             go faster than eating what you burn at rest allows. */}
         {(profile.goal === 'lose' || profile.goal === 'gain') && (
           <>
@@ -272,15 +271,9 @@ function PersonalInfo({ profile, lastLb, onChange, onWeight }) {
               min={profile.goal === 'gain' && shownLb != null ? Math.floor(shownLb) + 1 : 50}
               max={profile.goal === 'lose' && shownLb != null ? Math.ceil(shownLb) - 1 : 600}
               start={shownLb != null ? Math.round(shownLb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb"
-              hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${shownLb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'build muscle'}.` : null}
+              hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${shownLb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'bulk'}.` : null}
               onChange={v => onChange({ targetLb: v })} />
-            <NumberRow label="Pace" value={profile.pace ?? null} step={0.25} min={0.25} max={profile.goal === 'lose' && fastest != null ? fastest : 10} start={profile.goal === 'lose' ? 1 : 0.25} unit="lb/wk"
-              disabled={profile.goal === 'lose' && fastest == null}
-              hint={profile.goal === 'lose' && fastest == null ? 'Fill in About you and Activity first: your fastest pace comes from them.' : null}
-              note={profile.goal === 'lose'
-                ? `Most people aim for 0.5–1 lb a week (about 0.5–1% of your weight).${fastest != null ? ` Your fastest is ${fastest} lb a week; any faster would mean eating less than you burn at rest.` : ''}`
-                : 'Muscle builds slowly: most people aim for 0.25–0.5 lb a week. Gaining faster mostly adds fat.'}
-              onChange={v => onChange({ pace: v })} />
+            <TargetDateRow profile={profile} lb={shownLb} fastest={fastest} onChange={onChange} />
           </>
         )}
       </div>
@@ -334,6 +327,49 @@ function NumberRow({ label, value, step, min, max, start, unit, note, hint, disa
       </div>
       {hint && <p className={`text-xs leading-relaxed ${disabled ? 'text-stone-500' : 'text-amber-700'}`}>{hint}</p>}
       {info && <InfoSheet icon={<InfoIcon />} title={label} text={note} onClose={() => setInfo(false)} />}
+    </div>
+  )
+}
+
+// When you want to reach your target weight. Your pace (and so your
+// calories) comes from it, and it can't be sooner than your fastest pace
+// allows (see fastestPace).
+function TargetDateRow({ profile, lb, fastest, onChange }) {
+  const [info, setInfo] = useState(false)
+  const lose = profile.goal === 'lose'
+  const earliest = earliestDate(profile, lb)
+  const pace = paceFor(profile, lb)
+  const date = profile.targetDate ?? ''
+  const tooSoon = !!(date && earliest && date < earliest)
+  const show = key => {
+    const [y, m, d] = key.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+  const hint = !earliest
+    ? (lb && profile.targetLb ? 'Fill in About you and Activity first: your earliest date comes from them.' : 'Set your target weight first.')
+    : tooSoon
+    ? `Too soon now: the earliest is ${show(earliest)}. Until you change it, you'll go at your fastest, ${fastest} lb a week.`
+    : pace != null
+    ? `That's ${pace} lb a week. Earliest: ${show(earliest)}.`
+    : `Earliest: ${show(earliest)}.`
+  const range = paceRange(profile.goal, lb)
+  const yours = range ? ` For you, that's ${range[0]}–${range[1]} lb a week.` : ''
+  const note = lose
+    ? `Your pace comes from this date and updates as you weigh in. A healthy pace is 0.5–1% of your body weight a week.${yours}${fastest != null ? ` Your fastest is ${fastest} lb a week${fastest < range?.[1] ? ', since any faster would mean eating less than you burn at rest' : ''}, so the date can't be any sooner.` : ''}`
+    : `Your pace comes from this date and updates as you weigh in. A standard bulk is 0.25–0.5% of your body weight a week; past that the extra is mostly fat.${yours}${fastest != null ? ` The date can't be sooner than ${fastest} lb a week allows.` : ''}`
+  return (
+    <div className="py-3 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 min-w-0 flex items-center gap-1.5 text-base text-stone-700">Target date
+          <button onClick={() => setInfo(true)} aria-label="About target date" className="-m-1.5 p-1.5 text-stone-400 active:opacity-60"><InfoIcon /></button>
+        </p>
+        {/* Never sooner than the earliest: an earlier pick snaps to it. */}
+        <input type="date" value={date} min={earliest ?? undefined} disabled={!earliest}
+          onChange={e => { const v = e.target.value; if (v) onChange({ targetDate: v < earliest ? earliest : v }) }}
+          className="min-w-[8.5rem] text-center text-base font-bold bg-white rounded-lg py-1 px-2 text-stone-900 outline-none select-text disabled:opacity-40" />
+      </div>
+      {hint && <p className={`text-xs leading-relaxed ${tooSoon ? 'text-amber-700' : 'text-stone-500'}`}>{hint}</p>}
+      {info && <InfoSheet icon={<InfoIcon />} title="Target date" text={note} onClose={() => setInfo(false)} />}
     </div>
   )
 }

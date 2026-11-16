@@ -163,14 +163,14 @@ export function calorieBurn(profile, lb) {
 export const feetInches = inches => `${Math.floor(inches / 12)}′${inches % 12}″`
 
 // What Personal info still needs (by name): sex, age, height, weight,
-// activity, goal and ZIP code, plus target weight and pace when losing or
+// activity, goal and ZIP code, plus target weight and date when losing or
 // gaining. `lb`: your weight (last weigh-in).
 export function profileMissing(profile, lb) {
   const p = profile ?? {}
   const moving = p.goal === 'lose' || p.goal === 'gain'
   return [
     ['sex', !p.sex], ['age', !p.age], ['height', !p.heightIn], ['weight', !lb], ['activity', !p.activity], ['goal', !p.goal],
-    ['target weight', moving && !p.targetLb], ['pace', moving && !(p.pace > 0)],
+    ['target weight', moving && !p.targetLb], ['target date', moving && !p.targetDate],
     ['ZIP code', !/^\d{5}$/.test(p.zip ?? '')],
   ].filter(([, missing]) => missing).map(([name]) => name)
 }

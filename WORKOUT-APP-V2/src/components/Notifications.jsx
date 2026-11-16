@@ -7,13 +7,14 @@ const ICONS = {
   next: <><path d="M5 12h12M13 7l5 5-5 5" /></>,
   weight: <><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M9 9.5a4 4 0 0 1 6 0L12 12" /></>,
   targets: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>,
+  date: <><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4M12 13v3l2 1" /></>,
   backup: <><path d="M7 18a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5A4 4 0 0 1 17.5 18" /><path d="M12 12v8M9 15l3-3 3 3" /></>,
 }
 
 // Which part of the app each kind is about, in the order they're listed.
 const GROUPS = [
   ['Fitness', ['goals', 'pr', 'week', 'next']],
-  ['Nutrition', ['weight', 'targets']],
+  ['Nutrition', ['weight', 'targets', 'date']],
   ['App', ['backup']],
 ]
 

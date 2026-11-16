@@ -6,7 +6,7 @@ import { EXERCISE_BY_ID } from '../data/exercises'
 import { workouts } from '../data/workout'
 import { upNextOf } from './upNext'
 import { weightWeek, goalsOf, lastWeight } from './nutrition'
-import { suggestedTargets } from './targets'
+import { suggestedTargets, earliestDate } from './targets'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
 const TARGET_KEYS = ['cal', 'protein', 'fat', 'carbs', 'fiber', 'sugar', 'water']
@@ -136,7 +136,7 @@ export function notificationsOf(store, now = new Date()) {
   // New suggested targets (only when a row in Targets shows Use): back again whenever the
   // suggestions change, so keeping your own numbers doesn't nag.
   const goals = goalsOf(n)
-  const suggested = suggestedTargets(goals, lastWeight(n) ?? store.profile?.weight ?? null, store.profile)
+  const suggested = suggestedTargets(goals, lastWeight(n), store.profile)
   const off = TARGET_KEYS.filter(k => suggested[k] != null && suggested[k] !== goals[k])
   if (off.length) {
     notes.push({
@@ -145,6 +145,23 @@ export function notificationsOf(store, now = new Date()) {
       title: 'Review your targets',
       action: 'Review',
       run: 'targets',
+    })
+  }
+  // Your target date's now sooner than your fastest safe pace can get you
+  // there (behind, or a new weigh-in or activity): pick a later one. Once
+  // per date, so clearing it doesn't nag.
+  const p = store.profile ?? {}
+  const earliest = p.targetDate ? earliestDate(p, lastWeight(n)) : null
+  if (earliest && p.targetDate < earliest) {
+    const [y, m, d] = earliest.split('-').map(Number)
+    const when = new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    notes.push({
+      id: `date:${p.targetDate}`,
+      icon: 'date',
+      title: 'Your target date is too soon',
+      body: `At your fastest safe pace you'll reach ${p.targetLb} lb around ${when}.`,
+      action: 'Change date',
+      run: 'personal',
     })
   }
   // Last week's average weight against the week before.

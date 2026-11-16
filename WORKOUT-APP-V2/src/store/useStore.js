@@ -4,7 +4,7 @@ import { STRETCH_BY_ID, applyCustomStretches, applyStretchEdits } from '../data/
 import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } from '../data/exercises'
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession, REPEATABLE } from './state'
-import { capPace } from '../utils/targets'
+import { syncPace } from '../utils/targets'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 
 // The store every screen reads and changes: this week's state plus the
@@ -28,7 +28,7 @@ export function useStore() {
 
   function update(fn) {
     setState(s => {
-      const next = capPace(settleRest(endPastSessions(fn(s))))
+      const next = syncPace(settleRest(endPastSessions(fn(s))))
       saveState(next)
       return next
     })

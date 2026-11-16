@@ -84,6 +84,7 @@ export default function App() {
     if (n.run === 'week') setWeekStart(n.weekStart)
     if (n.run === 'backup') setSettings('backup')
     if (n.run === 'targets') setSettings('targets')
+    if (n.run === 'personal') setSettings('personal')
     if (n.run === 'weigh') setWeigh(w => w + 1)
     if (n.run === 'trends') { setTrendLift(n.lift ?? null); setView('trends') }
     if (n.run === 'plan') { setWeekStart(null); setFocus(null); setWorkoutId(n.plan) }
