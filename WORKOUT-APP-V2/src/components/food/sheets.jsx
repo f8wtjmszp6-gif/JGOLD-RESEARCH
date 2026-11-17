@@ -521,10 +521,6 @@ export function WaterSheet({ onAdd, onClose }) {
   )
 }
 
-export function GlassSheet({ oz, onRemove, onClose }) {
-  return <ConfirmSheet title="Remove this glass?" body={`${oz} oz of water.`} confirmLabel="Remove" onConfirm={onRemove} onClose={onClose} />
-}
-
 // What you weighed, for today or a day this week.
 export function WeighInSheet({ title, initial, onSave, onRemove, onClose }) {
   const [value, setValue] = useState(initial != null ? String(initial) : '')

@@ -21,8 +21,8 @@ function start() {
 
 // On the local dev site only, ?demo fills the app with made-up weeks and
 // ?restore puts your own data back, and ?meals adds test foods to today's
-// breakfast (see dev/demo.js).
-if (import.meta.env.DEV && /[?&](demo|restore|meals)\b/.test(location.search)) {
+// breakfast, ?amber a cup of rice to lunch (see dev/demo.js).
+if (import.meta.env.DEV && /[?&](demo|restore|meals|amber)\b/.test(location.search)) {
   import('./dev/demo').then(m => { m.runDemoSwitch(); start() })
 } else {
   start()

@@ -5,6 +5,7 @@ import { EXERCISE_BY_ID, applyCustomExercises, applyExerciseEdits, fitsPlan } fr
 import { STORAGE_KEY, migrate, loadState, saveState } from './persist'
 import { setupOf, settingsOf, equipmentOf, splitOf, weekSetsOf, writeSplit, writeSettings, writeChecks, dayLogOf, writeTicks, countOf, cardioSettingOf, classesOf, newClassOf, cardioSessionsOf, rememberSport, warmupOf, cardioWeekOf, sessionsOfKind, writeSessions, listIds, coreOnOf, coreInMain, exercisesOf, sectionOf, writeList, writeCoreOn, weekOf, restDaysOf, ownStretchesOf, stretchesOf, writeStretchList, routineSecondsOf, stretchWeekOf, timerOf, goalsOf, sessionsOf, sessionOf, sessionCounts, finishedOf, fileSession, reopenOf, reopenSession, endSession, beginSession, startTargeted, settleRest, endPastSessions, planEndedOf, targetedOf, planName, weekDiffOf, resetWeekOf, putBackWeekOf, defaultEditsOf, restoreDefaultOf, undoDefaultEditOf, openSlotsOf, SLOT_SETS, fillSlot, dropSlot, discardSession, REPEATABLE } from './state'
 import { syncPace } from '../utils/targets'
+import { lastWeight } from '../utils/nutrition'
 import { summarize, weekStateOf, writeWeek, weeksOf, clearWeek, rollWeek, weekKeyOf, calendarWeekOf } from './weeks'
 
 // The store every screen reads and changes: this week's state plus the
@@ -171,7 +172,13 @@ export function useStore() {
     nutrition: state.nutrition ?? {},
     // About you (sex, age), for which recommendations apply.
     profile: state.profile ?? {},
-    setProfile: patch => update(s => ({ ...s, profile: { ...s.profile, ...patch } })),
+    // A new target weight or goal starts from your weight now (startLb), for
+    // the progress bar on Nutrition.
+    setProfile: patch => update(s => {
+      const old = s.profile ?? {}
+      const fresh = ('targetLb' in patch && patch.targetLb !== old.targetLb) || ('goal' in patch && patch.goal !== old.goal)
+      return { ...s, profile: { ...old, ...patch, ...(fresh ? { startLb: lastWeight(s.nutrition) } : {}) } }
+    }),
     setNutrition: fn => update(s => ({ ...s, nutrition: fn(s.nutrition ?? {}) })),
   }
 }
@@ -480,13 +487,14 @@ function makeStore(state, update) {
 
   // Moves an exercise to a place in its own list (main or Core), as when
   // dragged by its handle.
-  function moveExerciseTo(workoutId, exerciseId, to) {
+  // `scope`: just this week or every week, as for adding and removing.
+  function moveExerciseTo(workoutId, exerciseId, to, scope = 'auto') {
     update(s => {
       const section = sectionOf(EXERCISE_BY_ID[exerciseId], workoutId)
       const ids = listIds(s, workoutId, section).filter(id => id !== exerciseId)
       if (ids.length === listIds(s, workoutId, section).length) return s
       ids.splice(Math.max(0, Math.min(to, ids.length)), 0, exerciseId)
-      return writeList(s, workoutId, section, () => ids, 'auto')
+      return writeList(s, workoutId, section, () => ids, listScope(workoutId, scope))
     })
   }
 
@@ -595,11 +603,11 @@ function makeStore(state, update) {
   }
 
   // Moves a stretch to a place in its list, as when dragged by its handle.
-  function moveStretchTo(listId, id, to) {
+  function moveStretchTo(listId, id, to, scope = 'auto') {
     update(s => {
       const ids = stretchesOf(s, listId).map(x => x.id).filter(x => x !== id)
       ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id)
-      return writeStretchList(s, listId, () => ids, 'auto')
+      return writeStretchList(s, listId, () => ids, listScope(listId, scope))
     })
   }
 

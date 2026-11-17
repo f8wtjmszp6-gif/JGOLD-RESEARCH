@@ -128,15 +128,21 @@ export function fastestPace(profile, lb) {
 }
 
 // The soonest target date you can pick ('YYYY-MM-DD'): what your fastest
-// pace allows, and at least a week out. null until that can be worked out.
-export function earliestDate(profile, lb) {
+// pace allows from the last weigh-in (`from`, a day key; today without one),
+// at least a week from it, and never before tomorrow. Anchoring at the
+// weigh-in keeps the date still between weigh-ins — on pace, time passing
+// is progress — so it only moves when a new weight shows you're behind.
+// null until it can be worked out.
+export function earliestDate(profile, lb, from = null) {
   const { goal, targetLb } = profile ?? {}
   const max = fastestPace(profile, lb)
   if ((goal !== 'lose' && goal !== 'gain') || !targetLb || !lb || !(max > 0)) return null
   const days = Math.max(7, Math.ceil((Math.abs(lb - targetLb) / max) * 7))
-  const d = new Date()
+  const d = from ? (([y, m, dd]) => new Date(y, m - 1, dd, 12))(from.split('-').map(Number)) : new Date()
   d.setDate(d.getDate() + days)
-  return dayKey(d)
+  const floor = new Date()
+  floor.setDate(floor.getDate() + 1)
+  return dayKey(d < floor ? floor : d)
 }
 
 // After every change: your pace follows your target date and your latest
@@ -151,4 +157,17 @@ export function syncPace(s) {
   const max = fastestPace(p, lb)
   if (max != null) pace = Math.min(pace, max)
   return pace === p.pace ? s : { ...s, profile: { ...p, pace } }
+}
+
+// How far you've come toward your target weight, 0 to 1: from where you
+// started (your weight when the target was set, `startLb`; older saves, your
+// first weigh-in) to the target, by your latest weigh-in. null without both.
+export function targetProgress(profile, n) {
+  const target = profile?.targetLb
+  const lb = lastWeight(n)
+  const first = Object.keys(n?.weights ?? {}).sort()[0]
+  const start = profile?.startLb ?? (first ? n.weights[first] : null)
+  if (target == null || lb == null || start == null) return null
+  if (start === target) return 1
+  return Math.min(1, Math.max(0, (lb - start) / (target - start)))
 }

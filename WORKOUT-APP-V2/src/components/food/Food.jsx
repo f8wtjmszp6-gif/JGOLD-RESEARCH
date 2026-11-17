@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { weekDays } from '../../utils/days'
+import { weekDays, dayLabel } from '../../utils/days'
 
-import { NUTRIENTS, goalsOf, dayOf, dayKey, mealNow, dayTotal, mealTotal, entryTotal, num, newId, weightWeek, lastWeight, foodsOf, lookedOf } from '../../utils/nutrition'
+import { NUTRIENTS, goalsOf, dayOf, dayKey, mealNow, dayTotal, mealTotal, entryTotal, num, newId, lastWeight, lastWeighDay, foodsOf, lookedOf } from '../../utils/nutrition'
 import { Numbers, MealSwitch, Card } from './parts'
+import { targetProgress, earliestDate } from '../../utils/targets'
+import { SettingsSheet } from '../ui/Sheet'
+import { GoalFields } from '../SettingsDrawer'
 import Scanner from './Scanner'
 import { sameCode } from '../../utils/barcode'
-import { AddFoodSheet, HowMuchSheet, MissingSheet, NewFoodSheet, EntrySheet, LogSheet, MyFoodsSheet, WaterSheet, GlassSheet, WeighInSheet, WeightSheet, GoalsSheet } from './sheets'
+import { AddFoodSheet, HowMuchSheet, MissingSheet, NewFoodSheet, EntrySheet, LogSheet, MyFoodsSheet, WaterSheet, WeighInSheet, WeightSheet, GoalsSheet } from './sheets'
 
 // The food side of the app, picked from the pill at the bottom: today's
 // numbers against your goals, water, body weight, and what you ate by meal.
@@ -14,13 +17,12 @@ import { AddFoodSheet, HowMuchSheet, MissingSheet, NewFoodSheet, EntrySheet, Log
 // `bare`: only the pop-ups, over another screen (Home's + Food, + Water and
 // Weigh in); nothing shows once they're closed. Food goes to the meal for
 // the time of day.
-export default function Food({ nutrition: n, setNutrition, profile, header, date, open, bare = false }) {
+export default function Food({ nutrition: n, setNutrition, profile, setProfile, header, date, open, bare = false }) {
   const [meal, setMeal] = useState(() => (bare ? mealNow() : 'breakfast'))
   const [adding, setAdding] = useState(open === 'food')
-  const [sheet, setSheet] = useState(() => (open === 'weigh' ? { type: 'weigh', key: dayKey(), date: new Date() } : open === 'water' ? { type: 'water' } : null))
+  const [sheet, setSheet] = useState(() => (open === 'weigh' ? { type: 'weigh', key: dayKey(), date: new Date() } : open === 'water' ? { type: 'water' } : open === 'weight' || open === 'goal' || open === 'goals' ? { type: open } : null))
   // The day showing: today, or one picked from the calendar.
   const key = dayKey(date ?? new Date())
-  const isToday = !date
   const day = dayOf(n, key)
   const goals = goalsOf(n)
 
@@ -56,10 +58,6 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
   // ── Body weight ──────────────────────────────────────────────────────────
   const shown = date ?? new Date()
   const days = weekDays(shown)
-  const { avg } = weightWeek(n, days)
-  const yesterday = new Date(shown); yesterday.setDate(yesterday.getDate() - 1)
-  const todayLb = n.weights?.[key] ?? null
-  const yesterdayLb = n.weights?.[dayKey(yesterday)] ?? null
   const weighIn = (k, date) => setSheet({ type: 'weigh', key: k, date })
 
   const total = dayTotal(day)
@@ -114,8 +112,11 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
           <LogSheet onFood={() => { setSheet(null); setAdding(true) }} onWater={() => setSheet({ type: 'water' })} onWeight={() => weighIn(key, shown)} onClose={() => setSheet(null)} />
         )}
         {sheet?.type === 'water' && <WaterSheet onAdd={oz => { setDay(d => ({ ...d, water: [...(d.water ?? []), oz] })); setSheet(null) }} onClose={() => setSheet(null)} />}
-        {sheet?.type === 'glass' && (
-          <GlassSheet oz={water[sheet.i]} onRemove={() => { setDay(d => ({ ...d, water: (d.water ?? []).filter((_, i) => i !== sheet.i) })); setSheet(null) }} onClose={() => setSheet(null)} />
+        {/* Just your goal, target weight and date, from the body weight card. */}
+        {sheet?.type === 'goal' && (
+          <SettingsSheet title="Goal" onClose={() => setSheet(null)}>
+            <GoalFields profile={profile} lb={lastWeight(n)} lbDay={lastWeighDay(n)} onChange={setProfile} />
+          </SettingsSheet>
         )}
         {sheet?.type === 'weight' && <WeightSheet n={n} days={days} onDay={(k, date) => weighIn(k, date)} onClose={() => setSheet(null)} />}
         {sheet?.type === 'weigh' && (
@@ -147,44 +148,20 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
         {/* One card: the numbers (tap them for Targets), then water, then body
             weight, a line between each. */}
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
-        <button onClick={() => setSheet({ type: 'goals' })} aria-label="Targets" className="w-full text-left px-4 pt-3.5 pb-3 flex flex-col gap-2.5 active:bg-stone-50">
+        <button onClick={() => setSheet({ type: 'goals' })} aria-label="Targets" className="w-full text-left px-4 pt-3 pb-2.5 flex flex-col gap-2 active:bg-stone-50">
           <NutrientBars total={total} goals={goals} />
         </button>
 
-        {/* Water: each glass shows how much it was (tap to remove); the + by
-            the meals adds one. */}
+        {/* Water: the + by the meals adds a glass. */}
         <div className="mx-4 border-t border-stone-100" />
-        <div className="px-4 pt-3 pb-3.5 flex flex-col gap-2.5">
+        <div className="px-4 py-2.5 flex flex-col gap-2">
           {/* A bar like the ones above: drunk, the bar, the goal. */}
           <WaterBar drunk={drunk} goal={goals.water} />
-          {water.length > 0 && <div className="grid grid-cols-7 gap-1.5">
-            {water.map((oz, i) => (
-              <button key={i} onClick={() => setSheet({ type: 'glass', i })} aria-label={`Glass ${i + 1}, ${oz} oz`} className="h-11 rounded-[10px] bg-accent-100 text-accent-600 flex flex-col items-center justify-center gap-0.5 active:bg-accent-200">
-                <span className="text-[15px] font-bold leading-none">{oz}</span>
-                <span className="text-[10px] font-semibold leading-none">oz</span>
-              </button>
-            ))}
-          </div>}
         </div>
 
-        {/* Body weight: today and yesterday, the week's average; the title
-            opens every day this week. */}
+        {/* Body weight (see BodyWeight). */}
         <div className="mx-4 border-t border-stone-100" />
-        <div className="px-4 pt-3 pb-3.5 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <button onClick={() => setSheet({ type: 'weight' })} className="flex items-center gap-1 text-base font-semibold text-stone-900 active:opacity-60">
-              Body weight
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-stone-400" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-            </button>
-            <span className="text-[13px] text-stone-600">Week avg <b className="text-stone-900">{avg != null ? `${avg.toFixed(1)} lb` : '—'}</b></span>
-          </div>
-          <div className="flex items-center gap-2.5">
-            {/* The day before, then the day showing: Yesterday and Today, or
-                dated ("Fri, Nov 13") on a past day. */}
-            <WeightTile label={isToday ? 'Yesterday' : yesterday.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} lb={yesterdayLb} onClick={() => weighIn(dayKey(yesterday), yesterday)} />
-            <WeightTile label={isToday ? 'Today' : shown.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} lb={todayLb} onClick={() => weighIn(key, shown)} />
-          </div>
-        </div>
+        <BodyWeight n={n} profile={profile} date={date} onWeights={() => setSheet({ type: 'weight' })} onWeighIn={() => weighIn(key, shown)} onGoal={() => setSheet({ type: 'goal' })} />
         </div>
 
 
@@ -218,48 +195,116 @@ export default function Food({ nutrition: n, setNutrition, profile, header, date
   )
 }
 
-// Today's numbers as lines, in label order (fiber and added sugar indented
-// under carbs): amount, bar, target. Green: a goal to reach. Amber: a
-// limit (red once over). Grey: a guide. Also on Home.
+// Today's numbers against your targets: calories left big, with eaten /
+// target and a bar; then each of the rest on two lines, its name,
+// "32 of 40g" and what's left (or over) above a full-width bar.
 export function NutrientBars({ total, goals }) {
-  return NUTRIENTS.map(x => {
-    const v = total[x.key]
-    const g = goals[x.key]
-    const over = x.kind === 'limit' && v > g
-    const color = over ? 'bg-red-500' : x.kind === 'goal' ? 'bg-emerald-400' : x.kind === 'limit' ? 'bg-amber-400' : 'bg-stone-400'
-    return (
-      <div key={x.key} className="flex items-center gap-2.5">
-        <span className={`w-[84px] shrink-0 whitespace-nowrap ${x.sub ? 'pl-3.5 text-xs text-stone-600' : 'text-[13px] text-stone-700'}`}>{x.label}</span>
-        {/* Today's amount left of the bar, the target right of it. */}
-        <span className="w-[40px] shrink-0 text-right text-[13px] font-bold text-stone-900 tabular-nums whitespace-nowrap">{num(v)}{x.unit}</span>
-        <span className="flex-1 h-2 rounded bg-stone-200 overflow-hidden flex"><span className={color} style={{ width: `${g ? Math.min(100, (v / g) * 100) : 0}%` }} /></span>
-        <span className="w-[42px] shrink-0 text-[13px] font-medium text-stone-500 tabular-nums whitespace-nowrap">{num(g)}{x.unit}</span>
+  const [cal, ...rest] = NUTRIENTS
+  const c = total[cal.key]
+  const cg = goals[cal.key]
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-[34px] leading-none font-extrabold tracking-[-0.03em] text-stone-900 tabular-nums">{num(Math.abs(cg - c))}</span>
+            <span className={`text-[13px] ${c > cg ? 'font-semibold text-red-600' : 'text-stone-600'}`}>calories {c > cg ? 'over' : 'left'}</span>
+          </span>
+          <span className="text-xs text-stone-500 tabular-nums whitespace-nowrap">{num(c)} / {num(cg)}</span>
+        </div>
+        <Bar v={c} g={cg} color={barColor(cal, c, cg)} />
       </div>
-    )
-  })
+      <div className="border-t border-stone-100" />
+      {rest.map(x => <NumberLine key={x.key} label={x.label} sub={x.sub} v={total[x.key]} g={goals[x.key]} unit={x.unit} color={barColor(x, total[x.key], goals[x.key])} red={overBad(x)} />)}
+    </>
+  )
 }
 
-// Water as a line like the ones above: drunk, the bar, the goal.
-export function WaterBar({ drunk, goal }) {
+// A nutrient's bar color: grey with room to spare, amber once you're close
+// (90% of the target), red past it. Protein and fiber, which you want to
+// reach, stay grey all the way (more is fine).
+const MORE_FINE = new Set(['protein', 'fiber'])
+const overBad = x => !MORE_FINE.has(x.key)
+const barColor = (x, v, g) => (!overBad(x) || v < g * 0.9 ? 'bg-stone-400' : v > g ? 'bg-red-500' : 'bg-amber-400')
+
+function Bar({ v, g, color }) {
+  return <span className="w-full h-1.5 rounded-sm bg-stone-200 overflow-hidden flex"><span className={color} style={{ width: `${g ? Math.min(100, (v / g) * 100) : 0}%` }} /></span>
+}
+
+// One number on two lines: name, "32 of 40g", what's left ("8g left"; past
+// it "5g over", red for a limit), then its bar.
+function NumberLine({ label, sub = false, v, g, unit, color, red = false }) {
+  const over = v > g
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="w-[84px] shrink-0 text-[13px] text-stone-700">Water</span>
-      <span className="w-[40px] shrink-0 text-right text-[13px] font-bold text-stone-900 tabular-nums whitespace-nowrap">{num(drunk)}oz</span>
-      <span className="flex-1 h-2 rounded bg-stone-200 overflow-hidden flex"><span className="bg-sky-400" style={{ width: `${goal ? Math.min(100, (drunk / goal) * 100) : 0}%` }} /></span>
-      <span className="w-[42px] shrink-0 text-[13px] font-medium text-stone-500 tabular-nums whitespace-nowrap">{num(goal)}oz</span>
+    <div className={`flex flex-col gap-1 ${sub ? 'pl-3.5' : ''}`}>
+      <div className="flex items-baseline gap-1.5 whitespace-nowrap tabular-nums">
+        <span className={sub ? 'text-xs text-stone-600' : 'text-[13px] text-stone-700'}>{label}</span>
+        <span className="flex-1 text-xs text-stone-500">{num(v)} of {num(g)}{unit}</span>
+        <span className={`text-[13px] font-bold ${over && red ? 'text-red-600' : 'text-stone-900'}`}>{num(Math.abs(g - v))}{unit} {over ? 'over' : 'left'}</span>
+      </div>
+      <Bar v={v} g={g} color={color} />
     </div>
   )
 }
 
-function WeightTile({ label, lb, onClick }) {
-  return (
-    // The day and its weight on one line.
-    <button onClick={onClick} className="flex-1 min-w-0 bg-stone-50 rounded-xl px-3 py-2.5 flex items-baseline justify-between gap-2 text-left whitespace-nowrap active:bg-stone-100">
-      <span className="min-w-0 truncate text-xs text-stone-600">{label}</span>
-      <span className={`shrink-0 text-[15px] font-bold ${lb != null ? 'text-stone-900' : 'text-stone-400'}`}>{lb != null ? `${lb.toFixed(1)} lb` : 'Not yet'}</span>
+// Water as a line like the ones above.
+export function WaterBar({ drunk, goal }) {
+  return <NumberLine label="Water" v={drunk} g={goal} unit="oz" color="bg-sky-400" />
+}
+
+// Body weight, on Nutrition and Home: the day's weight, big (tap to weigh
+// in), and, with a target, a bar of how far
+// you've come toward it, whether its date still works (On track / Off
+// track), and the target and date (tap for the Goal pop-up). The title
+// opens every day this week. `date`: the day showing (today without one).
+// Without `onWeights` (Home), the title is plain text.
+export function BodyWeight({ n, profile, date, onWeights, onWeighIn, onGoal }) {
+  const shown = date ?? new Date()
+  const isToday = !date
+  // A target to head toward (losing or bulking), how far along you are, and
+  // whether its date can still be reached at a healthy pace (null: no date).
+  const headed = (profile?.goal === 'lose' || profile?.goal === 'gain') && profile.targetLb != null
+  const progress = headed ? targetProgress(profile, n) : null
+  const earliest = headed && profile.targetDate ? earliestDate(profile, lastWeight(n), lastWeighDay(n)) : null
+  const tooSoon = earliest ? profile.targetDate < earliest : null
+  const todayLb = n.weights?.[dayKey(shown)] ?? null
+  // The day's weight (tap to weigh in): top right, across from the title.
+  const weight = (
+    <button onClick={onWeighIn} className="shrink-0 flex items-baseline gap-1.5 text-left active:opacity-60">
+      {todayLb != null
+        ? <span className="text-[13px] font-bold text-stone-900">{todayLb.toFixed(1)} lb</span>
+        : <span className="text-[13px] font-bold text-stone-400">Weigh in</span>}
+      <span className="text-xs text-stone-500">{isToday ? 'today' : dayOfLabel(shown)}</span>
     </button>
   )
+  return (
+    <div className="px-4 pt-2.5 pb-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        {onWeights
+          ? <button onClick={onWeights} className="flex items-center gap-1 text-[13px] text-stone-700 active:opacity-60">
+              Body weight
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-stone-400" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+            </button>
+          : <p className="text-[13px] text-stone-700">Body weight</p>}
+        {weight}
+      </div>
+      {headed && (
+        <button onClick={onGoal} className="flex flex-col gap-1 text-left active:opacity-60">
+          <span className="w-full h-2 rounded bg-stone-100 overflow-hidden"><span className="block h-full rounded bg-accent-500" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} /></span>
+          <span className="w-full flex items-center justify-between gap-2 text-xs text-stone-600 whitespace-nowrap">
+            {tooSoon == null ? <span /> : tooSoon
+              ? <span className="flex items-center gap-1 font-semibold text-amber-700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 6v8M12 18h.01" /></svg>Off track</span>
+              : <span className="flex items-center gap-1 font-semibold text-green-700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>On track</span>}
+            <span className="min-w-0 truncate">Target <b className="text-stone-900">{profile.targetLb.toFixed(1)}</b>{profile.targetDate && ` by ${dayLabel(profile.targetDate)}`}</span>
+          </span>
+        </button>
+      )}
+    </div>
+  )
 }
+
+// "Fri, Nov 13" — a day that isn't today.
+const dayOfLabel = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
 // Floats at the bottom of the main screens: Home (a house), Fitness or
 // Nutrition, then the bell and settings, which every side shares.

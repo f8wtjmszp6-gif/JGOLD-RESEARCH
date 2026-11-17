@@ -129,6 +129,7 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
   const [fullStat, setFullStat] = useState(null) // a cut-off stat, shown in full
   const [showTrend, setShowTrend] = useState(false)
   const [showPage, setShowPage] = useState(false) // its page in the Exercises bank
+  const [changingStart, setChangingStart] = useState(false) // the starting weight pop-up
 
   const log = store.getLog(workoutId, exercise)
   const equipment = store.getEquipment(exercise)
@@ -160,6 +161,10 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
 
   const summary = loadSummary(equipment, log)
   const past = pastOf(store.history ?? [], exercise.id) // none when looking at a past week
+  // Before any set is ticked: what you're starting at (the weight carries
+  // over from last time), with Change, in place of the weight under the name.
+  // Not for bodyweight with nothing added, or a past week.
+  const starting = !log.all.some(x => x.done) && !store.past && (equipment !== 'bodyweight' || log.weight > 0)
 
   if (!open && !allDone) {
     return (
@@ -205,13 +210,13 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
       allDone ? 'bg-accent-50 border border-accent-200' : 'bg-white shadow-sm'
     }`}>
       {/* Name and its weight, with how-to, settings and collapse. */}
-      <div className="flex items-start gap-1.5">
+      <div className="flex items-center gap-1.5">
         <button data-title onClick={onClose} className="flex-1 min-w-0 mr-1.5 text-left active:opacity-70">
           <p className={`text-lg font-bold leading-tight text-balance ${allDone ? 'text-accent-500' : 'text-stone-900'}`}>
             {exercise.name}
             {tag}
           </p>
-          <p className="mt-0.5 text-sm text-stone-500">{[summary, setup.perSide && 'per side'].filter(Boolean).join(' · ')}</p>
+          {(!starting || setup.perSide) && <p className="mt-0.5 text-sm text-stone-500">{[!starting && summary, setup.perSide && 'per side'].filter(Boolean).join(' · ')}</p>}
         </button>
         {store.current && (
           <button data-keep onClick={() => setShowTrend(true)} aria-label={`${exercise.name} trend`} className="w-9 h-9 shrink-0 rounded-[10px] bg-stone-100 flex items-center justify-center text-stone-500 active:bg-stone-200">
@@ -249,6 +254,18 @@ export function ExerciseCard({ exercise, workoutId, store, grip, open, onOpen, o
               ))}
             </div>
           }
+        </SettingsSheet>
+      )}
+
+      {starting && (
+        <div className="mt-3 flex items-baseline gap-1.5 px-1 text-[13px] text-stone-500">
+          <span className="min-w-0 truncate">Starting at <b className="font-semibold text-stone-900">{summary}</b></span>
+          <button data-keep onClick={() => setChangingStart(true)} className="ml-auto shrink-0 text-xs font-semibold text-accent-500 active:opacity-60">Change</button>
+        </div>
+      )}
+      {changingStart && (
+        <SettingsSheet title="Starting weight" onClose={() => setChangingStart(false)}>
+          <LoadHero equipment={equipment} weight={log.weight} bar={log.bar} onChange={v => store.setWeight(exercise, v)} onBar={v => store.setBar(exercise, v)} onEquipment={v => store.setEquipment(exercise, v)} />
         </SettingsSheet>
       )}
 

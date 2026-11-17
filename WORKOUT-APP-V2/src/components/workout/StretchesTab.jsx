@@ -61,7 +61,7 @@ export function StretchesTab({ workout, store, diff, repeat, onTimer, open = nul
   // Adding or removing one asks: just this week, or every week after?
   const [ask, scopeSheet] = useScope(store, workout.id)
   const listRef = useRef(null)
-  const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => store.moveStretchTo(workout.id, id, to))
+  const drag = useDragReorder(listRef, () => store.getStretches(workout.id).map(x => x.id), (id, to) => ask(`Move ${STRETCH_BY_ID[id]?.name ?? 'this stretch'}?`, scope => store.moveStretchTo(workout.id, id, to, scope)))
   // One open at a time; open, just it and the ones either side, greyed.
   const [openId, setOpenId] = useState(open)
   const openStretch = list.some(x => x.id === openId) ? openId : null

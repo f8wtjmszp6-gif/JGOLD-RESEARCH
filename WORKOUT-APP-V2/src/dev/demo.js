@@ -150,31 +150,37 @@ export function buildDemo(now = new Date()) {
 
 // ?demo saves what's there (once) and swaps in the demo; ?restore puts it
 // back. Either way the address is cleaned up after.
-// ?meals: adds 10 made-up foods to today's breakfast (on top of what's there),
-// for trying a long meal. Delete them in the app as usual.
+// ?meals: adds 10 made-up foods to today's breakfast and 24oz of water (on
+// top of what's there), for trying a long meal and the daily numbers. Delete
+// them in the app as usual.
+// [name, amount, unit, cal, fat, carbs, protein, fiber, added sugar]
 const TEST_FOODS = [
-  ['Eggs', 2, 'large', 70, 5, 0, 6], ['Toast', 1, 'slice', 80, 1, 15, 3], ['Butter', 1, 'tbsp', 100, 11, 0, 0],
-  ['Banana', 1, 'medium', 105, 0, 27, 1], ['Greek yogurt', 1, 'cup', 130, 0, 9, 23], ['Granola', 0.5, 'cup', 210, 8, 30, 5],
-  ['Blueberries', 1, 'cup', 85, 0, 21, 1], ['Coffee', 1, 'cup', 5, 0, 0, 0], ['Orange juice', 1, 'cup', 110, 0, 26, 2],
-  ['Bacon', 3, 'slices', 130, 10, 0, 9],
+  ['Eggs', 2, 'large', 140, 10, 1, 12, 0, 0], ['Toast', 1, 'slice', 80, 1, 15, 3, 2, 2], ['Butter', 1, 'tbsp', 100, 11, 0, 0, 0, 0],
+  ['Banana', 1, 'medium', 105, 0, 27, 1, 3, 0], ['Greek yogurt', 1, 'cup', 130, 0, 9, 23, 0, 0], ['Granola', 0.5, 'cup', 210, 8, 30, 5, 3, 12],
+  ['Blueberries', 1, 'cup', 85, 0, 21, 1, 4, 0], ['Coffee', 1, 'cup', 5, 0, 0, 0, 0, 0], ['Orange juice', 1, 'cup', 110, 0, 26, 2, 0, 0],
+  ['Bacon', 3, 'slices', 130, 10, 0, 9, 0, 0], ['Cookie', 2, 'cookies', 160, 7, 22, 2, 1, 26],
 ]
-function addTestMeals() {
+// ?amber: adds a cup of rice to today's lunch, which takes the ?meals day's
+// carbs to about 95% of 205g, so one bar shows amber.
+const RICE = ['Rice', 1, 'cup', 205, 0, 45, 4, 1, 0]
+function addTestMeals(foods = TEST_FOODS, meal = 'breakfast', water = [12, 12]) {
   const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
   const d = new Date()
   const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const n = s.nutrition ?? {}
   const day = n.days?.[key] ?? {}
-  const added = TEST_FOODS.map(([name, amount, unit, cal, fat, carbs, protein], i) => ({
+  const added = foods.map(([name, amount, unit, cal, fat, carbs, protein, fiber, sugar], i) => ({
     id: `test${Date.now()}${i}`, name, servings: 1, serving: { amount, unit },
-    per: { cal, fat, carbs, protein, fiber: 0, sugar: 0 },
+    per: { cal, fat, carbs, protein, fiber, sugar },
   }))
-  s.nutrition = { ...n, days: { ...n.days, [key]: { ...day, breakfast: [...(day.breakfast ?? []), ...added] } } }
+  s.nutrition = { ...n, days: { ...n.days, [key]: { ...day, [meal]: [...(day[meal] ?? []), ...added], water: [...(day.water ?? []), ...water] } } }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
 }
 
 export function runDemoSwitch() {
   const q = new URLSearchParams(location.search)
   if (q.has('meals')) addTestMeals()
+  else if (q.has('amber')) addTestMeals([RICE], 'lunch', [])
   else if (q.has('demo')) {
     if (localStorage.getItem(BEFORE) === null) localStorage.setItem(BEFORE, localStorage.getItem(STORAGE_KEY) ?? '')
     localStorage.setItem(STORAGE_KEY, JSON.stringify(buildDemo()))

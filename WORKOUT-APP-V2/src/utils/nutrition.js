@@ -29,7 +29,8 @@ export const MEALS = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner',
 export const mealName = id => MEALS.find(([m]) => m === id)?.[1] ?? 'Snacks'
 
 export const UNITS = ['cup', 'tbsp', 'tsp', 'g', 'oz', 'fl oz', 'mL', 'serving', 'piece', 'slice', 'bar', 'scoop']
-export const GLASSES = [8, 12, 16, 20, 24]
+// Water presets in ounces: a glass, a tall glass, then Owala FreeSip bottle sizes.
+export const GLASSES = [8, 12, 24, 32, 40]
 
 export const DEFAULT_GOALS = { cal: 2200, fat: 80, carbs: 275, fiber: 30, sugar: 36, protein: 150, water: 96 }
 
@@ -136,6 +137,12 @@ export function weightWeek(n, days) {
 export const lastWeight = n => {
   const keys = Object.keys(n?.weights ?? {}).sort()
   return keys.length ? n.weights[keys[keys.length - 1]] : null
+}
+
+// The day of that last weigh-in ('YYYY-MM-DD'), or null.
+export const lastWeighDay = n => {
+  const keys = Object.keys(n?.weights ?? {}).sort()
+  return keys.length ? keys[keys.length - 1] : null
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)

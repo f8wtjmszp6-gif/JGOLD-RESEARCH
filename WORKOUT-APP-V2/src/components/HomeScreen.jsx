@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import WeekCard from './week/WeekCard'
-import Food, { NutrientBars, WaterBar } from './food/Food'
+import Food, { NutrientBars, WaterBar, BodyWeight } from './food/Food'
 import { upNextOf } from '../utils/upNext'
 import { weekDay } from '../utils/goal'
 import { workouts, GYM_ORDER } from '../data/workout'
@@ -14,7 +14,7 @@ import { useWeather } from '../hooks/useWeather'
 // one) and today's numbers and water. Food, water and weigh-in pop up right here, Nutrition's own
 // pop-ups, without leaving Home.
 export default function HomeScreen({ store, onStart }) {
-  // The pop-up open: { what: 'food' | 'water' | 'weigh', n } (each tap
+  // The pop-up open: { what: 'food' | 'water' | 'weigh' | 'weight' | 'goal' | 'goals', n } (each tap
   // starts it fresh).
   const [log, setLog] = useState(null)
   // How far the cards have scrolled (up to 24px): the top of the list fades
@@ -24,21 +24,32 @@ export default function HomeScreen({ store, onStart }) {
   const now = new Date()
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const left = weekDay(now).daysLeft - 1
+  const left = weekDay(now).daysLeft
 
   // Up next as Fitness has it; with no saved weeks yet, the first gym plan
   // not started this week. None: every plan's been started.
   const started = new Set((store.current.plans ?? []).filter(p => p.done > 0).map(p => p.id))
   const next = upNextOf(store)?.id ?? (store.history.length ? null : GYM_ORDER.find(id => !started.has(id)))
 
-  // A plan begun today and not finished takes the card's place (Continue
-  // opens it), so coming back mid-workout finds it here.
+  // The card follows a plan through today: its lifts, then its stretches.
+  // A plan begun today with sets left takes the card's place (Continue opens
+  // it); once its sets are all done, its stretches are next (Start opens its
+  // Stretches tab), then in progress, until they're all ticked. Only today:
+  // tomorrow the card moves on to the next plan.
+  const today = at => at && sameDay(new Date(at), now)
   const going = GYM_ORDER.find(id => {
     const { done, total } = store.workoutProgress(id)
-    const { at } = store.stampsOf(id)
-    return at && sameDay(new Date(at), now) && done > 0 && done < total && !store.planEnded(id)
+    return today(store.stampsOf(id).at) && done > 0 && done < total && !store.planEnded(id)
   })
   const progress = going && store.workoutProgress(going)
+  const stretchPlan = !going && GYM_ORDER.find(id => {
+    const { done, total } = store.workoutProgress(id)
+    const { at, stretchedAt } = store.stampsOf(id)
+    const list = store.getStretches(id)
+    return (today(at) || today(stretchedAt)) && total > 0 && done >= total && list.length > 0 && !list.every(x => store.getStretchDone(id, x.id))
+  })
+  const stretchList = stretchPlan ? store.getStretches(stretchPlan) : []
+  const stretched = stretchList.filter(x => store.getStretchDone(stretchPlan, x.id)).length
 
   const weather = useWeather(store.profile.zip)
 
@@ -80,13 +91,17 @@ export default function HomeScreen({ store, onStart }) {
       <div className="flex flex-col gap-3.5">
         <p className={heading}>Fitness</p>
         {going ? (
+          <InProgress label="In progress" name={workouts[going].short} sub={`${progress.done} of ${progress.total} sets`} onClick={() => onStart(going)} />
+        ) : stretchPlan && stretched > 0 ? (
+          <InProgress label="In progress · Stretches" name={workouts[stretchPlan].short} sub={`${stretched} of ${stretchList.length} stretches`} onClick={() => onStart(stretchPlan, 'stretches')} />
+        ) : stretchPlan ? (
           <div className="rounded-[20px] bg-accent-500 text-white p-4 flex flex-col gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-accent-100">In progress</p>
-              <p className="mt-0.5 text-[22px] font-bold">{workouts[going].short}</p>
-              <p className="text-sm text-accent-100">{progress.done} of {progress.total} sets</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-accent-100">Up next · Stretches</p>
+              <p className="mt-0.5 text-[22px] font-bold">{workouts[stretchPlan].short}</p>
+              <p className="text-sm text-accent-100">0 of {stretchList.length} stretches</p>
             </div>
-            <button onClick={() => onStart(going)} className="h-11 rounded-xl bg-white text-accent-500 text-base font-bold active:bg-accent-50">Continue</button>
+            <button onClick={() => onStart(stretchPlan, 'stretches')} className="h-11 rounded-xl bg-white text-accent-500 text-base font-bold active:bg-accent-50">Start stretching</button>
           </div>
         ) : next ? (
           <div className="rounded-[20px] bg-accent-500 text-white p-4 flex flex-col gap-3">
@@ -105,7 +120,7 @@ export default function HomeScreen({ store, onStart }) {
         <WeekCard week={store.week} stretch={store.stretchWeek} cardio={store.cardioWeek} goals={store.goals} live logged={{ class: store.classes.length, cardio: store.otherCardio.length + store.sports.length }} heading={
           <div className="flex items-baseline justify-between mb-2.5">
             <p className="text-[17px] font-bold text-stone-900">This week</p>
-            <p className="text-sm text-stone-500">{left ? `${left} day${left === 1 ? '' : 's'} left` : 'Last day'}</p>
+            <p className="text-sm text-stone-500">{left === 1 ? 'Last day' : `${left} days left`}</p>
           </div>
         } />
 
@@ -117,16 +132,36 @@ export default function HomeScreen({ store, onStart }) {
           <button onClick={() => onLog('weigh')} className={action}>{lb != null ? `${lb.toFixed(1)} lb` : 'Weigh in'}</button>
         </div>
         <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
-          <div className="px-4 pt-3.5 pb-3 flex flex-col gap-2.5">
-            <p className="text-[17px] font-bold text-stone-900 mb-0.5">Today</p>
-            <NutrientBars total={dayTotal(day)} goals={goals} />
-          </div>
+          {/* Today's numbers and water: tap for Targets, as on Nutrition. */}
+          <button onClick={() => onLog('goals')} aria-label="Targets" className="w-full text-left active:bg-stone-50">
+            <div className="px-4 pt-3 pb-2.5 flex flex-col gap-2">
+              <p className="text-[17px] font-bold text-stone-900">Today</p>
+              <NutrientBars total={dayTotal(day)} goals={goals} />
+            </div>
+            <div className="mx-4 border-t border-stone-100" />
+            <div className="px-4 py-2.5"><WaterBar drunk={drunk} goal={goals.water} /></div>
+          </button>
+          {/* Body weight, as on Nutrition; its pop-ups open right here. */}
           <div className="mx-4 border-t border-stone-100" />
-          <div className="px-4 py-3"><WaterBar drunk={drunk} goal={goals.water} /></div>
+          <BodyWeight n={n} profile={store.profile} onWeights={() => onLog('weight')} onWeighIn={() => onLog('weigh')} onGoal={() => onLog('goal')} />
         </div>
       </div>
       </div>
-      {log && <Food key={log.n} bare open={log.what} nutrition={store.nutrition} setNutrition={store.setNutrition} profile={store.profile} />}
+      {log && <Food key={log.n} bare open={log.what} nutrition={store.nutrition} setNutrition={store.setNutrition} profile={store.profile} setProfile={store.setProfile} />}
+    </div>
+  )
+}
+
+// A plan you're partway through today, in yellow: what, how far, Continue.
+function InProgress({ label, name, sub, onClick }) {
+  return (
+    <div className="rounded-[20px] bg-yellow-400 text-stone-900 p-4 flex flex-col gap-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.06em] text-yellow-900">{label}</p>
+        <p className="mt-0.5 text-[22px] font-bold">{name}</p>
+        <p className="text-sm text-yellow-900">{sub}</p>
+      </div>
+      <button onClick={onClick} className="h-11 rounded-xl bg-white text-yellow-800 text-base font-bold active:bg-yellow-50">Continue</button>
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { metric } from './lifts'
 import { EXERCISE_BY_ID } from '../data/exercises'
 import { workouts } from '../data/workout'
 import { upNextOf } from './upNext'
-import { weightWeek, goalsOf, lastWeight } from './nutrition'
+import { weightWeek, goalsOf, lastWeight, lastWeighDay } from './nutrition'
 import { suggestedTargets, earliestDate } from './targets'
 
 const fmt = n => (Number.isInteger(n) ? String(n) : n.toFixed(1))
@@ -151,7 +151,7 @@ export function notificationsOf(store, now = new Date()) {
   // there (behind, or a new weigh-in or activity): pick a later one. Once
   // per date, so clearing it doesn't nag.
   const p = store.profile ?? {}
-  const earliest = p.targetDate ? earliestDate(p, lastWeight(n)) : null
+  const earliest = p.targetDate ? earliestDate(p, lastWeight(n), lastWeighDay(n)) : null
   if (earliest && p.targetDate < earliest) {
     const [y, m, d] = earliest.split('-').map(Number)
     const when = new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

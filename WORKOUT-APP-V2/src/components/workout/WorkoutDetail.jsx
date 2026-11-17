@@ -80,6 +80,11 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   // Done to the end already: nothing to finish. A plan finished early and
   // picked up again can be finished again.
   const endable = anyTicked && !(repeatable ? current.finished : store.workoutProgress(workoutId).done >= store.workoutProgress(workoutId).total)
+  // Everything ticked (every set and every stretch): ✕ turns into a ✓ that
+  // just goes back, with nothing left to finish.
+  const sets = store.workoutProgress(workoutId)
+  const allStretches = store.getStretches(workoutId)
+  const allChecked = (sets.total > 0 || allStretches.length > 0) && sets.done >= sets.total && allStretches.every(x => store.getStretchDone(workoutId, x.id))
   const warmup = store.getWarmup(workoutId)
   // Every exercise starts folded; tapping one opens it (and folds any other).
   // Finishing it folds it again.
@@ -87,7 +92,13 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
   const exercises = store.getExercises(workoutId)
   const openExercise = exercises.some(x => x.id === openId) ? openId : null
 
-  // Drag an exercise by its handle within its own list (main or Core).
+  // Adding, removing or moving an exercise, or adding Core, asks: just this
+  // week, or every week after? (Or, for one you can do any number of times,
+  // this time or every time.)
+  const [ask, scopeSheet] = useScope(store, workoutId)
+
+  // Drag an exercise by its handle within its own list (main or Core); where
+  // it lands asks just this week or every week.
   const listRef = useRef(null)
   const exerciseDrag = useDragReorder(
     listRef,
@@ -95,13 +106,8 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
       const { main, core } = store.getExerciseSections(workoutId)
       return (main.some(x => x.id === id) ? main : core).map(x => x.id)
     },
-    (id, to) => store.moveExerciseTo(workoutId, id, to),
+    (id, to) => ask(`Move ${EXERCISE_BY_ID[id]?.name ?? 'this exercise'}?`, scope => store.moveExerciseTo(workoutId, id, to, scope)),
   )
-
-  // Adding or removing an exercise, or adding Core, asks: just this week, or
-  // every week after? (Or, for one you can do any number of times, this
-  // time or every time.)
-  const [ask, scopeSheet] = useScope(store, workoutId)
   // What's different from every week's version: tagged, struck through, and
   // a bar to reset it. Build a Workout's are made fresh each time, so they
   // have none.
@@ -243,7 +249,11 @@ export default function WorkoutDetail({ workoutId, weekStart = null, focus: aske
                 </span>
               )}
               {calendarBtn}
-              <HeadBtn label={`Leave ${title}`} onClick={() => (anyTicked || stamps.day || repeatable ? setLeaving(true) : onBack())}><CrossIcon /></HeadBtn>
+              {allChecked
+                ? <button onClick={onBack} aria-label={`${title} done, back to the main menu`} className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center active:bg-emerald-600">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                  </button>
+                : <HeadBtn label={`Leave ${title}`} onClick={() => (anyTicked || stamps.day || repeatable ? setLeaving(true) : onBack())}><CrossIcon /></HeadBtn>}
             </div>
           )}
         </div>

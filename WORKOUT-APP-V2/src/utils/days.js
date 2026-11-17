@@ -38,3 +38,9 @@ export function weeksAgo(weekStart, now = new Date()) {
 
 // "Wednesday"
 export const weekdayOf = at => new Date(at).toLocaleDateString('en-US', { weekday: 'long' })
+
+// A day ("YYYY-MM-DD") as "Feb 7, 2027".
+export function dayLabel(key) {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d, 12).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}

@@ -10,7 +10,7 @@ import { InfoSheet } from './ui/InfoMark'
 import { InfoIcon } from './ui/glyphs'
 import { RangeMark } from './ui/RangeMark'
 import { TargetRows, UseAllButton } from './food/sheets'
-import { goalsOf, lastWeight, ACTIVITY, feetInches, profileMissing } from '../utils/nutrition'
+import { goalsOf, lastWeight, lastWeighDay, ACTIVITY, feetInches, profileMissing } from '../utils/nutrition'
 import { fastestPace, paceFor, earliestDate, paceRange } from '../utils/targets'
 
 // App settings, full screen, sliding in from the right (and swiping back out
@@ -112,7 +112,7 @@ export default function SettingsDrawer({ store, page: start, onClose }) {
               {/* Your goal first: it sets the calories (and so the rest) below. */}
               <div className="space-y-2">
                 <GroupLabel>Goal</GroupLabel>
-                <GoalFields profile={store.profile} lb={lastWeight(store.nutrition)} onChange={store.setProfile} />
+                <GoalFields profile={store.profile} lb={lastWeight(store.nutrition)} lbDay={lastWeighDay(store.nutrition)} onChange={store.setProfile} />
                 <GroupLabel>Daily targets</GroupLabel>
                 <TargetRows goals={goalsOf(store.nutrition)} lb={lastWeight(store.nutrition)} profile={store.profile} onSet={(k, v) => store.setNutrition(x => ({ ...x, goals: { ...goalsOf(x), [k]: v } }))} />
               </div>
@@ -315,8 +315,9 @@ function NumberRow({ label, value, step, min, max, start, unit, note, hint, disa
 }
 
 // Your nutrition goal, and losing or bulking, where you're headed and by
-// when: at the top of Targets (and in the required pop-up).
-function GoalFields({ profile, lb, onChange }) {
+// when: at the top of Targets, in the required pop-up, and in the Goal
+// pop-up from Nutrition's body weight.
+export function GoalFields({ profile, lb, lbDay, onChange }) {
   const [goalInfo, setGoalInfo] = useState(false)
   const fastest = fastestPace(profile, lb)
   // A target on the wrong side of your weight (you've passed it, or changed goal).
@@ -345,7 +346,7 @@ function GoalFields({ profile, lb, onChange }) {
               start={lb != null ? Math.round(lb) + (profile.goal === 'lose' ? -10 : 10) : 170} unit="lb"
               hint={wrongSide ? `Must be ${profile.goal === 'lose' ? 'under' : 'over'} ${lb} lb to ${profile.goal === 'lose' ? 'lose fat' : 'bulk'}.` : null}
               onChange={v => onChange({ targetLb: v })} />
-            <TargetDateRow profile={profile} lb={lb} fastest={fastest} onChange={onChange} />
+            <TargetDateRow profile={profile} lb={lb} lbDay={lbDay} fastest={fastest} onChange={onChange} />
           </>
         )}
     </div>
@@ -355,10 +356,10 @@ function GoalFields({ profile, lb, onChange }) {
 // When you want to reach your target weight. Your pace (and so your
 // calories) comes from it, and it can't be sooner than your fastest pace
 // allows (see fastestPace).
-function TargetDateRow({ profile, lb, fastest, onChange }) {
+function TargetDateRow({ profile, lb, lbDay, fastest, onChange }) {
   const [info, setInfo] = useState(false)
   const lose = profile.goal === 'lose'
-  const earliest = earliestDate(profile, lb)
+  const earliest = earliestDate(profile, lb, lbDay)
   const pace = paceFor(profile, lb)
   const date = profile.targetDate ?? ''
   const tooSoon = !!(date && earliest && date < earliest)
@@ -390,6 +391,8 @@ function TargetDateRow({ profile, lb, fastest, onChange }) {
           className="min-w-[8.5rem] text-center text-base font-bold bg-white rounded-lg py-1 px-2 text-stone-900 outline-none select-text disabled:opacity-40" />
       </div>
       {hint && <p className={`text-xs leading-relaxed ${tooSoon ? 'text-amber-700' : 'text-stone-500'}`}>{hint}</p>}
+      {/* Too soon: one tap moves it to the earliest date. */}
+      {tooSoon && <button onClick={() => onChange({ targetDate: earliest })} className="w-full h-10 rounded-xl bg-white shadow-sm text-sm font-semibold text-accent-500 active:bg-stone-100">Update to {show(earliest)}</button>}
       {info && <InfoSheet icon={<InfoIcon />} title="Target date" text={note} onClose={() => setInfo(false)} />}
     </div>
   )

@@ -127,13 +127,14 @@ export default function App() {
           <WorkoutDetail key={`${weekStart}-${workoutId}`} workoutId={workoutId} weekStart={shownWeek} focus={focus} store={week} timer={timer} onBack={() => { setFocus(null); setReopenActivities(fromActivities); setFromActivities(false); if (returnWeek !== undefined) { setWeekStart(returnWeek); setReturnWeek(undefined) } setWorkoutId(null) }} />
         </div>
       ) : mode === 'home' ? (
-        <HomeScreen store={store} onStart={id => { setWeekStart(null); setFocus(null); setWorkoutId(id) }} />
+        <HomeScreen store={store} onStart={(id, tab) => { setWeekStart(null); setFocus(tab ? { tab, id: null } : null); setWorkoutId(id) }} />
       ) : mode === 'food' ? (
         <Food
           nutrition={store.nutrition}
           profile={store.profile}
           setNutrition={store.setNutrition}
           date={foodDate}
+          setProfile={store.setProfile}
           header={<TopBar onCalendar={() => setCalendar(true)} onToday={foodDate || foodAt != null ? () => { setFoodDate(null); setFoodAt(null) } : undefined} day={foodDate ?? undefined} onStep={n => {
             // A day back or forward; today goes back to plain today, and the
             // week follows the day (for the calendar).
